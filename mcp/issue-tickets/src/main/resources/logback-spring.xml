@@ -1,0 +1,13 @@
+<configuration>
+    <!-- See security-scanner's logback-spring.xml for why there is no console appender here. -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>issue-tickets.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="WARN">
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

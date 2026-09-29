@@ -330,7 +330,7 @@ Up-to-date library documentation MCP. Works on the free tier with no key; an opt
 
 ## Local MCP servers
 
-The CLI also builds and installs these from source (`mcp/<name>`) into your AI agent configuration.
+The CLI also builds and installs these from source (`mcp/<name>`) into your AI agent configuration. Both are Java/Spring Boot projects built via Maven at install time (see [Requirements](#requirements)) — everything else in this repo is Node.js.
 
 ### `issue-tickets`
 
@@ -365,3 +365,4 @@ A shared circuit breaker aborts the rest of a scan the moment the target's error
 ## Requirements
 
 - Node.js ≥ 18
+- Java 21+ and Maven — only needed if you install the `issue-tickets` or `security-scanner` MCP servers (both are Java/Spring, built from source via Maven at install time; everything else in this installer is pure Node.js)

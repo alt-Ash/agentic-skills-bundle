@@ -54,10 +54,10 @@ Host matching is exact and case-insensitive (host includes port, e.g.
   `127.0.0.1:1`), never real internal/cloud-metadata addresses.
 - IDOR probing is bounded to a small fixed range (±3 IDs), never a large
   enumeration sweep.
-- A shared circuit breaker (see `src/http-client.ts`) aborts the rest of a
-  scan the moment the target's error rate or latency degrades sharply — active
-  exploitation continues, but stops the instant it looks like it's causing
-  real damage.
+- A shared circuit breaker (see `DefaultScanSession`, under
+  `src/main/java/.../session/`) aborts the rest of a scan the moment the
+  target's error rate or latency degrades sharply — active exploitation
+  continues, but stops the instant it looks like it's causing real damage.
 
 ## Reports
 
@@ -66,8 +66,17 @@ calling process's working directory.
 
 ## Development
 
+A Spring Boot (Spring AI MCP server, stdio transport) Maven project — Java 21+
+required.
+
 ```bash
-pnpm install
-pnpm run build   # tsc -> dist/
-pnpm test        # vitest — allowlist + circuit-breaker unit tests
+mvn package   # builds target/security-scanner.jar (self-contained fat jar)
+mvn test      # JUnit — allowlist + circuit-breaker (via a real local HTTP
+              # server) + passive/active check unit tests
+```
+
+Run directly (e.g. for manual testing against a local target):
+
+```bash
+java -jar target/security-scanner.jar
 ```

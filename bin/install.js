@@ -889,33 +889,41 @@ async function writeFigmaEnvVar({ accessToken }) {
 // ─── issue-tickets MCP ───────────────────────────────────────────────────────────
 
 /**
- * Copies the issue-tickets source to ~/.config/opencode/mcp/issue-tickets/,
- * installs production dependencies, and builds the TypeScript source.
+ * Throws a clear, actionable error if `mvn` isn't on PATH. Unlike npm/pnpm
+ * (interchangeable JS package managers with a documented fallback), there's
+ * no equivalent alternate build tool to fall back to for a Maven project, so
+ * this fails hard immediately rather than surfacing an opaque ENOENT deep
+ * inside `execFileAsync('mvn', ...)`.
+ */
+async function checkMavenAvailable() {
+  try {
+    await execFileAsync('mvn', ['--version']);
+  } catch {
+    throw new Error(
+      'Maven (`mvn`) is required to build the issue-tickets/security-scanner MCP servers ' +
+      '(Java/Spring, not Node) but was not found on PATH. Install Java 21+ and Maven, then retry.',
+    );
+  }
+}
+
+/**
+ * Builds the issue-tickets MCP server (Java/Spring, Maven) from source and
+ * copies the resulting self-contained fat jar to
+ * ~/.config/opencode/mcp/issue-tickets/. No separate dependency-install step
+ * is needed post-build — the jar is complete.
  */
 async function installObTicketsMcp() {
   const dest = OB_TICKETS_MCP_INSTALL_DIR;
 
-  let pm = 'npm';
-  try {
-    await execFileAsync('pnpm', ['--version']);
-    pm = 'pnpm';
-  } catch {
-    // pnpm not found — use npm
-  }
-
-  await cleanNodeModulesIfPmChanged(OB_TICKETS_MCP_SRC, pm);
-  await execFileAsync(pm, ['install'], { cwd: OB_TICKETS_MCP_SRC });
-  await execFileAsync(pm, ['run', 'build'], { cwd: OB_TICKETS_MCP_SRC });
-  await writeNodeModulesPm(OB_TICKETS_MCP_SRC, pm);
+  await checkMavenAvailable();
+  await execFileAsync('mvn', ['-q', '-DskipTests', 'package'], { cwd: OB_TICKETS_MCP_SRC });
 
   await fs.ensureDir(dest);
-  await cleanNodeModulesIfPmChanged(dest, pm);
-  await fs.copy(path.join(OB_TICKETS_MCP_SRC, 'dist'), path.join(dest, 'dist'), { overwrite: true });
-  await fs.copy(path.join(OB_TICKETS_MCP_SRC, 'package.json'), path.join(dest, 'package.json'), { overwrite: true });
-
-  const installArgs = pm === 'pnpm' ? ['install', '--prod'] : ['install', '--omit=dev'];
-  await execFileAsync(pm, installArgs, { cwd: dest });
-  await writeNodeModulesPm(dest, pm);
+  await fs.copy(
+    path.join(OB_TICKETS_MCP_SRC, 'target', 'issue-tickets.jar'),
+    path.join(dest, 'issue-tickets.jar'),
+    { overwrite: true },
+  );
 
   return { success: true, installDir: dest };
 }
@@ -923,22 +931,24 @@ async function installObTicketsMcp() {
 /**
  * Builds the issue-tickets MCP server config entry for a given tool.
  * opencode gets {env:VAR} placeholders; all other hosts get resolved values.
+ * The server is a self-contained Spring Boot fat jar — launched via
+ * `java -jar`, no separate runtime dependency install needed post-build.
  */
 function obTicketsMcpConfig(toolKey, { azureAccountsB64, githubAccountsB64 } = {}) {
-  const entryPoint = path.join(OB_TICKETS_MCP_INSTALL_DIR, 'dist', 'index.js');
+  const jarPath = path.join(OB_TICKETS_MCP_INSTALL_DIR, 'issue-tickets.jar');
 
   if (toolKey === 'opencode') {
     const names = ['AZURE_DEVOPS_ACCOUNTS_B64', 'GITHUB_ACCOUNTS_B64'];
-    return { type: 'local', command: ['node', entryPoint], environment: opencodeEnvRefs(names) };
+    return { type: 'local', command: ['java', '-jar', jarPath], environment: opencodeEnvRefs(names) };
   }
   const env = definedEnv({
     AZURE_DEVOPS_ACCOUNTS_B64: azureAccountsB64,
     GITHUB_ACCOUNTS_B64: githubAccountsB64,
   });
   if (toolKey === 'zed') {
-    return { source: 'custom', command: 'node', args: [entryPoint], env };
+    return { source: 'custom', command: 'java', args: ['-jar', jarPath], env };
   }
-  return { type: 'stdio', command: 'node', args: [entryPoint], env };
+  return { type: 'stdio', command: 'java', args: ['-jar', jarPath], env };
 }
 
 /**
@@ -955,8 +965,9 @@ async function uninstallObTicketsMcp() {
 // ─── security-scanner MCP ─────────────────────────────────────────────────────
 
 /**
- * Copies the security-scanner source to ~/.config/opencode/mcp/security-scanner/,
- * installs production dependencies, and builds the TypeScript source.
+ * Builds the security-scanner MCP server (Java/Spring, Maven) from source
+ * and copies the resulting self-contained fat jar to
+ * ~/.config/opencode/mcp/security-scanner/.
  *
  * Unlike issue-tickets, this MCP needs no credentials — it is gated
  * entirely by a project-local allowlist file it reads at runtime, not by
@@ -965,27 +976,15 @@ async function uninstallObTicketsMcp() {
 async function installSecurityScannerMcp() {
   const dest = SECURITY_SCANNER_MCP_INSTALL_DIR;
 
-  let pm = 'npm';
-  try {
-    await execFileAsync('pnpm', ['--version']);
-    pm = 'pnpm';
-  } catch {
-    // pnpm not found — use npm
-  }
-
-  await cleanNodeModulesIfPmChanged(SECURITY_SCANNER_MCP_SRC, pm);
-  await execFileAsync(pm, ['install'], { cwd: SECURITY_SCANNER_MCP_SRC });
-  await execFileAsync(pm, ['run', 'build'], { cwd: SECURITY_SCANNER_MCP_SRC });
-  await writeNodeModulesPm(SECURITY_SCANNER_MCP_SRC, pm);
+  await checkMavenAvailable();
+  await execFileAsync('mvn', ['-q', '-DskipTests', 'package'], { cwd: SECURITY_SCANNER_MCP_SRC });
 
   await fs.ensureDir(dest);
-  await cleanNodeModulesIfPmChanged(dest, pm);
-  await fs.copy(path.join(SECURITY_SCANNER_MCP_SRC, 'dist'), path.join(dest, 'dist'), { overwrite: true });
-  await fs.copy(path.join(SECURITY_SCANNER_MCP_SRC, 'package.json'), path.join(dest, 'package.json'), { overwrite: true });
-
-  const installArgs = pm === 'pnpm' ? ['install', '--prod'] : ['install', '--omit=dev'];
-  await execFileAsync(pm, installArgs, { cwd: dest });
-  await writeNodeModulesPm(dest, pm);
+  await fs.copy(
+    path.join(SECURITY_SCANNER_MCP_SRC, 'target', 'security-scanner.jar'),
+    path.join(dest, 'security-scanner.jar'),
+    { overwrite: true },
+  );
 
   return { success: true, installDir: dest };
 }
@@ -994,18 +993,19 @@ async function installSecurityScannerMcp() {
  * Builds the security-scanner MCP server config entry for a given tool.
  * No env vars needed — the allowlist gate is read from a project-local file
  * at runtime (`.security-scanner/allowlist.json`, resolved relative to the
- * host's working directory), not from install-time configuration.
+ * host's working directory), not from install-time configuration. The
+ * server is a self-contained Spring Boot fat jar — launched via `java -jar`.
  */
 function securityScannerMcpConfig(toolKey) {
-  const entryPoint = path.join(SECURITY_SCANNER_MCP_INSTALL_DIR, 'dist', 'index.js');
+  const jarPath = path.join(SECURITY_SCANNER_MCP_INSTALL_DIR, 'security-scanner.jar');
 
   if (toolKey === 'opencode') {
-    return { type: 'local', command: ['node', entryPoint] };
+    return { type: 'local', command: ['java', '-jar', jarPath] };
   }
   if (toolKey === 'zed') {
-    return { source: 'custom', command: 'node', args: [entryPoint] };
+    return { source: 'custom', command: 'java', args: ['-jar', jarPath] };
   }
-  return { type: 'stdio', command: 'node', args: [entryPoint] };
+  return { type: 'stdio', command: 'java', args: ['-jar', jarPath] };
 }
 
 /**
@@ -2071,8 +2071,8 @@ async function runUninstall(availableSkills, availableAgentFiles, detectedTools)
   // 8. Global tools (Engram + Context7 + issue-tickets) — only show if installed in at least one tool
   let globalMcpsToRemove = [];
 
-  const obTicketsInstalled = await fs.pathExists(path.join(OB_TICKETS_MCP_INSTALL_DIR, 'dist', 'index.js'));
-  const securityScannerInstalled = await fs.pathExists(path.join(SECURITY_SCANNER_MCP_INSTALL_DIR, 'dist', 'index.js'));
+  const obTicketsInstalled = await fs.pathExists(path.join(OB_TICKETS_MCP_INSTALL_DIR, 'issue-tickets.jar'));
+  const securityScannerInstalled = await fs.pathExists(path.join(SECURITY_SCANNER_MCP_INSTALL_DIR, 'security-scanner.jar'));
   const installedGlobalChoices = ['engram', 'context7', 'figma-mcp'].filter((name) =>
     selectedTools.some((toolKey) => installedMcpsByTool[toolKey]?.has(name))
   );
@@ -2885,7 +2885,7 @@ async function main() {
   let installObTicketsMcp_ = false;
 
   if (selectedTools.includes('opencode')) {
-    const alreadyInstalled = await fs.pathExists(path.join(OB_TICKETS_MCP_INSTALL_DIR, 'dist', 'index.js'));
+    const alreadyInstalled = await fs.pathExists(path.join(OB_TICKETS_MCP_INSTALL_DIR, 'issue-tickets.jar'));
     const { wantObTickets } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -2988,7 +2988,7 @@ async function main() {
   let installSecurityScannerMcp_ = false;
 
   if (selectedTools.includes('opencode')) {
-    const alreadyInstalled = await fs.pathExists(path.join(SECURITY_SCANNER_MCP_INSTALL_DIR, 'dist', 'index.js'));
+    const alreadyInstalled = await fs.pathExists(path.join(SECURITY_SCANNER_MCP_INSTALL_DIR, 'security-scanner.jar'));
     const { wantSecurityScanner } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -3305,7 +3305,7 @@ async function main() {
         color: 'cyan',
       }).start();
       try {
-        obTicketsSpinner.text = chalk.dim('[issue-tickets MCP] Building TypeScript…');
+        obTicketsSpinner.text = chalk.dim('[issue-tickets MCP] Building with Maven…');
         await installObTicketsMcp();
         obTicketsSpinner.text = chalk.dim('[issue-tickets MCP] Writing MCP config entry…');
         const serverConfig = obTicketsMcpConfig(toolKey, {
@@ -3333,7 +3333,7 @@ async function main() {
         color: 'cyan',
       }).start();
       try {
-        scannerSpinner.text = chalk.dim('[security-scanner] Building TypeScript…');
+        scannerSpinner.text = chalk.dim('[security-scanner] Building with Maven…');
         await installSecurityScannerMcp();
         scannerSpinner.text = chalk.dim('[security-scanner] Writing MCP config entry…');
         const serverConfig = securityScannerMcpConfig(toolKey);
