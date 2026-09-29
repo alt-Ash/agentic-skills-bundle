@@ -1,6 +1,10 @@
 node_modules/
 dist/
 
+# Maven build output (mcp/issue-tickets, mcp/security-scanner Java projects)
+target/
+*.log
+
 .idea/
 
 # OS-generated files
