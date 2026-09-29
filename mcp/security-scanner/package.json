@@ -1,0 +1,30 @@
+{
+  "name": "security-scanner",
+  "version": "1.0.0",
+  "description": "MCP server that actively scans an authorized, non-production URL for common web vulnerabilities and writes a detailed report.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --inspect-brk=9225 --import tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.40",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

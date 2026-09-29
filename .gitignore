@@ -1,0 +1,42 @@
+node_modules/
+dist/
+
+.idea/
+
+# OS-generated files
+.DS_Store
+
+docs/
+
+# Telemetry hook runtime output (written to cwd by the hooks; not source)
+ai-usage-events.json
+post-tool-use-usage.json
+.hooks-data/
+hooks-events.json
+
+# Generated SharePoint export (run: pnpm docs:export)
+docs/
+
+# Local install output directories (not source)
+.claude/
+.codex/
+.cursor/
+.gemini/
+.windsurf/
+.vscode/
+
+# Project-level skill/agent installations for each tool (generated at install time)
+.github/copilot/
+.github/hooks/
+.opencode/*
+!.opencode/commands
+.agents/
+
+# Keep .opencode/commands tracked; ignore IDE and lock files
+Intelligence/
+skills-lock.json
+
+# Local secrets / MCP config (never commit tokens)
+.env
+.env.*
+.mcp.json
