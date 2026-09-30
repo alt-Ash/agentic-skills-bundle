@@ -134,8 +134,17 @@ a runner-installed `mvn`/`gradle` so CI uses the pinned build-tool version.
 
 - name: Notify on failure
   if: failure()
-  uses: slackapi/slack-github-action@v1
+  uses: slackapi/slack-github-action@v4
+  with:
+    webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+    webhook-type: incoming-webhook
+    payload: |
+      text: "Build failed: ${{ github.repository }}@${{ github.ref_name }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 ```
+
+`webhook-type: incoming-webhook` posts the `payload` as a message to the channel
+the incoming webhook URL is bound to. Store the URL as a secret — it is a
+credential.
 
 ## Secrets and variables
 

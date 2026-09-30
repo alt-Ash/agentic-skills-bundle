@@ -1,7 +1,7 @@
 {
   "name": "agentic-skills-bundle",
-  "version": "1.0.0",
-  "description": "A guided CLI installer for AI agent skills (frontend & backend)",
+  "version": "2.0.0",
+  "description": "A guided CLI installer that adds agents, skills, slash commands, and MCP servers for Java/Spring Boot projects to AI coding tools",
   "type": "module",
   "bin": {
     "agentic-skills": "bin/install.js",
@@ -28,6 +28,7 @@
     "skills",
     "agents",
     "mcp",
+    "!mcp/*/target",
     ".opencode",
     "templates"
   ],
@@ -41,7 +42,9 @@
     "copilot",
     "agent",
     "cli",
-    "installer"
+    "installer",
+    "java",
+    "spring-boot"
   ],
   "author": "Ashleigh Dorrian",
   "license": "MIT",
@@ -50,7 +53,6 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "vite": "^6.0.0",
     "vitest": "^4.1.0"
   }
 }
