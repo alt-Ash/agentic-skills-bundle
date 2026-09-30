@@ -12,8 +12,8 @@ class SmallRegistriesTest {
 
     @Test
     void commandRegistryMapsSkillsAndAgentsToCommandBasenames() {
-        assertEquals(List.of("migrate-node"), CommandRegistry.commandsForSkill("nodejs-version-migrator"));
-        assertEquals(List.of("migrate-mui"), CommandRegistry.commandsForSkill("mui-migration"));
+        assertEquals(List.of("migrate-java"), CommandRegistry.commandsForSkill("java-version-migrator"));
+        assertEquals(List.of("security-gate"), CommandRegistry.commandsForSkill("secure-feature-gate"));
         assertEquals(List.of("new-issue"), CommandRegistry.commandsForAgent("issue-architect"));
         assertTrue(CommandRegistry.commandsForSkill("no-such-skill").isEmpty());
     }

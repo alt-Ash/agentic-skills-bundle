@@ -16,7 +16,7 @@ class SkillDiscoveryTest {
     @Test
     void discoversSkillsTwoLevelsDeep(@TempDir Path tempDir) throws IOException {
         Files.createDirectories(tempDir.resolve("frontend").resolve("react-migration"));
-        Files.createDirectories(tempDir.resolve("backend").resolve("nodejs-version-migrator"));
+        Files.createDirectories(tempDir.resolve("backend").resolve("java-version-migrator"));
         // A stray file directly under skills/ (not a category dir) must be ignored.
         Files.writeString(tempDir.resolve("README.md"), "not a category");
 
@@ -24,7 +24,7 @@ class SkillDiscoveryTest {
 
         assertEquals(2, skills.size());
         assertTrue(skills.stream().anyMatch(s -> s.category().equals("frontend") && s.name().equals("react-migration")));
-        assertTrue(skills.stream().anyMatch(s -> s.category().equals("backend") && s.name().equals("nodejs-version-migrator")));
+        assertTrue(skills.stream().anyMatch(s -> s.category().equals("backend") && s.name().equals("java-version-migrator")));
     }
 
     @Test

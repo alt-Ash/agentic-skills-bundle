@@ -8,17 +8,17 @@ description:
   decomposes into two or more slices that do not touch the same files, no
   shared migration/schema ordering, and no shared config edits — as an
   addition to (not a replacement for) routing role-specific work (a security
-  fix, a UX audit, a browser bug) to a named specialist agent. Rejects the
+  fix, a dependency migration, a runtime bug) to a named specialist agent. Rejects the
   decomposition and falls back to sequential work when slices are not
   provably independent.
 ---
 
 # Parallel Feature Build
 
-Named specialists (`@react-frontend-engineer`, `@security-auditor`, …) are the
+Named specialists (`@spring-boot-backend-engineer`, `@security-auditor`, …) are the
 right call when a task genuinely needs a fixed expertise. But a single feature
-that splits cleanly into independent pieces — a new API route plus its
-corresponding UI screen, three unrelated components in the same PR, a config
+that splits cleanly into independent pieces — a new REST endpoint plus its
+corresponding service/repository layer, three unrelated components in the same PR, a config
 migration touching disjoint files — doesn't need N different personas. It
 needs N *interchangeable* workers, each briefed on its own slice, running at
 the same time instead of one after another. This skill defines that mechanic:

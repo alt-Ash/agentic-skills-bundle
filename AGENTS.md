@@ -4,7 +4,7 @@
 
 This is a **skill and agent authoring and distribution package** — `agentic-skills-bundle`.
 
-Its purpose is to **create, maintain, and publish** AI agent skills, slash commands, and sub-agents so that downstream consumers can install them into their own projects or global AI agent configs via the CLI tool (`agentic-skills` / `bin/install.js`).
+Its purpose is to **create, maintain, and publish** AI agent skills, slash commands, and sub-agents so that downstream consumers can install them into their own projects or global AI agent configs via the CLI tool (`agentic-skills` / `bin/install.js`, a thin Node shim that launches the Java installer at `bin/agentic-skills-cli`).
 
 This is NOT a project that uses skills. It is the project that PRODUCES them.
 
@@ -40,7 +40,7 @@ When working in this repository, these terms always refer to the **source files 
 |---|---|---|
 | **Skill** | `skills/<category>/<skill-name>/` | A directory containing a `SKILL.md` and optional supporting files. This is the content that gets installed. |
 | **Agent** | `agents/<agent-name>.md` | A markdown file defining a sub-agent persona. Installed as `@agent-name` in supported tools. |
-| **Command** | `.opencode/commands/<command-name>.md` | A slash command markdown file — the single source installed to every tool with `supportsCommands: true` in `bin/install.js`'s `AGENTS` registry (OpenCode and Claude Code). Paired with skills via `SKILL_COMMANDS` in `bin/install.js`. |
+| **Command** | `.opencode/commands/<command-name>.md` | A slash command markdown file — the single source installed to every tool with `supportsCommands: true` in `bin/agentic-skills-cli`'s `AgentToolRegistry` (OpenCode and Claude Code). Paired with skills/agents via `CommandRegistry` in `bin/agentic-skills-cli`. |
 
 ---
 
@@ -49,20 +49,20 @@ When working in this repository, these terms always refer to the **source files 
 ```
 agentic-skills-bundle/
 ├── bin/
-│   └── install.js          # CLI installer — the tool that copies skills/agents/commands
-│                           # to target environments. This is what gets published as agentic-skills.
+│   ├── install.js              # thin Node shim — launches the Java installer below
+│   └── agentic-skills-cli/     # the actual installer logic (Maven project, plain Java 21)
 ├── skills/
-│   ├── frontend/           # Frontend skill directories (each is an installable skill)
-│   │   ├── cra-to-vite/
-│   │   ├── msw-mocking/
-│   │   ├── mui-migration/
-│   │   ├── react-best-practices/
-│   │   ├── react-migration/
-│   │   └── vite-version-migrator/
-│   └── backend/            # Backend skill directories
-│       └── nodejs-version-migrator/
+│   ├── backend/                 # Backend skill directories (each is an installable skill)
+│   │   ├── java-version-migrator/
+│   │   └── spring-boot-best-practices/
+│   ├── devops/
+│   ├── quality/
+│   ├── security/
+│   └── workflow/
 ├── agents/
-│   └── react-browser-debugger.md   # Sub-agent definition files
+│   ├── spring-boot-backend-engineer.md   # Sub-agent definition files
+│   ├── security-auditor.md
+│   └── ...
 ├── .opencode/
 │   └── commands/           # Slash command markdown files for OpenCode
 │       └── *.md
@@ -92,16 +92,13 @@ The `SKILL.md` file is the primary artifact. Write it as instructions for an AI 
 
 ## How companion commands are paired with skills
 
-The mapping is in `bin/install.js` under `SKILL_COMMANDS`:
+The mapping lives in `CommandRegistry.java` (`bin/agentic-skills-cli/src/main/java/dev/dorrian/agenticskillscli/registry/`) under `SKILL_COMMANDS`:
 
-```js
-const SKILL_COMMANDS = {
-  'nodejs-version-migrator': ['migrate-node'],
-  'cra-to-vite': ['cra-to-vite'],
-  'vite-version-migrator': ['migrate-vite'],
-  'mui-migration': ['migrate-mui'],
-  'react-migration': ['migrate-react'],
-};
+```java
+public static final Map<String, List<String>> SKILL_COMMANDS = Map.of(
+    "java-version-migrator", List.of("migrate-java"),
+    "secure-feature-gate", List.of("security-gate")
+);
 ```
 
 If a skill has a companion slash command, add the command markdown file to `.opencode/commands/` and register the mapping here.
@@ -113,8 +110,8 @@ If a skill has a companion slash command, add the command markdown file to `.ope
 When checking for errors or validating changes:
 
 - **Skill content errors** → check the `SKILL.md` file inside the relevant `skills/` subdirectory
-- **CLI installer errors** → check `bin/install.js`
-- **Missing command file** → check `.opencode/commands/` and the `SKILL_COMMANDS` map in `bin/install.js`
+- **CLI installer errors** → check `bin/agentic-skills-cli` (the Java installer); `bin/install.js` is just a thin launcher shim
+- **Missing command file** → check `.opencode/commands/` and the `SKILL_COMMANDS`/`AGENT_COMMANDS` maps in `CommandRegistry.java`
 - **Missing agent file** → check `agents/`
 - **Package errors** → check `package.json` and `pnpm-lock.yaml`
 
@@ -122,7 +119,12 @@ Never diagnose a problem as "the skill is not in the correct folder" by checking
 
 ---
 
-## The installer (bin/install.js)
+## The installer (bin/install.js → bin/agentic-skills-cli)
+
+`bin/install.js` is a ~20-line Node shim that resolves the installed package's
+root and execs a bundled Java jar (`bin/agentic-skills-cli`, a plain-Java-21
+Maven project — requires a JRE at runtime, not just Node). All wizard logic
+lives there, not in the shim.
 
 The CLI prompts the user to choose:
 

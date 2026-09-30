@@ -15,7 +15,7 @@ single typed structure that:
 Emit the block **in the conversation** at the very end of execution, after all work is done and
 all checks have passed (or are explicitly noted as failing). Use the exact fences shown below.
 
-For skills/agents that also write a file artifact (e.g. `ux-auditor` writes `UX-AUDIT.md`),
+For skills/agents that also write a file artifact (e.g. `security-auditor` writes `SECURITY-AUDIT.md`),
 embed the HANDOFF BLOCK at the **top of that file** AND emit it in the conversation.
 
 ---
@@ -46,7 +46,7 @@ Status      : [completed | partial | blocked]
 | lint       | ✅ passed / ❌ failed / ⚪ n/a |
 | typecheck  | ✅ passed / ❌ failed / ⚪ n/a |
 | build      | ✅ passed / ❌ failed / ⚪ n/a |
-| browser    | ✅ passed / ❌ failed / ⚪ n/a |
+| runtime    | ✅ verified / ❌ errors found / ⚪ n/a |
 
 ### Blocked items
 <!-- Anything unresolved. Include the reason and the suggested next action. Use "—" if none. -->

@@ -115,16 +115,11 @@ Build a plan from the contract:
 
 | Issue type / signal | Preferred delegate |
 | --- | --- |
-| Visible browser bug, React error, network failure | `@react-browser-debugger` |
-| New React component or refactor | `@react-frontend-engineer` |
-| MUI v4→v5 / v5→v6 work, theme refactor | `@mui-frontend-engineer` + `mui-migration` skill |
-| Node version bump | `nodejs-version-migrator` skill |
-| CRA → Vite migration | `cra-to-vite` skill |
-| Vite version bump | `vite-version-migrator` skill |
-| React major version bump | `react-migration` skill |
+| Spring Boot component/endpoint work, REST controller/service/repository/entity change | `@spring-boot-backend-engineer` |
+| Java/JDK version bump | `java-version-migrator` skill |
+| Spring Boot major version bump (e.g. 2.x→3.x) | `java-version-migrator`'s `spring-boot` framework-migration sub-skill |
 | Security vuln, auth bug, exposure risk | `@security-auditor` then `@security-implementor` |
 | New test coverage, TDD-shaped task | `@tdd-engineer` |
-| UX / a11y issue | `@ux-auditor` |
 
 You are not limited to this list. Use `task` to invoke any installed sub-agent that fits. Use `skill` to load any installed skill that applies.
 
@@ -163,8 +158,8 @@ gates themselves:
 
 - Every acceptance criterion checkbox is genuinely satisfied.
 - Every `success_signal` from `agent_contract` is observable.
-- For browser-observable bugs: use `@react-browser-debugger` to verify the
-  symptom is gone in a real browser, not just that tests pass.
+- For a Spring Boot runtime bug: use `@spring-boot-backend-engineer` to verify the
+  symptom is gone by actually re-running the app/tests, not just that tests pass.
 
 Treat these as additional conditions the loop must satisfy before Phase 5 ↔
 Phase 6 iteration can end, on top of the `validation-loop` skill's own
@@ -202,7 +197,7 @@ Produce a concise summary using exactly this structure (will be reused as the PR
 
 If `ticket-scope-extraction` ran in Phase 1, this summary must be plain natural-language markdown — no XML tags, no literal "signal"/"noise"/"open"/"flagged" labels, even though those categories shaped what you built. This becomes the PR body verbatim in Phase 8.
 
-Show this summary to the user. Optionally, invoke `@pr-reviewer` here for an advisory TypeScript/JS best-practice and scope-alignment pass on the diff — it is read-only and never blocks Phase 8; surface its findings to the user alongside the summary if it's run.
+Show this summary to the user. Optionally, invoke `@pr-reviewer` here for an advisory Java/Spring Boot best-practice and scope-alignment pass on the diff — it is read-only and never blocks Phase 8; surface its findings to the user alongside the summary if it's run.
 
 ### Phase 8 — Pull request (only if user confirms)
 

@@ -19,7 +19,7 @@ class SummaryPrinterTest {
         ToolResults r = new ToolResults(
             "Claude Code",
             List.of(OperationResult.ok("react-migration", false, null), OperationResult.failed("broken-skill", null, "boom")),
-            List.of(OperationResult.ok("migrate-node", false, null)),
+            List.of(OperationResult.ok("migrate-java", false, null)),
             List.of(OperationResult.ok("plan", false, null)),
             List.of(new AgentRegistrationResult("plan", true, true, false, "/x/opencode.json")),
             List.of(OperationResult.ok("CLAUDE.md", false, null)),

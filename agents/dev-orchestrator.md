@@ -46,15 +46,11 @@ Your job is to drive the full lifecycle of a development task from first input t
 |---|---|
 | `@issue-implementer` | Given a fetched issue — drives the full implementation, validation, and PR lifecycle |
 | `@issue-architect` | Creating a structured GitHub / Azure DevOps issue from a vague request |
-| `@react-frontend-engineer` | React component work when the project does NOT use MUI as primary UI library |
-| `@mui-frontend-engineer` | Any frontend task where the UI is built on MUI |
-| `@react-browser-debugger` | Visible browser bug, React error, failed network request, any browser-observable issue |
+| `@spring-boot-backend-engineer` | Builds, updates, or removes REST controllers, service/repository layers, JPA entities, and configuration classes — any Spring Boot backend task |
 | `@tdd-engineer` | Feature or bug fix that must follow Red → Green → Refactor |
-| `@security-auditor` | Security review of a Node.js / Express / Fastify / NestJS codebase |
+| `@security-auditor` | Security review of a Spring Boot / Spring MVC / Spring WebFlux codebase |
 | `@security-implementor` | Applying fixes from a `@security-auditor` Handoff Block |
-| `@ux-auditor` | UX/UI audit, design review, color blindness accessibility check |
-| `@figma-style-migrator` | Sync design tokens (colors, typography, spacing, shadows) from a Figma file into the project's theme or token file |
-| `@pr-reviewer` | Advisory TS/JS best-practice and ticket-scope review of a pending diff, before opening a PR |
+| `@pr-reviewer` | Advisory Java/Spring Boot best-practice and ticket-scope review of a pending diff, before opening a PR |
 
 ---
 
@@ -70,10 +66,8 @@ Read the user's request and classify:
 |---|---|
 | Issue number / URL / "implement ticket X" | → Phase 2 (pull ticket) |
 | "File an issue" / "Create a ticket" | → Spawn `@issue-architect`; stop after |
-| Frontend bug visible in browser | → Spawn `@react-browser-debugger`; enter Phase 5 (validate) after |
-| Frontend feature / component | → Phase 3 (planning), then Phase 4 |
+| Spring Boot feature / bug / component work | → Phase 3 (planning), then Phase 4 (spawns `@spring-boot-backend-engineer`) |
 | Security audit request | → Spawn `@security-auditor`; if Handoff Block returned → spawn `@security-implementor` |
-| UX / design audit | → Spawn `@ux-auditor`; stop after |
 | Ambiguous / multi-concern | → Decompose into sub-tasks; run independent ones in parallel via parallel `task` calls |
 | Feature decomposes into ≥2 independent, file-scoped slices (no role-specific need per slice) | → Load the `parallel-feature-build` skill before Phase 4 |
 
@@ -152,7 +146,7 @@ Otherwise, spawn `@issue-implementer` via the `task` tool. Pass:
 
 If `@issue-implementer` returns `status: blocked`:
 - Read the blocker.
-- If it is a specialist task (e.g. a browser bug, MUI migration, security fix): spawn the right agent, collect results, re-invoke `@issue-implementer` with the additional context.
+- If it is a specialist task (e.g. a Spring Boot component, a security fix): spawn the right agent, collect results, re-invoke `@issue-implementer` with the additional context.
 - If it requires user input: ask the user one focused question, then resume.
 
 ### Phase 5 — Validate and iterate
@@ -166,14 +160,14 @@ specialist, not re-derive the loop mechanics:
    - `build: fail` → spawn the right agent to fix the build failure; re-run
    - `tests: fail` → spawn `@tdd-engineer` with the failing test output; re-run
    - `lint: fail` → fix inline if trivial, or spawn the right agent; re-run
-2. For browser-observable bugs: spawn `@react-browser-debugger` to verify the symptom is gone in a real browser.
+2. For a Spring Boot runtime bug: spawn `@spring-boot-backend-engineer` to verify the symptom is gone by actually re-running the app/tests.
 3. Every re-run still goes through `@issue-implementer`'s own `validation-loop`
    skill, so this dispatch loop inherits that skill's hard-stop template
    (N=10) — do not add a separate iteration cap here; if that hard-stop
    fires, stop and report to the user with the exact failure output instead
    of re-dispatching further.
 
-Optionally, once validation is green, spawn `@pr-reviewer` for an advisory TypeScript/JS best-practice and scope-alignment pass on the diff — it is read-only and never blocks Phase 6; surface its findings to the user alongside the Phase 6 question if it's run.
+Optionally, once validation is green, spawn `@pr-reviewer` for an advisory Java/Spring Boot best-practice and scope-alignment pass on the diff — it is read-only and never blocks Phase 6; surface its findings to the user alongside the Phase 6 question if it's run.
 
 ### Phase 5b — Security gate (mandatory, blocking)
 

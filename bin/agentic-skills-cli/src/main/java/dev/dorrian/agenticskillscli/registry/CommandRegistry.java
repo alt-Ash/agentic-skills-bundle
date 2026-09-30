@@ -12,11 +12,7 @@ import java.util.Map;
 public final class CommandRegistry {
 
     public static final Map<String, List<String>> SKILL_COMMANDS = Map.of(
-        "nodejs-version-migrator", List.of("migrate-node"),
-        "cra-to-vite", List.of("cra-to-vite"),
-        "vite-version-migrator", List.of("migrate-vite"),
-        "mui-migration", List.of("migrate-mui"),
-        "react-migration", List.of("migrate-react"),
+        "java-version-migrator", List.of("migrate-java"),
         "secure-feature-gate", List.of("security-gate")
     );
 

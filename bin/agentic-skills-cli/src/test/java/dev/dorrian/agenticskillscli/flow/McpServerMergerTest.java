@@ -8,7 +8,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class McpServerMergerTest {
@@ -19,29 +18,30 @@ class McpServerMergerTest {
         assertTrue(McpServerMerger.mergeSkillServers(List.of(skill), "opencode").isEmpty());
     }
 
+    // As of the Java/Spring Boot content refactor (2026-09-30), both
+    // SkillMcpRegistry and AgentMcpServerRegistry are empty (their prior
+    // entries were all for deleted frontend skills/agents with no Java
+    // successor - spring-boot-backend-engineer verifies via actual execution,
+    // not a browser, so it has no MCP wiring to register). There is currently
+    // no skill or agent with real MCP-server entries to test a positive
+    // resolution case against - these tests confirm the merge logic still
+    // behaves correctly (returns empty, unions across multiple inputs
+    // without throwing) against that now-empty registry state, rather than
+    // asserting on removed content.
+
     @Test
-    void mergeSkillServersResolvesKnownSkill() {
-        SkillDescriptor skill = new SkillDescriptor("frontend", "figma-design-to-code", Paths.get("/tmp"));
-        Map<String, Object> merged = McpServerMerger.mergeSkillServers(List.of(skill), "opencode");
-        assertTrue(merged.containsKey("figma-mcp"));
+    void mergeSkillServersAcrossMultipleSkillsStillEmptyPostRefactor() {
+        SkillDescriptor a = new SkillDescriptor("backend", "spring-boot-best-practices", Paths.get("/tmp"));
+        SkillDescriptor b = new SkillDescriptor("security", "secure-feature-gate", Paths.get("/tmp"));
+        Map<String, Object> merged = McpServerMerger.mergeSkillServers(List.of(a, b), "opencode");
+        assertTrue(merged.isEmpty());
     }
 
     @Test
-    void mergeSkillServersAcrossMultipleSkillsUnionsKeys() {
-        SkillDescriptor figma = new SkillDescriptor("frontend", "figma-design-to-code", Paths.get("/tmp"));
-        SkillDescriptor mui = new SkillDescriptor("frontend", "mui-migration", Paths.get("/tmp"));
-        Map<String, Object> merged = McpServerMerger.mergeSkillServers(List.of(figma, mui), "opencode");
-        assertTrue(merged.containsKey("figma-mcp"));
-        assertTrue(merged.containsKey("mui-mcp"));
-    }
-
-    @Test
-    void mergeAgentServersResolvesKnownAgent() {
-        AgentDescriptor agent = new AgentDescriptor("react-browser-debugger", Paths.get("/tmp/x.md"), Map.of());
+    void mergeAgentServersStillEmptyPostRefactor() {
+        AgentDescriptor agent = new AgentDescriptor("spring-boot-backend-engineer", Paths.get("/tmp/x.md"), Map.of());
         Map<String, Object> merged = McpServerMerger.mergeAgentServers(List.of(agent), "opencode");
-        assertEquals(2, merged.size());
-        assertTrue(merged.containsKey("chrome-devtools"));
-        assertTrue(merged.containsKey("playwright"));
+        assertTrue(merged.isEmpty());
     }
 
     @Test

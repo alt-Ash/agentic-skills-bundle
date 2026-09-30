@@ -4,8 +4,8 @@ The **CONTEXT BLOCK** is the normalized output emitted at the end of every conte
 (Phase 0) in skills and agents. It creates a typed, predictable handoff so that:
 
 - Each subsequent phase reads the same structure regardless of which skill/agent produced it.
-- Downstream agents (e.g. `react-frontend-engineer` consuming `ux-auditor` output) never have to
-  re-discover context that was already collected.
+- Downstream agents (e.g. `spring-boot-backend-engineer` consuming `security-auditor` output) never
+  have to re-discover context that was already collected.
 - Gaps and unknowns are surfaced explicitly instead of silently defaulting.
 
 ---
@@ -26,28 +26,25 @@ Skill/Agent : <skill-name or agent-name>
 Timestamp   : <ISO-8601 date>
 
 ### Project
-- Type            : [Node.js API | React SPA | Vue SPA | NestJS | Next.js | monorepo | unknown]
-- Package manager : [npm | pnpm | yarn | unknown]
-- TypeScript      : [yes | no]
+- Type            : [Spring Boot API | Quarkus | Micronaut | monorepo | unknown]
+- Build tool       : [Maven | Gradle | unknown]
 - Monorepo        : [yes — tool: <nx/turborepo/lerna/…> | no]
 
 ### Runtime & tooling versions
-- Node.js         : <version or "unknown">
-- Framework       : <name + version, e.g. "React 18.2" or "—">
-- UI library      : <name + version, e.g. "MUI 6.1" or "—">
-- Build tool      : <Vite x.x | CRA / react-scripts x.x | webpack x.x | tsc | unknown>
-- Test runner     : <vitest x.x | jest x.x | none | unknown>
-- Linter          : <eslint | biome | none | unknown>
+- JDK version     : <version or "unknown">
+- Spring Boot version : <version or "—">
+- Framework       : <name + version, e.g. "Spring Boot 3.2" or "—">
+- Test runner     : <JUnit 5 | TestNG | none | unknown>
+- Linter          : <checkstyle | spotless | none | unknown>
 
 ### Migration context (fill only when the skill is a migrator)
-- Current version : <e.g. "Node 16.14" or "—">
-- Target version  : <e.g. "Node 20.11" or "—">
-- Migration hops  : <e.g. "v16 → v20 (single hop)" or "—">
+- Current version : <e.g. "JDK 17" or "—">
+- Target version  : <e.g. "JDK 21" or "—">
+- Migration hops  : <e.g. "17 → 21 (single hop)" or "—">
 
 ### Infrastructure
 - CI/CD           : [GitHub Actions | Azure Pipelines | GitLab CI | CircleCI | none | unknown]
 - Docker          : [yes | no | unknown]
-- Storybook       : [yes — vx.x | no]
 
 ### Files read
 <!-- List every file actually opened during this phase — not assumptions -->

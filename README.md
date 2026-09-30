@@ -71,89 +71,20 @@ Some skills and agents also ship a companion slash command (see each skill's **C
 
 ## Available skills
 
-### Frontend
-
-#### `figma-design-to-code`
-
-Implements a Figma design as production React code. Loads the official Figma MCP skill and adds house conventions: reuse existing components, map colors to theme tokens (not hardcoded hex), follow the project's file structure, and verify in a real browser.
-
-**Use when:** given a Figma URL or file key and asked to implement a screen, page, or component.
-Requires: `figma-mcp` (installed automatically when this skill is selected).
-
-#### `figma-generate-library`
-
-Builds or updates a Figma design system by pushing React components and design tokens from the codebase into a Figma file. Adds MUI theme token mapping and Storybook-first component discovery.
-
-**Use when:** syncing the codebase into Figma or bootstrapping a new Figma design system from existing components.
-Requires: `figma-mcp` (installed automatically when this skill is selected).
-
-#### `figma-code-connect`
-
-Creates Figma Code Connect mappings (`.figma.ts` files) that link Figma design components to their React code counterparts.
-
-**Use when:** setting up Code Connect for Figma Dev Mode, or linking an existing component library to a Figma design system.
-Requires: `figma-mcp` (installed automatically when this skill is selected).
-
-#### `cra-to-vite`
-
-Migrates a Create React App (`react-scripts`) project to Vite and moves tests from Jest to Vitest — dependency swap, `vite.config` creation, `index.html` restructuring, env variable renaming (`REACT_APP_*` → `VITE_*`), TypeScript setup, and CI/CD/Dockerfile/Helm updates.
-
-**Use when:** migrating from CRA to Vite, replacing `react-scripts`, or migrating Jest tests to Vitest.
-**Companion command:** `/cra-to-vite`
-
-#### `msw-mocking`
-
-Mock Service Worker (MSW 2.x) setup and usage for React projects — installation, handler authoring, Vitest integration, and test patterns (happy path, error overrides, one-time overrides).
-
-**Use when:** writing tests that involve network requests, adding new API mocks, or setting up MSW for the first time.
-
-#### `mui-best-practices`
-
-Material UI theme setup, palette configuration, component customization, and TypeScript augmentation. Theme-first: all design tokens live in `createTheme()`, and the customization hierarchy is `sx` → `styled()` → `theme.components` → `GlobalStyles`.
-
-**Use when:** building or customizing MUI-based UIs, implementing new components, or reviewing existing MUI usage.
-
-#### `mui-migration`
-
-Guides migration between Material UI major versions (v3→v4, v4→v5, v5→v6, v6→v7, v7→v9), including Grid v2. Routes to the correct version-specific reference and covers codemods, package renames, and breaking changes.
-
-**Use when:** upgrading MUI or updating MUI component APIs.
-**Companion command:** `/migrate-mui <from> <to>`
-
-#### `react-best-practices`
-
-Functional-component conventions: hooks usage, Context API patterns, deriving state during render instead of syncing in `useEffect`, `Promise.all` for independent parallel requests, and re-render optimization only where measurably useful.
-
-**Use when:** writing, reviewing, or refactoring components, context providers, routes, or API calls.
-
-#### `react-migration`
-
-Guides migration of React applications to React 18 or 19 — peer dependency audit, root API changes, TypeScript updates, automatic batching, and deprecated API removal.
-
-**Use when:** upgrading React from an older version to 18 or 19.
-**Companion command:** `/migrate-react <target>`
-
-#### `vite-version-migrator`
-
-Guides safe Vite version upgrades (v4→v5, v5→v6, v6→v7, v7→v8) — audits breaking changes, updates config and plugins, and verifies builds.
-
-**Use when:** upgrading Vite versions or investigating breaking changes between versions.
-**Companion command:** `/migrate-vite <from> <to>`
-
-#### `vue-migration`
-
-Guides migration of Vue 2 applications to Vue 3 — direct vs `@vue/compat` incremental strategy selection, breaking changes, and ecosystem upgrades (Vue Router 4, Pinia/Vuex 4, Vite).
-
-**Use when:** upgrading a Vue 2 app to Vue 3 or updating the Vue ecosystem.
-
 ### Backend
 
-#### `nodejs-version-migrator`
+#### `spring-boot-best-practices`
 
-Guides safe Node.js version upgrades — audits breaking changes, runs automated codemods, checks npm package compatibility against a target version, and updates `.nvmrc`, `package.json engines`, CI/CD, and Dockerfiles. Includes NestJS-specific migration guides (v8→v9, v9→v10, v10→v11) and supports multi-hop upgrades by chaining guides in order.
+Spring Boot best practices: dependency injection, transaction boundaries, JPA/Hibernate access patterns, exception handling, validation, testing, and configuration.
 
-**Use when:** upgrading Node.js versions or investigating breaking changes between versions.
-**Companion command:** `/migrate-node <from> <to>`
+**Use when:** writing, reviewing, or refactoring Spring Boot controllers, services, repositories, or entities.
+
+#### `java-version-migrator`
+
+Guides safe Java/JDK version upgrades — audits breaking changes, runs automated migration tooling (OpenRewrite recipes), and updates build configs. Includes a Spring Boot major-version migration guide (2.x→3.x Jakarta EE namespace migration) and supports multi-hop JDK upgrades by chaining guides in order.
+
+**Use when:** upgrading Java/JDK versions, migrating Spring Boot major versions, or investigating breaking changes between versions.
+**Companion command:** `/migrate-java <from> <to>`
 
 ### DevOps
 
@@ -167,7 +98,7 @@ Authoring, debugging, and best-practice reference for GitHub Actions and Azure D
 
 #### `pr-review-checklist`
 
-Reviews a pending diff (uncommitted, staged, or against a base branch) for TypeScript/JavaScript best practices and alignment with the originating ticket's actual scope. Diff-first and token-efficient — reads the change, not the whole repo — and never edits, blocks, or runs a full security audit.
+Reviews a pending diff (uncommitted, staged, or against a base branch) for Java/Spring Boot best practices and alignment with the originating ticket's actual scope. Diff-first and token-efficient — reads the change, not the whole repo — and never edits, blocks, or runs a full security audit.
 
 **Use when:** a diff needs an advisory best-practice pass before a PR is opened.
 **Companion command:** `/pr-check [ticket-id-or-branch-context]` (drives the `pr-reviewer` agent).
@@ -233,7 +164,7 @@ Implements a GitHub or Azure DevOps issue end-to-end. Pulls the issue via `issue
 
 #### `@pr-reviewer`
 
-Advisory review of a pending diff against TypeScript/JavaScript best practices and the originating ticket's scope, before a PR is opened. Read-only — never edits code, never blocks.
+Advisory review of a pending diff against Java/Spring Boot best practices and the originating ticket's scope, before a PR is opened. Read-only — never edits code, never blocks.
 
 **Invoke when:** before opening a pull request, or whenever a best-practice pass on a pending diff is wanted.
 **Companion command:** `/pr-check [ticket-id-or-branch-context]`
@@ -244,39 +175,13 @@ Analyzes a project's structure, tech stack, and configuration, then fills docume
 
 **Invoke when:** right after installing the skill set, to generate and populate documentation for a project.
 
-### Frontend
+### Backend
 
-#### `@react-frontend-engineer`
+#### `@spring-boot-backend-engineer`
 
-Builds, updates, or removes application components in React (or React + Next.js). Library-agnostic — loads whichever UI skill is available (MUI, Radix, shadcn/ui, etc.). Manages state, writes Storybook stories, adds tests, and verifies the actual render via Playwright.
+Builds, updates, or removes REST controllers, service/repository layers, JPA entities, and configuration classes. Manages dependency injection, writes JUnit 5 tests, and verifies changes by actually compiling, running, and exercising the application.
 
-**Invoke when:** any React frontend task, regardless of which component library the project uses.
-
-#### `@mui-frontend-engineer`
-
-Builds, updates, or removes application components using Material UI. Manages state, writes Storybook stories, adds tests, and verifies the actual render via Playwright and Chrome DevTools.
-
-**Invoke when:** any frontend task where the UI is built on top of MUI (narrower scope than `@react-frontend-engineer`).
-
-#### `@react-browser-debugger`
-
-Launches a real browser, reads console errors and network calls, locates the bug in the source code, applies a fix, and iterates until the issue is resolved.
-
-**Invoke when:** there is a visible frontend bug, a React error, a failed network request, or any browser-observable issue.
-Requires: `chrome-devtools` MCP, `playwright` MCP (installed automatically by the CLI).
-
-#### `@ux-auditor`
-
-Navigates a running SPA, takes snapshots across key screens, and evaluates the interface against the Laws of UX and color-blindness accessibility principles. Produces a prioritized, implementable report handed off to `@react-frontend-engineer` or `@mui-frontend-engineer`.
-
-**Invoke when:** a UX audit, design review, or actionable improvement plan is wanted.
-
-#### `@figma-style-migrator`
-
-Reads design tokens (colors, typography, spacing, shadows, border radius) from a Figma file and migrates them into the project's styling system (MUI theme, CSS custom properties, or design token files), applying changes only after confirmation.
-
-**Invoke when:** a designer has updated the Figma design system and the codebase needs to reflect those changes, or when bootstrapping a new project's theme from Figma.
-Requires: `figma-mcp` (installed automatically by the CLI).
+**Invoke when:** any Spring Boot backend task, regardless of persistence layer or build tool.
 
 ### Quality
 
@@ -290,13 +195,13 @@ Writes a failing test first, confirms it fails for the right reason, implements 
 
 #### `@security-auditor`
 
-Full Node.js/Express/Fastify/NestJS security audit specialized in OWASP Top 10:2025 — `npm audit` with confirmed-version triage, a full grep sweep across every category, optional live exploitation as proof-of-concept, and a structured report with fixes.
+Full Spring Boot/Spring MVC/Spring WebFlux security audit specialized in OWASP Top 10:2025 — OWASP Dependency-Check with confirmed-version triage, a full grep sweep across every category, optional live exploitation as proof-of-concept, and a structured report with fixes. Can optionally invoke the `security-scanner` MCP for a complementary live-HTTP-probe layer.
 
 **Invoke when:** a thorough security review is needed (heavier than the always-on `secure-feature-gate`).
 
 #### `@security-implementor`
 
-Consumes a `@security-auditor` report's Handoff Block and applies every fixable finding — dependency upgrades, `package.json` overrides, code changes — then re-runs `npm audit` to verify. Iterates until every fixable issue is resolved or reports exactly why one cannot be fixed.
+Consumes a `@security-auditor` report's Handoff Block and applies every fixable finding — dependency upgrades, `pom.xml` dependency management, code changes — then re-runs OWASP Dependency-Check to verify. Iterates until every fixable issue is resolved or reports exactly why one cannot be fixed.
 
 **Invoke when:** after `@security-auditor` has produced a report with a Handoff Block.
 
