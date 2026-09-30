@@ -89,6 +89,181 @@ class SourceDetectorTest {
         assertThat(detector.detect(root)).contains(Source.github);
     }
 
+    private static String pom(String projectChildren) {
+        return """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>org.example</groupId>
+              <artifactId>widgets</artifactId>
+              <version>1.0.0</version>
+            %s
+            </project>
+            """.formatted(projectChildren);
+    }
+
+    @Test
+    void detectsGithubFromPomScmUrl(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"), pom("<scm><url>https://github.com/org/widgets</url></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
+    @Test
+    void detectsAzureFromPomScmGitConnection(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"),
+            pom("<scm><connection>scm:git:https://dev.azure.com/org/proj/_git/widgets</connection></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.azure);
+    }
+
+    @Test
+    void detectsAzureFromPomScmSshDeveloperConnectionOnVisualStudioHost(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"),
+            pom("<scm><developerConnection>scm:git:ssh://org@vs-ssh.visualstudio.com/v3/org/proj/widgets</developerConnection></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.azure);
+    }
+
+    @Test
+    void detectsGithubFromPomScmSshConnection(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"),
+            pom("<scm><developerConnection>scm:git:git@github.com:org/widgets.git</developerConnection></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
+    @Test
+    void detectsGithubFromPomIssueManagementUrlWhenNoScm(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"),
+            pom("<issueManagement><system>GitHub</system><url>https://github.com/org/widgets/issues</url></issueManagement>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
+    @Test
+    void detectsGithubFromPomProjectUrlWhenNoScmOrIssueManagement(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"), pom("<url>https://github.com/org/widgets</url>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
+    @Test
+    void pomScmTakesPrecedenceOverPomProjectUrl(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"), pom("""
+            <url>https://github.com/org/widgets</url>
+            <scm><url>https://dev.azure.com/org/proj/_git/widgets</url></scm>
+            """));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.azure);
+    }
+
+    @Test
+    void ignoresHostUrlsOutsideTheProjectLevelScmUrlAndIssueManagementElements(@TempDir Path root) throws IOException {
+        // A <repository>/<pluginRepository> or <distributionManagement> URL says where artifacts
+        // live, not where tickets live — it must not be read as a provider signal.
+        Files.writeString(root.resolve("pom.xml"), pom("""
+            <repositories><repository><id>gh</id><url>https://maven.pkg.github.com/org/widgets</url></repository></repositories>
+            <distributionManagement><repository><id>gh</id><url>https://maven.pkg.github.com/org/widgets</url></repository></distributionManagement>
+            """));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).isEmpty();
+    }
+
+    @Test
+    void pomWithNoScmFallsThroughToCredentials(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"), pom(""));
+        var detector = detectorWithCredentials(true, false);
+
+        assertThat(detector.detect(root)).contains(Source.azure);
+    }
+
+    @Test
+    void malformedPomFallsThroughWithoutThrowing(@TempDir Path root) throws IOException {
+        // Truncated pom whose partial content would say github — parse failure must fall through
+        // to the credentials tier (azure-only here), not throw or half-read it.
+        Files.writeString(root.resolve("pom.xml"), "<project><scm><url>https://github.com/org/widgets</url></scm>");
+        var detector = detectorWithCredentials(true, false);
+
+        assertThat(detector.detect(root)).contains(Source.azure);
+    }
+
+    @Test
+    void pomWithExternalEntityIsNotResolved(@TempDir Path root) throws IOException {
+        Path secret = root.resolve("secret.txt");
+        Files.writeString(secret, "https://github.com/leaked/by-xxe");
+        Files.writeString(root.resolve("pom.xml"), """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE project [ <!ENTITY xxe SYSTEM "%s"> ]>
+            <project><modelVersion>4.0.0</modelVersion><scm><url>&xxe;</url></scm></project>
+            """.formatted(secret.toUri()));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).isEmpty();
+    }
+
+    @Test
+    void multiModuleUsesOnlyTheRootPomScm(@TempDir Path root) throws IOException {
+        // Detection only ever inspects the project root (no walking into modules or up to
+        // parents) — same as every other signal in the chain.
+        Files.writeString(root.resolve("pom.xml"), pom("""
+            <packaging>pom</packaging>
+            <modules><module>api</module></modules>
+            <scm><url>https://github.com/org/widgets</url></scm>
+            """));
+        Files.createDirectories(root.resolve("api"));
+        Files.writeString(root.resolve("api/pom.xml"), pom("<scm><url>https://dev.azure.com/org/proj/_git/widgets</url></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
+    @Test
+    void submodulePomScmIsNotConsultedWhenRootPomHasNone(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"), pom("<modules><module>api</module></modules>"));
+        Files.createDirectories(root.resolve("api"));
+        Files.writeString(root.resolve("api/pom.xml"), pom("<scm><url>https://github.com/org/widgets</url></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).isEmpty();
+    }
+
+    @Test
+    void packageJsonRepositoryTakesPrecedenceOverPomScm(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("package.json"), "{ \"repository\": \"github.com/org/repo\" }");
+        Files.writeString(root.resolve("pom.xml"), pom("<scm><url>https://dev.azure.com/org/proj/_git/widgets</url></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
+    @Test
+    void pomScmIsUsedWhenPackageJsonHasNoRepositoryField(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("package.json"), "{ \"name\": \"frontend\" }");
+        Files.writeString(root.resolve("pom.xml"), pom("<scm><url>https://dev.azure.com/org/proj/_git/widgets</url></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.azure);
+    }
+
+    @Test
+    void gitConfigTakesPrecedenceOverPomScm(@TempDir Path root) throws IOException {
+        Files.createDirectories(root.resolve(".git"));
+        Files.writeString(root.resolve(".git/config"), "[remote \"origin\"]\n\turl = git@github.com:org/repo.git\n");
+        Files.writeString(root.resolve("pom.xml"), pom("<scm><url>https://dev.azure.com/org/proj/_git/widgets</url></scm>"));
+        var detector = detectorWithCredentials(false, false);
+
+        assertThat(detector.detect(root)).contains(Source.github);
+    }
+
     @Test
     void fallsBackToTheSingleConfiguredProviderWhenNoFileSignalsExist(@TempDir Path root) {
         var detector = detectorWithCredentials(true, false);

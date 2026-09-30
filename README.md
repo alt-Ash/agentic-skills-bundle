@@ -255,7 +255,7 @@ MCP server for ticket/issue management — supports **Azure DevOps and GitHub** 
 
 Tools: `pull_ticket`, `create_issue`, `create_pull_request`
 
-**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project for `.github/`, `azure-pipelines.yml`, `.git/config`, and `package.json` to determine the correct provider.
+**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>` `url`/`connection`/`developerConnection`, then `<issueManagement><url>`, then the project `<url>`). GitHub is recognised by `github.com` and Azure DevOps by `dev.azure.com` or `visualstudio.com`, in https, ssh, or `scm:git:` form. Gradle build files are not read. If none of these match and only one provider has credentials configured, that provider is used.
 
 | Variable | Required for | Description |
 |---|---|---|
