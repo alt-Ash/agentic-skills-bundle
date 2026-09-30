@@ -12,18 +12,17 @@ This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers
 
 ```bash
 pnpm start              # run the interactive CLI installer
-pnpm test               # structural tests (agent/skill file validation)
+pnpm test               # structural tests (agent/skill/command file validation, Java)
 pnpm run eval           # behavioral LLM evaluations (Java) — invoke actual models, run sparingly
 pnpm run test:hooks     # hook unit tests (spawns compiled hooks as child processes)
-pnpm run test:e2e       # analytics pipeline integration test
 pnpm run test:cli       # JUnit suite for bin/agentic-skills-cli (the Java installer)
 ```
 
 Run a single test file:
 
 ```bash
-# structural
-vitest run --config evals/vitest.config.ts evals/structural/agents.test.ts
+# structural (one of the three content-validation classes)
+mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest
 
 # hooks
 vitest run --config hooks/vitest.config.ts hooks/tests/hook-invocation.test.ts
@@ -170,9 +169,10 @@ either (`package.json`'s `files`/`prepack` don't reference it) — dev-only tool
 
 | Suite | Config | What it covers |
 |---|---|---|
-| `evals/structural/` | `evals/vitest.config.ts` | Validates agent frontmatter fields and skill file structure |
+| `bin/agentic-skills-cli`'s `content/` package | `mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest` (aliased as `pnpm test`) | Validates agent/skill/command frontmatter fields and file structure — no model calls, no real API cost. Resolves the repo root independently of the shared `PackageRoot` singleton (which `PackageRootTest` repeatedly re-points at fake dirs in the same Surefire fork) so results don't depend on cross-class execution order. |
 | `evals/agentic-skills-evals/` | `mvn -f evals/agentic-skills-evals/pom.xml test` | LLM-invoked scenario evals (Java, expensive — real billed model calls) |
 | `hooks/tests/` | `hooks/vitest.config.ts` | Spawns the built hooks jar (`java -jar ... <hookType>`) as a child process, asserts event output — cross-language black-box test, deliberately kept in a different toolchain than the JUnit suite it sits alongside |
-| `e2e/` | `e2e/vitest.config.ts` | Analytics pipeline integration |
 
-Agent files must pass `evals/structural/agents.test.ts`: required frontmatter includes `description` (≥ 20 chars), `mode` (`subagent` or `primary`), `temperature` (0–1), `color` (hex), and a `permission` object. Body must have ≥ 2 `##` sections and document its output format.
+Agent files must pass `AgentFileStructureTest`: required frontmatter includes `description` (≥ 20 chars), `mode` (`subagent` or `primary`), `temperature` (0–1), `color` (hex), and a `permission` object. Body must have ≥ 2 `##` sections and document its output format. Skill files must pass `SkillFileStructureTest` (required `name`/`description`, `***CONTEXT BLOCK***`/`***HANDOFF BLOCK***` templates). Command files must pass `CommandFileStructureTest` (frontmatter limited to `description`/`subtask`).
+
+`e2e/` (the analytics pipeline integration test) was removed — it was already gated behind an external `ANALYTICS_SERVICE_ROOT` and skipped by default in normal runs.

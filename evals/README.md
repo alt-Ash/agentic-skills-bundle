@@ -47,11 +47,6 @@ No API key is required: both the agent under test and the judge run through the 
 evals/
 ├── README.md                     ← this file
 ├── .gitignore                    ← ignores results/
-├── vitest.config.ts              ← still used by evals/structural/ only (unrelated, unaffected)
-│
-├── structural/                   ← static checks on the agent .md files (no model calls) — TS/Vitest, untouched
-│   ├── agents.test.ts
-│   └── skills.test.ts
 │
 └── agentic-skills-evals/         ← the behavioral harness (model calls) — Java/Maven
     ├── pom.xml                   ← plain Java 21, no Spring Boot (short-lived CLI invocations, no AI-client
@@ -108,7 +103,7 @@ evals/
 
 | Script | Command | What it does |
 |---|---|---|
-| `npm test` | `vitest run … evals/structural` | Static checks on agent/skill `.md` files. No model calls. Unaffected by this harness. |
+| `npm test` | `mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=...` | Static checks on agent/skill/command `.md` files (lives alongside the installer, not here — see `bin/agentic-skills-cli`'s `content/` package). No model calls. Unaffected by this harness. |
 | `npm run eval` | `mvn -f evals/agentic-skills-evals/pom.xml test` | Runs **all** behavioral evals once, for real. |
 | `npm run eval:select` | builds the jar, then `EvalCli select` | Interactive checkbox picker (agent → scenario tree, built on `org.jline:jline`). |
 | `npm run report` | builds the jar, then `EvalCli report` | Build `REPORT.md` + `report.json` from history. |

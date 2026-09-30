@@ -10,9 +10,8 @@
   "scripts": {
     "prepack": "mvn -q -DskipTests clean package -f bin/agentic-skills-cli/pom.xml && mvn -q -DskipTests clean package -f hooks/agentic-skills-hooks/pom.xml",
     "start": "node bin/install.js",
-    "test": "vitest run --config evals/vitest.config.ts evals/structural",
+    "test": "mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest",
     "test:hooks": "mvn -q -DskipTests package -f hooks/agentic-skills-hooks/pom.xml && vitest run --config hooks/vitest.config.ts hooks/tests",
-    "test:e2e": "vitest run --config e2e/vitest.config.ts",
     "test:cli": "mvn -f bin/agentic-skills-cli/pom.xml test",
     "test:security-scanner": "mvn -f mcp/security-scanner/pom.xml test",
     "test:issue-tickets": "mvn -f mcp/issue-tickets/pom.xml test",
@@ -51,12 +50,6 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "^1.0.0",
-    "@types/js-yaml": "^4.0.9",
-    "glob": "^11.0.0",
-    "gray-matter": "^4.0.3",
-    "js-yaml": "^4.1.0",
-    "tsx": "^4.19.0",
     "vite": "^6.0.0",
     "vitest": "^4.1.0"
   }
