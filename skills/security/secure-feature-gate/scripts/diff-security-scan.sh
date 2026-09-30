@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Diff-scoped OWASP Top 10:2025 pattern scanner.
+# Diff-scoped OWASP Top 10:2025 pattern scanner for Java/Spring Boot projects.
 #
 # Checks only lines added/changed in the current diff (working tree + staged,
 # or against a base branch if one is passed), not the whole repository — this
@@ -15,7 +15,8 @@
 # Output: one labeled section per matched pattern, listing file:line:code.
 # Matches are candidates, not confirmed findings — the calling skill/agent
 # must read each hit in context before treating it as real (some patterns,
-# e.g. jwt.sign/verify, legitimately appear in code that isn't vulnerable).
+# e.g. Jwts.builder().signWith(...), legitimately appear in code that isn't
+# vulnerable).
 # Exit 0 always — no matches means a clean diff, not a script failure.
 
 set -uo pipefail
@@ -26,15 +27,15 @@ cd "$REPO_ROOT" || exit 0
 
 if [[ -n "$BASE" ]]; then
   DIFF_RANGE="$BASE...HEAD"
-  FILES=$(git diff --name-only --diff-filter=ACMR "$DIFF_RANGE" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null)
+  FILES=$(git diff --name-only --diff-filter=ACMR "$DIFF_RANGE" -- '*.java' '*.kt' 2>/dev/null)
 else
-  FILES=$( { git diff --name-only --diff-filter=ACMR -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null; \
-             git diff --staged --name-only --diff-filter=ACMR -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null; } \
+  FILES=$( { git diff --name-only --diff-filter=ACMR -- '*.java' '*.kt' 2>/dev/null; \
+             git diff --staged --name-only --diff-filter=ACMR -- '*.java' '*.kt' 2>/dev/null; } \
            | sort -u)
 fi
 
 if [[ -z "$FILES" ]]; then
-  echo "No changed .ts/.tsx/.js/.jsx files to scan."
+  echo "No changed .java/.kt files to scan."
   exit 0
 fi
 
@@ -71,20 +72,20 @@ check_pattern() {
   done
 }
 
-check_pattern "cors-wildcard"        High     A05 'enableCors\(\)|Access-Control-Allow-Origin: ?\*'
-check_pattern "hardcoded-jwt-secret" Critical A02 'jwt\.(sign|verify)\('
-check_pattern "math-random-crypto"   Critical A02 'Math\.random\(\)'
-check_pattern "weak-hash"            High     A02 "createHash\\(.(md5|sha1)."
-check_pattern "tls-verify-disabled"  High     A02 'rejectUnauthorized: ?false|NODE_TLS_REJECT_UNAUTHORIZED'
-check_pattern "nosql-injection"      High     A03 '\.(find|findOne|findById)\('
-check_pattern "sql-injection"        High     A03 'db\.query\(|knex\.raw\('
-check_pattern "command-injection"    Critical A03 'exec\(|execSync\(|spawn\('
-check_pattern "path-traversal"       High     A03 'fs\.readFile\(|fs\.writeFile\(|path\.join\('
-check_pattern "eval-dynamic-code"    Critical A03 'eval\(|new Function\('
-check_pattern "missing-auth-guard"   High     A01 'router\.|app\.(get|post|put|delete|patch)\(|@(Get|Post|Put|Delete|Patch)\('
-check_pattern "stack-trace-leak"     Moderate A05 'err\.(stack|message)'
-check_pattern "ssrf-outbound"        High     A10 'fetch\(|axios\.|http\.request\('
-check_pattern "sensitive-log"        Moderate A09 'console\.(log|error).*(password|token|secret)'
-check_pattern "bcrypt-weak-rounds"   Moderate A07 'bcrypt\.(hash|genSalt)\('
+check_pattern "cors-wildcard"          High     A05 'allowedOrigins\(\"\*\"\)|@CrossOrigin\((origins ?= ?)?\"\*\"\)|Access-Control-Allow-Origin: ?\*'
+check_pattern "hardcoded-jwt-secret"   Critical A02 'signWith\(|Keys\.hmacShaKeyFor\('
+check_pattern "insecure-random"        Critical A02 'new Random\(\)'
+check_pattern "weak-hash"              High     A02 'MessageDigest\.getInstance\(.(MD5|SHA-1|SHA1).'
+check_pattern "tls-verify-disabled"    High     A02 'checkServerTrusted.*\{\s*\}|TrustAllStrategy|NoopHostnameVerifier'
+check_pattern "jpql-native-injection"  High     A03 '@Query\(.*nativeQuery\s*=\s*true|createNativeQuery\(|createQuery\('
+check_pattern "spel-injection"         Critical A03 'SpelExpressionParser|new SpelExpression\('
+check_pattern "command-injection"      Critical A03 'Runtime\.getRuntime\(\)\.exec\(|new ProcessBuilder\('
+check_pattern "path-traversal"         High     A03 'Paths\.get\(|new File\('
+check_pattern "eval-dynamic-code"      Critical A03 'ScriptEngine|GroovyShell'
+check_pattern "missing-auth-guard"     High     A01 '@(RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\('
+check_pattern "stack-trace-leak"       Moderate A05 'e\.getMessage\(\)|e\.printStackTrace\(\)'
+check_pattern "ssrf-outbound"          High     A10 'RestTemplate\(\)\.(getForObject|postForObject|exchange)|WebClient\.(get|post)\(\)'
+check_pattern "sensitive-log"          Moderate A09 'log\.(info|debug|warn|error)\(.*(password|token|secret)'
+check_pattern "bcrypt-weak-rounds"     Moderate A07 'new BCryptPasswordEncoder\([0-9]'
 
 exit 0

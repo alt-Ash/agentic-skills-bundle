@@ -11,8 +11,8 @@ description:
 
 # Secure Feature Gate
 
-`@security-auditor` does a thorough, full-repo OWASP Top 10:2025 audit — npm
-audit triage, a full grep sweep, and optional live exploitation. That's too
+`@security-auditor` does a thorough, full-repo OWASP Top 10:2025 audit — OWASP
+Dependency-Check triage, a full grep sweep, and optional live exploitation. That's too
 slow and heavy to run on every change. This skill runs the same catalog of
 patterns, but scoped to only the lines actually changed in the current diff,
 so it's cheap enough to run as a mandatory gate on every feature, not just on
@@ -40,11 +40,11 @@ unrelated files.
 bash scripts/diff-security-scan.sh [base-branch]
 ```
 
-This checks only added/changed lines in touched `.ts`/`.tsx`/`.js`/`.jsx`
+This checks only added/changed lines in touched `.java`/`.kt`
 files against the same severity/OWASP/CWE catalog `@security-auditor` uses
-(CORS wildcards, hardcoded JWT secrets, `Math.random()` for crypto, injection
+(CORS wildcards, hardcoded JWT secrets, `java.util.Random` for crypto, injection
 patterns, missing auth guards, path traversal, SSRF, stack-trace leaks,
-sensitive logging, weak bcrypt rounds — see
+sensitive logging, weak BCrypt rounds — see
 `agents/security-auditor.md`'s Step 4 catalog table for the authoritative
 severity/OWASP/CWE mapping). This catalog is intentionally duplicated in
 `scripts/diff-security-scan.sh` rather than shared, since skills and agents
@@ -75,8 +75,8 @@ never disappears a finding either.
 
 ## What this is not
 
-- Not a replacement for `@security-auditor` — it has no npm audit / dependency
-  coverage and no exploitation step. Escalate there for anything non-trivial.
+- Not a replacement for `@security-auditor` — it has no OWASP Dependency-Check /
+  dependency coverage and no exploitation step. Escalate there for anything non-trivial.
 - Not an advisory-only pass like `pr-review-checklist` — Critical/High
   findings are blocking by default here.
 

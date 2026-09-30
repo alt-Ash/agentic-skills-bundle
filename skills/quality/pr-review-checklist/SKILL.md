@@ -2,7 +2,7 @@
 name: pr-review-checklist
 description:
   Reviews a pending code change (uncommitted diff, or a diff against a base branch)
-  for TypeScript/JavaScript best practices and alignment with the originating
+  for Java/Spring Boot best practices and alignment with the originating
   ticket's scope, before a PR is opened. Use whenever a diff needs an advisory
   best-practice pass — never blocks, never edits, never runs a full security audit.
   Diff-first and token-efficient — reads the change, not the whole repo.
@@ -14,8 +14,8 @@ A PR review that reads every touched file in full is expensive and mostly review
 code that didn't change. This skill reviews the diff itself, pulling in extra
 context only where a hunk genuinely can't be judged without it, and checks the
 change against two things a generic linter can't: the originating ticket's actual
-scope, and TypeScript/JavaScript-specific pitfalls that pass `tsc`/eslint cleanly
-but are still wrong.
+scope, and Java/Spring Boot-specific pitfalls that compile and pass Checkstyle
+cleanly but are still wrong.
 
 ## When this applies
 
@@ -42,43 +42,46 @@ targeted `Read` (using `offset`/`limit` for the surrounding lines) only when:
   that function's body to judge correctness
 
 **Step 3 — skip generated and low-signal content.** Never review, and never spend a
-`Read` call on: lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`),
-snapshot files (`__snapshots__/`), build output, `.min.js`, or vendored/generated
-directories.
+`Read` call on: generated build output (`target/`, `build/`), generated sources
+(`target/generated-sources/`), IDE metadata, or vendored/generated directories.
 
 **Step 4 — use `grep` for known-risky patterns** on touched files instead of
-re-reading them line by line: `: any`, `as any`, `catch {}` / `catch (e) {}` with an
-empty body, `console.log` left in non-debug code, `// eslint-disable`, `TODO`/`FIXME`
-introduced by this diff.
+re-reading them line by line: raw `Map`/`List` without generics, `catch (Exception e) {}`
+with an empty body, `e.printStackTrace()` left in non-debug code, `@SuppressWarnings`,
+`TODO`/`FIXME` introduced by this diff.
 
 **Step 5 — classify every finding** into exactly one of four categories:
 
 | Category | Meaning |
 |---|---|
 | `scope` | The diff does or doesn't satisfy the ticket's acceptance criteria, or goes beyond ticket scope |
-| `best-practice` | A TypeScript/JavaScript idiom or safety issue (see below) |
+| `best-practice` | A Java/Spring Boot idiom or safety issue (see below) |
 | `maintainability` | Naming, duplication, dead code, missing tests — not a bug, just costlier to live with |
 | `flag-for-security` | Touches something security-load-bearing — do not deep-review it here, name it and recommend `@security-auditor` |
 
-## TypeScript/JavaScript best-practice checks
+## Java/Spring Boot best-practice checks
 
-- **Type safety**: new `any` (explicit `: any`, `as any`, implicit `any` from an
-  untyped parameter), non-null assertions (`!`) on values that can genuinely be
-  null/undefined, `unknown` narrowed unsafely instead of via a type guard.
-- **Async correctness**: a `Promise`-returning call not `await`ed and not otherwise
-  handled, `async` functions whose rejections aren't caught anywhere in the call
-  chain, `.then()` mixed with `await` in the same function, obvious races (e.g. two
-  independent `await`s that could run in `Promise.all` but don't, where order
-  doesn't matter and latency does).
-- **Error handling**: empty `catch` blocks, `catch` blocks that swallow the original
-  error instead of rethrowing/wrapping it, throwing non-`Error` values.
-- **Module hygiene**: a new import that creates a circular dependency, inconsistent
-  default vs. named export style introduced alongside existing convention in the
-  same file/directory.
-- **Modern idioms**: `var` instead of `let`/`const`, mutation of a value that's only
-  ever read elsewhere (should be `const`/`readonly`/frozen), deep optional-chaining
-  nests that would read cleaner as an early return, string concatenation instead of
-  template literals for multi-part messages.
+- **Type safety**: raw (non-generic) `Map`/`List`/`Collection` usage, unchecked casts,
+  overuse of `@SuppressWarnings("unchecked")` to silence a real type-safety gap,
+  `instanceof` narrowing without a corresponding `else`/default case.
+- **Async correctness**: a `CompletableFuture` created but never joined/composed (fire-and-forget
+  where the result or exception matters), blocking calls (`Thread.sleep`, JDBC calls, blocking I/O)
+  made on a reactive/WebFlux event-loop thread, `@Async` methods whose exceptions aren't handled via
+  an `AsyncUncaughtExceptionHandler`, independent calls made sequentially that could run via
+  `CompletableFuture.allOf(...)` instead.
+- **Error handling**: empty `catch` blocks, `catch` blocks that swallow the original exception
+  instead of rethrowing/wrapping it (losing the stack trace), catching `Exception`/`Throwable`
+  broadly where a specific exception type is available, throwing a raw `RuntimeException` instead
+  of a domain-specific exception type.
+- **Module/bean hygiene**: a new `@Autowired` field/constructor that introduces a circular bean
+  dependency, field injection (`@Autowired` on a field) introduced where the file's existing
+  convention is constructor injection, inconsistent package structure relative to the project's
+  layering convention.
+- **Modern idioms**: `var` overuse where an explicit type materially aids readability, missing
+  `final` on fields/parameters that are never reassigned, side-effecting `forEach` where a
+  functional stream pipeline (`map`/`filter`/`collect`) would be clearer, string concatenation
+  in a loop instead of `StringBuilder`/`String.join`, or `String.format` instead of a text block
+  for multi-line messages.
 
 ## Severity taxonomy for the report
 
@@ -115,7 +118,7 @@ Timestamp   : <ISO-8601 date>
 Status      : completed | partial | blocked
 
 ### What was done
-- Reviewed <n> changed files against ticket scope and TS/JS best practices.
+- Reviewed <n> changed files against ticket scope and Java/Spring Boot best practices.
 - Ticket context: <pulled via issue-tickets | none available>
 
 ### Artifacts produced
