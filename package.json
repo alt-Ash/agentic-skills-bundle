@@ -8,10 +8,12 @@
     "agentic-skills-uninstall": "bin/uninstall.js"
   },
   "scripts": {
+    "prepack": "mvn -q -DskipTests clean package -f bin/agentic-skills-cli/pom.xml && mvn -q -DskipTests clean package -f hooks/agentic-skills-hooks/pom.xml",
     "start": "node bin/install.js",
     "test": "vitest run --config evals/vitest.config.ts evals/structural",
     "test:hooks": "mvn -q -DskipTests package -f hooks/agentic-skills-hooks/pom.xml && vitest run --config hooks/vitest.config.ts hooks/tests",
     "test:e2e": "vitest run --config e2e/vitest.config.ts",
+    "test:cli": "mvn -f bin/agentic-skills-cli/pom.xml test",
     "test:security-scanner": "mvn -f mcp/security-scanner/pom.xml test",
     "test:issue-tickets": "mvn -f mcp/issue-tickets/pom.xml test",
     "eval": "vitest run --config evals/vitest.config.ts evals/behavioral",
@@ -20,7 +22,10 @@
     "eval:baseline": "tsx evals/report.ts --save-baseline"
   },
   "files": [
-    "bin",
+    "bin/install.js",
+    "bin/uninstall.js",
+    "bin/agentic-skills-cli/target/agentic-skills-cli.jar",
+    "hooks/agentic-skills-hooks/target/agentic-skills-hooks.jar",
     "skills",
     "agents",
     "mcp",
@@ -44,13 +49,6 @@
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "chalk": "^5.3.0",
-    "fs-extra": "^11.2.0",
-    "inquirer": "^9.2.0",
-    "ora": "^8.0.1",
-    "yaml": "^2.8.4"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^1.0.0",
