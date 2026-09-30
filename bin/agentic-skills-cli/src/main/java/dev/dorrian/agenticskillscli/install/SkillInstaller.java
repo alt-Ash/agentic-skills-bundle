@@ -1,0 +1,99 @@
+package dev.dorrian.agenticskillscli.install;
+
+import dev.dorrian.agenticskillscli.config.OperationResult;
+import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Java port of {@code bin/install.js}'s {@code installSkills()}, plus the
+ * inline skill-removal logic from {@code runUninstall()} (there is no
+ * separate {@code uninstallSkills} function in the original — removal is a
+ * simple recursive delete at the call site).
+ */
+public final class SkillInstaller {
+
+    private SkillInstaller() {
+    }
+
+    public static List<OperationResult> install(List<SkillDescriptor> skills, Path targetPath) {
+        ensureDir(targetPath);
+        List<OperationResult> results = new ArrayList<>();
+        for (SkillDescriptor skill : skills) {
+            Path dest = targetPath.resolve(skill.name());
+            try {
+                copyRecursive(skill.sourcePath(), dest);
+                results.add(OperationResult.ok(skill.name(), false, null));
+            } catch (IOException e) {
+                results.add(OperationResult.failed(skill.name(), null, e.getMessage()));
+            }
+        }
+        return results;
+    }
+
+    /** Removes an installed skill directory if present; skipped=true if it was already absent. */
+    public static OperationResult remove(String skillName, Path targetPath) {
+        Path dest = targetPath.resolve(skillName);
+        try {
+            if (!Files.exists(dest)) {
+                return OperationResult.ok(skillName, true, null);
+            }
+            deleteRecursive(dest);
+            return OperationResult.ok(skillName, false, null);
+        } catch (IOException e) {
+            return OperationResult.failed(skillName, null, e.getMessage());
+        }
+    }
+
+    private static void ensureDir(Path dir) {
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    static void copyRecursive(Path source, Path dest) throws IOException {
+        Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                Files.createDirectories(dest.resolve(source.relativize(dir)));
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.copy(file, dest.resolve(source.relativize(file)), StandardCopyOption.REPLACE_EXISTING);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    static void deleteRecursive(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return;
+        }
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+}
