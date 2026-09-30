@@ -137,7 +137,9 @@ class DefaultScanSessionTest {
             session.request("/");
         }
 
-        assertThat(session.isAborted()).isFalse();
+        assertThat(session.isAborted())
+            .describedAs("records: %s", session.getStats().records())
+            .isFalse();
         assertThat(session.getStats().requestsIssued()).isEqualTo(10);
     }
 

@@ -41,6 +41,8 @@ final class DefaultScanSession implements ScanSession {
      * below ~10ms, clock resolution and scheduler jitter swamp any real slowdown signal anyway.
      */
     static final long MIN_BASELINE_LATENCY_MS = 10;
+    /** A single slow outlier (JIT warm-up, GC) shouldn't abort the scan from a 1-2 sample average. */
+    static final int MIN_LATENCY_SAMPLES = 5;
     private static final Duration REQUEST_TIMEOUT = Duration.ofMillis(5000);
 
     private final String target;
@@ -184,7 +186,7 @@ final class DefaultScanSession implements ScanSession {
         }
 
         double avgLatency = window.stream().mapToLong(RequestRecord::latencyMs).average().orElse(0);
-        if (latencyTripped(avgLatency, baselineLatencyMs.get())) {
+        if (window.size() >= MIN_LATENCY_SAMPLES && latencyTripped(avgLatency, baselineLatencyMs.get())) {
             aborted.set(true);
         }
     }
