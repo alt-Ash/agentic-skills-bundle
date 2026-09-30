@@ -1,2 +1,0 @@
-{"type":"user","message":{"content":"Write a function to reverse a string"}}
-{"type":"assistant","message":{"model":"claude-opus-4-5","usage":{"input_tokens":150,"cache_read_input_tokens":50,"cache_creation_input_tokens":10}}}

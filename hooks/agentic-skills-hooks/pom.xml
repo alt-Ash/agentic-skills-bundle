@@ -77,6 +77,30 @@
           </execution>
         </executions>
       </plugin>
+
+      <!--
+        *IT classes run after `package` against the shaded jar itself, spawned
+        as a child process (`java -jar ... <hookType>`), so manifest/main-class/
+        bundling mistakes fail the build. `mvn verify` runs unit + IT suites.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <systemPropertyVariables>
+            <hooks.jar>${project.build.directory}/${project.build.finalName}.jar</hooks.jar>
+          </systemPropertyVariables>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>

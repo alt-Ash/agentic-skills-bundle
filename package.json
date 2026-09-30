@@ -11,7 +11,7 @@
     "prepack": "mvn -q -DskipTests clean package -f bin/agentic-skills-cli/pom.xml && mvn -q -DskipTests clean package -f hooks/agentic-skills-hooks/pom.xml",
     "start": "node bin/install.js",
     "test": "mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest",
-    "test:hooks": "mvn -q -DskipTests package -f hooks/agentic-skills-hooks/pom.xml && vitest run --config hooks/vitest.config.ts hooks/tests",
+    "test:hooks": "mvn -f hooks/agentic-skills-hooks/pom.xml verify",
     "test:cli": "mvn -f bin/agentic-skills-cli/pom.xml test",
     "test:security-scanner": "mvn -f mcp/security-scanner/pom.xml test",
     "test:issue-tickets": "mvn -f mcp/issue-tickets/pom.xml test",
@@ -51,8 +51,5 @@
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=18.0.0"
-  },
-  "devDependencies": {
-    "vitest": "^4.1.0"
   }
 }

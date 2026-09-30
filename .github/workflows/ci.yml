@@ -28,7 +28,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Pure-Maven suites (no Node needed). One matrix leg per module/test scope.
+  # All test suites are pure Maven (no Node needed). One matrix leg per module/test scope.
   # ---------------------------------------------------------------------------
   maven:
     name: ${{ matrix.name }}
@@ -49,6 +49,13 @@ jobs:
             artifact: cli
             module: bin/agentic-skills-cli
             command: mvn -B -f bin/agentic-skills-cli/pom.xml test
+
+          # Unit tests, then (failsafe, after `package`) HookInvocationIT, which
+          # spawns the shaded jar as a child process per hook type.
+          - name: hooks
+            artifact: hooks
+            module: hooks/agentic-skills-hooks
+            command: mvn -B -f hooks/agentic-skills-hooks/pom.xml verify
 
           - name: security-scanner
             artifact: security-scanner
@@ -89,59 +96,14 @@ jobs:
       - name: Test
         run: ${{ matrix.command }}
 
-      - name: Upload surefire reports
+      - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: surefire-reports-${{ matrix.artifact }}
-          path: ${{ matrix.module }}/target/surefire-reports/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # ---------------------------------------------------------------------------
-  # Hooks: JUnit suite, then the black-box Vitest suite that spawns the built
-  # hooks jar as a child process (`pnpm test:hooks` builds the jar first).
-  # ---------------------------------------------------------------------------
-  hooks:
-    name: hooks
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-
-      # Reads the pnpm version from package.json's `packageManager` field.
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: JUnit tests
-        run: mvn -B -f hooks/agentic-skills-hooks/pom.xml test
-
-      - name: Vitest (spawns built hooks jar)
-        run: pnpm test:hooks
-
-      - name: Upload surefire reports
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: surefire-reports-hooks
-          path: hooks/agentic-skills-hooks/target/surefire-reports/
+          name: test-reports-${{ matrix.artifact }}
+          path: |
+            ${{ matrix.module }}/target/surefire-reports/
+            ${{ matrix.module }}/target/failsafe-reports/
           retention-days: 7
           if-no-files-found: ignore
 

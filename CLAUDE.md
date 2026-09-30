@@ -14,7 +14,7 @@ This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers
 pnpm start              # run the interactive CLI installer
 pnpm test               # structural tests (agent/skill/command file validation, Java)
 pnpm run eval           # behavioral LLM evaluations (Java) — invoke actual models, run sparingly
-pnpm run test:hooks     # hook unit tests (spawns compiled hooks as child processes)
+pnpm run test:hooks     # hook unit tests + HookInvocationIT (spawns the packaged jar per hook type)
 pnpm run test:cli       # JUnit suite for bin/agentic-skills-cli (the Java installer)
 ```
 
@@ -24,8 +24,8 @@ Run a single test file:
 # structural (one of the three content-validation classes)
 mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest
 
-# hooks
-vitest run --config hooks/vitest.config.ts hooks/tests/hook-invocation.test.ts
+# hooks: black-box IT against the packaged jar (failsafe runs after `package`)
+mvn verify -f hooks/agentic-skills-hooks/pom.xml -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=HookInvocationIT
 ```
 
 Syntax-check the installer without running it:
@@ -89,9 +89,9 @@ below). It builds to one fat jar, argv-dispatched:
 `post-tool-use` / `post-tool-use-failure` / `session` / `user-prompt-submit` /
 `stop`. Each reads all of stdin as JSON, writes its side effects, and always
 exits 0 (an internal failure must never block the host CLI). Build/test via
-`pnpm test:hooks` (builds the jar, then runs the black-box Vitest spawn
-suite in `hooks/tests/hook-invocation.test.ts`) or
-`mvn -f hooks/agentic-skills-hooks/pom.xml test` for the JUnit suite alone.
+`pnpm test:hooks` (`mvn verify`: the unit tests, then failsafe's
+`HookInvocationIT`, which spawns the packaged shaded jar per hook type) or
+`mvn -f hooks/agentic-skills-hooks/pom.xml test` for the unit tests alone.
 
 Shared infrastructure lives in `EventLog.java`: the `UsageEvent` type,
 `recordEvent` (read-modify-write to `ai-usage-events.json` in the JVM's
@@ -171,7 +171,7 @@ either (`package.json`'s `files`/`prepack` don't reference it) — dev-only tool
 |---|---|---|
 | `bin/agentic-skills-cli`'s `content/` package | `mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest` (aliased as `pnpm test`) | Validates agent/skill/command frontmatter fields and file structure — no model calls, no real API cost. Resolves the repo root independently of the shared `PackageRoot` singleton (which `PackageRootTest` repeatedly re-points at fake dirs in the same Surefire fork) so results don't depend on cross-class execution order. |
 | `evals/agentic-skills-evals/` | `mvn -f evals/agentic-skills-evals/pom.xml test` | LLM-invoked scenario evals (Java, expensive — real billed model calls) |
-| `hooks/tests/` | `hooks/vitest.config.ts` | Spawns the built hooks jar (`java -jar ... <hookType>`) as a child process, asserts event output — cross-language black-box test, deliberately kept in a different toolchain than the JUnit suite it sits alongside |
+| `hooks/agentic-skills-hooks/` | `mvn -f hooks/agentic-skills-hooks/pom.xml verify` (aliased as `pnpm test:hooks`) | Unit tests, then `HookInvocationIT` (failsafe, after `package`): spawns the shaded jar (`java -jar ... <hookType>`) as a child process and asserts the files it writes and the events it POSTs to a localhost capture server — catches manifest/main-class/bundling mistakes an in-classpath test can't |
 
 Agent files must pass `AgentFileStructureTest`: required frontmatter includes `description` (≥ 20 chars), `mode` (`subagent` or `primary`), `temperature` (0–1), `color` (hex), and a `permission` object. Body must have ≥ 2 `##` sections and document its output format. Skill files must pass `SkillFileStructureTest` (required `name`/`description`, `***CONTEXT BLOCK***`/`***HANDOFF BLOCK***` templates). Command files must pass `CommandFileStructureTest` (frontmatter limited to `description`/`subtask`).
 
