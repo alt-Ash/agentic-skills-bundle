@@ -19,11 +19,18 @@ public final class ClaudeCliMcpRegistrar {
 
     public static final String CONFIG_LABEL = "~/.claude.json (user scope, via `claude mcp add`)";
 
+    /**
+     * Test-only: overrides the {@code claude} executable. The surefire config
+     * points it at a nonexistent path so tests can never write to the
+     * developer's real {@code ~/.claude.json}.
+     */
+    public static final String CLI_OVERRIDE_ENV_VAR = "AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE";
+
     private ClaudeCliMcpRegistrar() {
     }
 
     public static boolean exists(String name) {
-        return runQuiet("claude", "mcp", "get", name) == 0;
+        return runQuiet(cli(), "mcp", "get", name) == 0;
     }
 
     public static OperationResult install(String name, Map<String, Object> serverConfig, boolean force) {
@@ -51,7 +58,7 @@ public final class ClaudeCliMcpRegistrar {
 
         try {
             List<String> fullCommand = new ArrayList<>();
-            fullCommand.add("claude");
+            fullCommand.add(cli());
             fullCommand.addAll(args);
             int exit = run(fullCommand);
             if (exit != 0) {
@@ -64,8 +71,13 @@ public final class ClaudeCliMcpRegistrar {
     }
 
     public static OperationResult uninstall(String name) {
-        int exit = runQuiet("claude", "mcp", "remove", name, "--scope", "user");
+        int exit = runQuiet(cli(), "mcp", "remove", name, "--scope", "user");
         return OperationResult.ok(name, exit != 0, null);
+    }
+
+    private static String cli() {
+        String override = System.getenv(CLI_OVERRIDE_ENV_VAR);
+        return override == null || override.isBlank() ? "claude" : override;
     }
 
     private static int runQuiet(String... command) {

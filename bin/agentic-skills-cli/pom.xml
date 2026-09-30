@@ -76,8 +76,15 @@
             tests (see detect/InstalledSkillAgentCommandDetectorTest)
             possible without touching real machine state.
           -->
+          <!--
+            The HOME override can't reach the real `claude` CLI, which keeps
+            its own config (~/.claude.json). Point ClaudeCliMcpRegistrar at a
+            binary that doesn't exist so no test can `claude mcp add` into the
+            developer's real user-scope config.
+          -->
           <environmentVariables>
             <AGENTIC_SKILLS_HOME_OVERRIDE>${project.build.directory}/test-home</AGENTIC_SKILLS_HOME_OVERRIDE>
+            <AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE>${project.build.directory}/no-such-claude</AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE>
           </environmentVariables>
         </configuration>
       </plugin>

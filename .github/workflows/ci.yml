@@ -1,0 +1,211 @@
+# CI for agentic-skills-bundle.
+#
+# Every job here is zero-cost and offline apart from Maven Central / npm registry
+# downloads: no job calls a model, a ticketing API, or any other live external
+# service. Provider/scanner tests talk only to in-process localhost HttpServers.
+#
+# Action pins: floating major tags, verified against each repo's latest release
+# (`gh api repos/<owner>/<repo>/releases/latest`) — see
+# skills/devops/cicd-pipelines/platforms/github-actions.md for the repo's own
+# pinning guidance (SHA-pin if/when this repo moves to stricter hardening).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Pure-Maven suites (no Node needed). One matrix leg per module/test scope.
+  # ---------------------------------------------------------------------------
+  maven:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Agent/skill/command file validation (same as `pnpm test`).
+          - name: structural
+            artifact: structural
+            module: bin/agentic-skills-cli
+            command: mvn -B -f bin/agentic-skills-cli/pom.xml test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest
+
+          # Full JUnit suite for the Java installer (same as `pnpm test:cli`).
+          - name: cli
+            artifact: cli
+            module: bin/agentic-skills-cli
+            command: mvn -B -f bin/agentic-skills-cli/pom.xml test
+
+          - name: security-scanner
+            artifact: security-scanner
+            module: mcp/security-scanner
+            command: mvn -B -f mcp/security-scanner/pom.xml test
+
+          - name: issue-tickets
+            artifact: issue-tickets
+            module: mcp/issue-tickets
+            command: mvn -B -f mcp/issue-tickets/pom.xml test
+
+          # ===================================================================
+          # !!! EVALS: ZERO-COST UNIT TESTS ONLY !!!
+          # The billed behavioral evals — every *EvalTest class
+          # (IssueArchitectEvalTest, SecurityAuditorEvalTest,
+          # SecurityImplementorEvalTest, TddEngineerEvalTest), the
+          # *RealSubprocessTest classes, and `pnpm eval` — spawn a real
+          # `claude` CLI and make real, BILLED model calls. They must NEVER
+          # run in CI. Only the explicit -Dtest allowlist below may run here;
+          # never drop the -Dtest filter or widen it to a wildcard.
+          # ===================================================================
+          - name: evals (zero-cost only)
+            artifact: evals
+            module: evals/agentic-skills-evals
+            command: mvn -B -f evals/agentic-skills-evals/pom.xml test -Dtest=GoldenCheckerTest,InProcessMcpBridgeTest,JudgeTest,EvalReportTest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Test
+        run: ${{ matrix.command }}
+
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports-${{ matrix.artifact }}
+          path: ${{ matrix.module }}/target/surefire-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Hooks: JUnit suite, then the black-box Vitest suite that spawns the built
+  # hooks jar as a child process (`pnpm test:hooks` builds the jar first).
+  # ---------------------------------------------------------------------------
+  hooks:
+    name: hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      # Reads the pnpm version from package.json's `packageManager` field.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: JUnit tests
+        run: mvn -B -f hooks/agentic-skills-hooks/pom.xml test
+
+      - name: Vitest (spawns built hooks jar)
+        run: pnpm test:hooks
+
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports-hooks
+          path: hooks/agentic-skills-hooks/target/surefire-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Pack: `npm pack --dry-run` runs `prepack` (builds both fat jars) and must
+  # include both jars in the tarball, or the published CLI is broken.
+  # ---------------------------------------------------------------------------
+  pack:
+    name: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: npm pack --dry-run
+        run: npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+
+      - name: Assert both jars are packed
+        run: |
+          PACK_JSON="$RUNNER_TEMP/pack.json" node <<'EOF'
+          const fs = require('fs');
+          const [pkg] = JSON.parse(fs.readFileSync(process.env.PACK_JSON, 'utf8'));
+          const files = new Set(pkg.files.map((f) => f.path));
+          const required = [
+            'bin/agentic-skills-cli/target/agentic-skills-cli.jar',
+            'hooks/agentic-skills-hooks/target/agentic-skills-hooks.jar',
+          ];
+          const missing = required.filter((p) => !files.has(p));
+          for (const p of required) {
+            const entry = pkg.files.find((f) => f.path === p);
+            console.log(`${entry ? 'OK     ' : 'MISSING'} ${p}${entry ? ` (${entry.size} bytes)` : ''}`);
+          }
+          if (missing.length) {
+            console.error(`::error::npm pack is missing required jar(s): ${missing.join(', ')}`);
+            process.exit(1);
+          }
+          // MCP servers are built from source at install time; their local
+          // build output must stay out of the tarball (package.json `files`).
+          const leaked = [...files].filter((p) => /^mcp\/[^/]+\/target\//.test(p));
+          if (leaked.length) {
+            console.error(`::error::npm pack includes MCP build output: ${leaked.slice(0, 5).join(', ')}`);
+            process.exit(1);
+          }
+          console.log(`${pkg.entryCount} files, ${pkg.size} bytes packed`);
+          EOF
+
+      - name: Upload pack manifest
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pack-json
+          path: ${{ runner.temp }}/pack.json
+          retention-days: 7
+          if-no-files-found: ignore

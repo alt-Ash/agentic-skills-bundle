@@ -8,11 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code claude} CLI is not guaranteed to be on PATH in this build
- * environment, so these tests only assert the graceful-failure contract
- * (no exception escapes, a sane result is still returned) rather than a
- * real registration round-trip — matching how the original's {@code
- * execFileAsync('claude', ...)} calls are always wrapped in try/catch.
+ * Surefire sets {@code AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE} to a nonexistent
+ * binary (see pom.xml), so these tests exercise the graceful-failure contract
+ * deterministically and never write to the developer's real {@code
+ * ~/.claude.json}, even when the real {@code claude} CLI is on PATH.
  */
 class ClaudeCliMcpRegistrarTest {
 
@@ -32,7 +31,7 @@ class ClaudeCliMcpRegistrarTest {
         OperationResult result = ClaudeCliMcpRegistrar.install(
             "test-server", Map.of("command", "java", "args", java.util.List.of("-jar", "x.jar")), false
         );
-        // Either succeeds (claude CLI present and worked) or fails gracefully — must not throw.
         assertTrue(result.name().equals("test-server"));
+        assertFalse(result.success(), "must fail gracefully against the overridden, nonexistent CLI");
     }
 }
