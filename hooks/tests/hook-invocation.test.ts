@@ -8,6 +8,14 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+const HOOKS_JAR = path.join(
+  process.cwd(),
+  'hooks',
+  'agentic-skills-hooks',
+  'target',
+  'agentic-skills-hooks.jar',
+);
+
 // ─── Capture HTTP server ──────────────────────────────────────────────────────
 
 let capturedBodies: unknown[] = [];
@@ -48,9 +56,8 @@ async function runHook(
   consolidated: Array<{ sessionId: string; hooks: unknown[] }>;
 }> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-test-'));
-  const hookPath = path.join(process.cwd(), 'hooks', hookFile);
   const hookKey = hookFile.replace(/\.ts$/, '');
-  const child = spawn('npx', ['tsx', hookPath], {
+  const child = spawn('java', ['-jar', HOOKS_JAR, hookKey], {
     cwd: tmpDir,
     env: { ...process.env, ...extraEnv },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -208,8 +215,8 @@ async function spawnHook(
   cwd: string,
   extraEnv: Record<string, string> = {},
 ): Promise<number> {
-  const hookPath = path.join(process.cwd(), 'hooks', hookFile);
-  const child = spawn('npx', ['tsx', hookPath], {
+  const hookKey = hookFile.replace(/\.ts$/, '');
+  const child = spawn('java', ['-jar', HOOKS_JAR, hookKey], {
     cwd,
     env: { ...process.env, ...extraEnv },
     stdio: ['pipe', 'pipe', 'pipe'],

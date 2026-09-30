@@ -70,14 +70,15 @@ describe.skipIf(!SERVICE_ROOT)('analytics pipeline e2e', () => {
     '..',
     'hooks',
   );
+  const HOOKS_JAR = path.join(HOOKS_DIR, 'agentic-skills-hooks', 'target', 'agentic-skills-hooks.jar');
 
   async function runHook(
     hookFile: string,
     payload: object,
   ): Promise<{ exitCode: number; events: unknown[] }> {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-hook-'));
-    const hookPath = path.join(HOOKS_DIR, hookFile);
-    const child = spawn('npx', ['tsx', hookPath], {
+    const hookKey = hookFile.replace(/\.ts$/, '');
+    const child = spawn('java', ['-jar', HOOKS_JAR, hookKey], {
       cwd: tmpDir,
       env: { ...process.env, ANALYTICS_SERVICE_URL: serviceBaseUrl },
       stdio: ['pipe', 'pipe', 'pipe'],

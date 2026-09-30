@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node bin/install.js",
     "test": "vitest run --config evals/vitest.config.ts evals/structural",
-    "test:hooks": "vitest run --config hooks/vitest.config.ts hooks/tests",
+    "test:hooks": "mvn -q -DskipTests package -f hooks/agentic-skills-hooks/pom.xml && vitest run --config hooks/vitest.config.ts hooks/tests",
     "test:e2e": "vitest run --config e2e/vitest.config.ts",
     "test:security-scanner": "mvn -f mcp/security-scanner/pom.xml test",
     "test:issue-tickets": "mvn -f mcp/issue-tickets/pom.xml test",
