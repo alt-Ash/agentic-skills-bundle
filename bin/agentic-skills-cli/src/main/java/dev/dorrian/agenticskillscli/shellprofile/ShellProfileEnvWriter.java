@@ -200,12 +200,25 @@ public final class ShellProfileEnvWriter {
         return profileFile;
     }
 
-    /** Appends the Figma access token export to the user's shell profile. Skips if already present. */
+    /**
+     * Appends the Figma access token export to the user's shell profile. Skips if already present.
+     *
+     * @deprecated Figma MCP is now configured against Figma's OAuth-only
+     *     hosted server (or the desktop app's local server), neither of which
+     *     reads {@code FIGMA_ACCESS_TOKEN}. Remove once the install flows stop
+     *     prompting for a token.
+     */
+    @Deprecated
     public static WriteResult writeFigmaEnvVar(String accessToken) {
         return writeFigmaEnvVar(resolveShellProfileFile(), accessToken);
     }
 
-    /** Overload taking an explicit profile file — used by tests to avoid touching the real shell profile. */
+    /**
+     * Overload taking an explicit profile file — used by tests to avoid touching the real shell profile.
+     *
+     * @deprecated see {@link #writeFigmaEnvVar(String)}.
+     */
+    @Deprecated
     public static WriteResult writeFigmaEnvVar(Path profileFile, String accessToken) {
         String existing = readIfExists(profileFile);
 
