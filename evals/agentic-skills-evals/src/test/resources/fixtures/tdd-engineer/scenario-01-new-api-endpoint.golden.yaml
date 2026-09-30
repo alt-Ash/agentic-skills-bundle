@@ -1,13 +1,13 @@
 required:
   - pattern: 'HANDOFF BLOCK'
     label: hasHandoffBlock
-  - pattern: 'Cannot find module'
+  - pattern: 'cannot find symbol'
     label: hasRedConfirmation
-  - pattern: 'supertest'
-    label: hasSupertestUsage
-  - pattern: 'users.test.ts'
+  - pattern: 'MockMvc'
+    label: hasMockMvcUsage
+  - pattern: 'UserControllerTest'
     label: hasTestFile
-  - pattern: 'status(200)'
+  - pattern: 'isOk()'
     label: has200Response
   - pattern: 'completed'
     label: hasCompletedStatus

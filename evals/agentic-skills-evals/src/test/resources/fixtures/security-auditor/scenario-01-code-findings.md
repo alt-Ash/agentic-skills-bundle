@@ -2,7 +2,7 @@
 
 ## Request
 
-Audit the Vortex Node.js API for security vulnerabilities. Exploit all confirmed findings. Produce the full report including the HANDOFF BLOCK.
+Audit the Vortex Spring Boot API for security vulnerabilities. Exploit all confirmed findings. Produce the full report including the HANDOFF BLOCK.
 
 ## Pre-scanned project (Steps 1–3 complete)
 
@@ -11,38 +11,40 @@ Audit the Vortex Node.js API for security vulnerabilities. Exploit all confirmed
 ### Step 1 — Project shape
 
 ```
-# Framework / auth / security libs present:
-express
-jsonwebtoken
-pg
+# Spring Boot starters / auth / security libs present:
+spring-boot-starter-web
+spring-boot-starter-data-jpa
+jjwt (io.jsonwebtoken)
+postgresql (driver)
 
 # NOT present (no matches):
-helmet
-express-rate-limit
-rateLimit
-ThrottlerModule
+spring-boot-starter-security's HeadersConfigurer customization
+bucket4j / resilience4j-ratelimiter
+RateLimiter
 
 # Entry point
-{"main":"src/index.ts","start":"ts-node src/index.ts"}
+src/main/java/com/vortex/VortexApiApplication.java
 
-# Node version: 18.17.0
-# Lockfile: package-lock.json present
+# JDK version: 17 (<java.version>17</java.version> in pom.xml)
+# Build tool: Maven, pom.xml present
 ```
 
-`package.json` (abridged):
-```json
-{
-  "name": "vortex-api",
-  "version": "1.0.0",
-  "dependencies": {
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.0",
-    "pg": "^8.11.0"
-  }
-}
+`pom.xml` (abridged):
+```xml
+&lt;project&gt;
+  &lt;groupId&gt;com.vortex&lt;/groupId&gt;
+  &lt;artifactId&gt;vortex-api&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+  &lt;dependencies&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-data-jpa&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;io.jsonwebtoken&lt;/groupId&gt;&lt;artifactId&gt;jjwt-api&lt;/artifactId&gt;&lt;version&gt;0.12.3&lt;/version&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.postgresql&lt;/groupId&gt;&lt;artifactId&gt;postgresql&lt;/artifactId&gt;&lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/project&gt;
 ```
 
-### Step 2 — npm audit triage output
+### Step 2 — OWASP Dependency-Check triage output
 
 ```json
 {
@@ -62,115 +64,131 @@ No confirmed vulnerable dependencies. No dependency findings.
 
 **A01 — Broken Access Control**
 ```
-# Routes without auth guard — no matches
-# CORS wildcard — no matches
-# JWT missing algorithms — no matches
+# Controller methods without @PreAuthorize/@Secured — no matches flagged (endpoints are intentionally public)
+# @CrossOrigin(origins = "*") — no matches
+# JWT missing algorithm allowlist — no matches
 ```
 
 **A02 — Cryptographic Failures**
 ```
-# Math.random() in security context
-src/routes/auth.ts:47:  const token = Math.random().toString(36).substring(2);
+# java.util.Random in security context
+src/main/java/com/vortex/auth/PasswordResetService.java:31:  String token = new Random().nextLong() + "";
 
-# Hardcoded JWT secret — no matches (uses process.env.JWT_SECRET)
-# Weak hash — no matches
-# TLS disabled — no matches
+# Hardcoded JWT secret — no matches (uses @Value("${jwt.secret}") from environment)
+# Weak hash (MD5/SHA-1) — no matches
+# TLS trust manager disabled — no matches
 ```
 
-`src/routes/auth.ts` (lines 42–54, full context):
-```typescript
-router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  const user = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-  if (!user.rows.length) return res.status(404).json({ error: 'Not found' });
+`src/main/java/com/vortex/auth/PasswordResetService.java` (lines 24–38, full context):
+```java
+@Service
+public class PasswordResetService {
 
-  const token = Math.random().toString(36).substring(2);   // line 47
-  await db.query(
-    'UPDATE users SET reset_token = $1 WHERE email = $2',
-    [token, email],
-  );
-  res.json({ message: 'Reset email sent' });
-});
+    private final UserRepository userRepository;
+
+    public PasswordResetService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public void requestReset(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException(email));
+
+        String token = new Random().nextLong() + "";   // line 31
+        user.setResetToken(token);
+        userRepository.save(user);
+    }
+}
 ```
 
 **A03 — Injection**
 ```
-# SQL injection — raw concatenation
-src/routes/users.ts:23:  const result = await db.query('SELECT * FROM users WHERE id = ' + req.params.id);
+# JPQL/native-query injection via string concatenation
+src/main/java/com/vortex/user/UserRepository.java:19:  @Query(value = "SELECT * FROM users WHERE id = " + "?1", nativeQuery = true)
 
-# NoSQL injection — no matches (uses pg, not MongoDB)
-# Command injection — no matches
+# SpEL/script evaluation of untrusted input — no matches
+# Command injection via Runtime.exec/ProcessBuilder — no matches
 # Path traversal — no matches
 ```
 
-`src/routes/users.ts` (lines 19–29, full context):
-```typescript
-router.get('/:id', async (req, res) => {
-  try {
-    const result = await db.query(   // line 23
-      'SELECT * FROM users WHERE id = ' + req.params.id
-    );
-    res.json(result.rows[0]);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });   // also leaks stack
-  }
-});
+`src/main/java/com/vortex/user/UserController.java` (lines 15–27, full context):
+```java
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+
+    private final UserRepository userRepository;
+
+    @GetMapping("/{id}")
+    public ResponseEntity&lt;?&gt; getUser(@PathVariable String id) {
+        try {
+            User user = userRepository.findByIdRaw(id);   // line 23, see UserRepository below
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));   // also leaks exception message
+        }
+    }
+}
+```
+
+`src/main/java/com/vortex/user/UserRepository.java` (the offending native query):
+```java
+public interface UserRepository extends JpaRepository&lt;User, Long&gt; {
+
+    @Query(value = "SELECT * FROM users WHERE id = " + "?1", nativeQuery = true)   // line 19 — string-built, not parameterized via Spring Data's ?1 binding as intended, concatenation pattern flagged
+    User findByIdRaw(@Param("1") String id);
+}
 ```
 
 **A04 — Insecure Design**
 ```
-# Rate limiting — no matches (express-rate-limit, rateLimit, ThrottlerModule — none present)
+# Rate limiting — no matches (bucket4j, resilience4j-ratelimiter, RateLimiter — none present)
 # File upload — no matches
-# Password reset entropy — see A02 above (Math.random token)
+# Password reset token entropy — see A02 above (java.util.Random token)
 ```
 
 **A05 — Security Misconfiguration**
 ```
-# helmet() — no matches in src/index.ts or any entry point
-# CORS — no matches (no cors() call)
-# Stack trace leaked — see src/routes/users.ts:27 (err.message sent in res.json)
-# .env git tracking — git ls-files .env: no output (correctly gitignored)
-# Hardcoded secrets — no matches
+# HeadersConfigurer / security headers — no matches in any SecurityFilterChain bean
+# CORS — no matches (no CorsConfigurationSource bean)
+# Stack trace / exception message leaked — see UserController.java:25 (e.getMessage() returned in response body)
+# application.yml secrets tracked in git — git ls-files application.yml: tracked, but jwt.secret sourced from ${JWT_SECRET} env var, not a literal (no finding)
+# Actuator endpoints exposed — /actuator/env and /actuator/heapdump reachable with no authentication configured
 ```
 
-`src/index.ts` (full file):
-```typescript
-import express from 'express';
-import usersRouter from './routes/users';
-import authRouter from './routes/auth';
-
-const app = express();
-// No helmet() call
-app.use(express.json());
-app.use('/api/users', usersRouter);
-app.use('/api/auth', authRouter);
-
-app.listen(3000, () => console.log('Vortex API running on :3000'));
+`src/main/java/com/vortex/VortexApiApplication.java` (full file):
+```java
+@SpringBootApplication
+public class VortexApiApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(VortexApiApplication.class, args);
+    }
+    // No SecurityFilterChain bean defined anywhere in the project — no headers configuration exists
+}
 ```
 
 **A06 — Vulnerable & Outdated Components**: covered in Step 2. No confirmed findings.
 
 **A07 — Authentication Failures**
 ```
-# jwt.verify without algorithms — no matches (jwt.verify not used; only jwt.sign)
-# Session config — no matches (no express-session)
+# Jwts.parser() without algorithm allowlist — no matches (JWT verification not implemented; only Jwts.builder().signWith(...) found for issuing)
+# BCryptPasswordEncoder work factor — no matches (BCrypt not in use; passwords are not yet hashed in this early-stage project — pre-existing gap, out of scope for this scenario's findings)
 ```
 
 **A08 — Data Integrity**
 ```
-# Unsafe deserialization — no matches
-# Unsigned cookies — no matches
+# Unsafe deserialization (ObjectInputStream.readObject on untrusted data) — no matches
 ```
 
 **A09 — Logging Failures**
 ```
-# Sensitive data in logs — no matches
-# Swallowed catch blocks — src/routes/users.ts:27 sends err.message (see A05)
+# Sensitive data (password/token/secret) printed via log.info/System.out.println — no matches
+# Swallowed exception detail returned to client — UserController.java:25 returns e.getMessage() (see A05)
 ```
 
 **A10 — SSRF**
 ```
-# Outbound URL from user input — no matches
+# RestTemplate/WebClient call with URL sourced from request input — no matches
 ```
 
 ## Pre-baked exploitation results (Step 5)
@@ -178,32 +196,31 @@ app.listen(3000, () => console.log('Vortex API running on :3000'));
 > User confirmed: **A — run all findings**.
 > The curl/script results below ARE the Step 5 exploitation output. Do NOT run any network commands. Use these results verbatim.
 
-### Exploit — C-01 — `Math.random()` used for cryptographic randomness
+### Exploit — C-01 — `java.util.Random` used for cryptographic randomness
 **Status:** Confirmed (code review)
 **Payload:** N/A — internal token generation; no HTTP endpoint exposes the raw token for direct injection
 **Response:** N/A
-**Impact:** Reset tokens generated via `Math.random()` have ~54 bits of entropy from a non-CSPRNG. An attacker can predict or brute-force tokens within minutes using statistical analysis of the PRNG state, enabling account takeover without knowing the victim's password.
+**Impact:** Reset tokens generated via `new Random().nextLong()` are produced by a 48-bit linear congruential generator, not a CSPRNG. An attacker who observes a small number of generated tokens (or knows the approximate generation time) can predict the internal seed and derive subsequent tokens, enabling account takeover without knowing the victim's password.
 
-### Exploit — C-02 — SQL injection via string concatenation
+### Exploit — C-02 — SQL injection via string-concatenated native query
 **Status:** Confirmed
-**Payload:** `curl -s "http://localhost:3000/api/users/1'"`
-**Response:** `HTTP 500 {"error":"syntax error at or near \"'\" at character 38"}`
-**Impact:** Full read access to any row in the `users` table. Union-based extraction possible: `GET /api/users/0 UNION SELECT null,email,password_hash FROM users--`
+**Payload:** `curl -s "http://localhost:8080/api/users/1'"`
+**Response:** `HTTP 500 {"error":"org.postgresql.util.PSQLException: syntax error at or near \"'\""}`
+**Impact:** Full read access to any row in the `users` table. Union-based extraction possible via a crafted `id` path value once the native query's string-concatenation pattern is confirmed exploitable.
 
-### Exploit — C-03 — No Helmet — security headers absent
+### Exploit — C-03 — No security headers configured
 **Status:** Confirmed
-**Payload:** `curl -sI http://localhost:3000/api/users/1`
+**Payload:** `curl -sI http://localhost:8080/api/users/1`
 **Response:**
 ```
-HTTP/1.1 200 OK
-X-Powered-By: Express
+HTTP/1.1 200
 Content-Type: application/json
 ```
 **Impact:** No `X-Frame-Options`, `X-Content-Type-Options`, `Strict-Transport-Security`, or `Content-Security-Policy` headers. Browser-based attacks (clickjacking, MIME sniffing, XSS amplification) are unmitigated.
 
 ### Exploit — C-04 — No rate limiting on any endpoint
 **Status:** Confirmed
-**Payload:** `for i in $(seq 1 100); do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/auth/forgot-password -H 'Content-Type: application/json' -d '{"email":"victim@example.com"}'; done`
+**Payload:** `for i in $(seq 1 100); do curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8080/api/auth/forgot-password -H 'Content-Type: application/json' -d '{"email":"victim@example.com"}'; done`
 **Response:** 100 × `200` — all requests succeed without throttling
 **Impact:** `/api/auth/forgot-password` is brute-forceable without limit. Combined with C-01 (weak token entropy), an attacker can enumerate tokens by flooding the endpoint and testing predictions.
 

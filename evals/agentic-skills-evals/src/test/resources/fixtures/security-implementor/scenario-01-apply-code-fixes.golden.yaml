@@ -5,12 +5,12 @@ required:
     label: hasHandoffBlock
   - pattern: '"fixed"'
     label: hasFindingsFixed
-  - pattern: 'randomBytes'
+  - pattern: 'SecureRandom'
     label: hasCryptoFix
-  - pattern: 'process.env'
+  - pattern: '@Value'
     label: hasEnvSecretFix
-  - pattern: 'helmet()'
-    label: hasHelmetFix
+  - pattern: '.headers('
+    label: hasHeadersFix
 
 forbidden:
   - "I cannot"

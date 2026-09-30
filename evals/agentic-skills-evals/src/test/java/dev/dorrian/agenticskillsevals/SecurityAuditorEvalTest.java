@@ -37,7 +37,7 @@ class SecurityAuditorEvalTest extends AbstractEvalTest {
     @Override
     protected Map<String, String> judgeCriteria() {
         return Map.of(
-                "completeness", "Does the report identify all 4 planted vulnerabilities — Math.random() token (CWE-338), SQL injection (CWE-89), no Helmet (CWE-693), no rate limiting (CWE-770)?",
+                "completeness", "Does the report identify all 4 planted vulnerabilities — java.util.Random token (CWE-338), SQL injection (CWE-89), no security headers config (CWE-693), no rate limiting (CWE-770)?",
                 "classification", "Are catalog titles, severity levels (Critical/High), OWASP categories (A02/A03/A04/A05), and CWE numbers exactly correct per the fixed catalog?",
                 "exploitation", "Are Exploit sections present for findings, with Status (Confirmed/Not Confirmed) matching the pre-baked results provided?",
                 "handoff_block", "Is the HANDOFF BLOCK valid JSON with schema \"security-handoff/v1\" and a codeFindings array containing all 4 findings with correct severities?");
@@ -60,9 +60,9 @@ class SecurityAuditorEvalTest extends AbstractEvalTest {
         assertTrue(bool(checks, "notContains_I_don_t_have_informa"), "Response must not contain \"I don't have information\"");
         assertTrue(bool(checks, "hasReportHeader"), "Response must include report header");
         assertTrue(bool(checks, "hasHandoffBlock"), "Response must include HANDOFF BLOCK with schema");
-        assertTrue(bool(checks, "hasCriticalFinding"), "Response must include CWE-338 (Math.random critical finding)");
+        assertTrue(bool(checks, "hasCriticalFinding"), "Response must include CWE-338 (java.util.Random critical finding)");
         assertTrue(bool(checks, "hasSqlInjectionFinding"), "Response must include CWE-89 (SQL injection)");
-        assertTrue(bool(checks, "hasNoHelmetFinding"), "Response must include CWE-693 (no Helmet)");
+        assertTrue(bool(checks, "hasNoHelmetFinding"), "Response must include CWE-693 (no security headers config)");
         assertTrue(bool(checks, "hasNoRateLimitFinding"), "Response must include CWE-770 (no rate limiting)");
         assertTrue(bool(checks, "hasExploitSection"), "Response must include Exploit sections");
     }

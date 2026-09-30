@@ -4,10 +4,10 @@
 
 Implement a `POST /api/users` endpoint in the Prism API using TDD. The endpoint must:
 - Accept a JSON body with `name` (string) and `email` (string)
-- Return `200` with `{ id, name, email }` on valid input (use `crypto.randomUUID()` for the id)
-- Return `400` with `{ error: 'Name is required' }` if `name` is missing or empty
-- Return `400` with `{ error: 'Email is required' }` if `email` is missing or empty
-- Return `400` with `{ error: 'Invalid email format' }` if `email` does not match a basic email pattern
+- Return `200` with `{ id, name, email }` on valid input (use `UUID.randomUUID()` for the id)
+- Return `400` with `{ "error": "Name is required" }` if `name` is missing or empty
+- Return `400` with `{ "error": "Email is required" }` if `email` is missing or empty
+- Return `400` with `{ "error": "Invalid email format" }` if `email` does not match a basic email pattern
 
 ## Pre-scanned project (Phase 0 complete)
 
@@ -18,128 +18,124 @@ Implement a `POST /api/users` endpoint in the Prism API using TDD. The endpoint 
 
 ```
 prism-api/
-├── src/
-│   ├── app.ts
-│   ├── routes/
-│   │   ├── health.ts
-│   │   ├── health.test.ts
-│   │   └── users.ts         ← does not exist yet
-│   └── index.ts
-├── package.json
-├── tsconfig.json
-└── jest.config.js
+├── src/main/java/com/prism/
+│   ├── PrismApiApplication.java
+│   ├── user/
+│   │   └── UserController.java     ← does not exist yet
+│   └── health/
+│       └── HealthController.java
+├── src/test/java/com/prism/
+│   ├── user/
+│   │   └── UserControllerTest.java ← does not exist yet
+│   └── health/
+│       └── HealthControllerTest.java
+└── pom.xml
 ```
 
-### package.json (abridged)
+### pom.xml (abridged)
 
-```json
-{
-  "name": "prism-api",
-  "version": "1.0.0",
-  "scripts": {
-    "test": "jest",
-    "lint": "eslint src",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc"
-  },
-  "dependencies": {
-    "express": "^4.18.2"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/jest": "^29.5.12",
-    "@types/supertest": "^6.0.2",
-    "jest": "^29.7.0",
-    "supertest": "^7.0.0",
-    "ts-jest": "^29.1.4",
-    "typescript": "^5.4.5"
-  }
+```xml
+&lt;project&gt;
+  &lt;groupId&gt;com.prism&lt;/groupId&gt;
+  &lt;artifactId&gt;prism-api&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+  &lt;properties&gt;
+    &lt;java.version&gt;21&lt;/java.version&gt;
+  &lt;/properties&gt;
+  &lt;dependencies&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-validation&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;&lt;scope&gt;test&lt;/scope&gt;&lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/project&gt;
+```
+
+### src/main/java/com/prism/PrismApiApplication.java (full file)
+
+```java
+@SpringBootApplication
+public class PrismApiApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(PrismApiApplication.class, args);
+    }
 }
 ```
 
-### src/app.ts (full file)
+### src/main/java/com/prism/health/HealthController.java (full file)
 
-```typescript
-import express from 'express';
-import { healthRouter } from './routes/health';
+```java
+@RestController
+@RequestMapping("/api")
+public class HealthController {
 
-const app = express();
-app.use(express.json());
-app.use('/api', healthRouter);
-
-export { app };
+    @GetMapping("/health")
+    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; health() {
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+}
 ```
 
-### src/routes/health.ts (full file)
+### src/test/java/com/prism/health/HealthControllerTest.java (full file — test pattern reference)
 
-```typescript
-import { Router } from 'express';
+```java
+@WebMvcTest(HealthController.class)
+class HealthControllerTest {
 
-export const healthRouter = Router();
+    @Autowired
+    private MockMvc mockMvc;
 
-healthRouter.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-```
-
-### src/routes/health.test.ts (full file — test pattern reference)
-
-```typescript
-import request from 'supertest';
-import { app } from '../app';
-
-describe('health', () => {
-  it('GET /api/health returns 200 with status ok', async () => {
-    const response = await request(app).get('/api/health');
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ok' });
-  });
-});
+    @Test
+    void getHealthReturns200WithStatusOk() throws Exception {
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"));
+    }
+}
 ```
 
 ## Pre-baked execution results
 
 > Phase 1, Phase 3, and Phase 5 have been pre-run. Treat the results below as complete and accurate.
 
-### Phase 1 — Test run (test suite fails to run — production module missing)
+### Phase 1 — Test run (build fails to compile — production class missing)
 
 ```
-FAIL src/routes/users.test.ts
-  ● Test suite failed to run
-
-    Cannot find module '../routes/users' from 'src/routes/users.test.ts'
-
-Test Suites: 1 failed, 1 total
-Tests:       0 failed, 0 total
+[ERROR] /src/test/java/com/prism/user/UserControllerTest.java:[8,25] cannot find symbol
+[ERROR]   symbol:   class UserController
+[ERROR]   location: package com.prism.user
+[ERROR] -> [Help 1]
+[ERROR] COMPILATION ERROR
+[ERROR] Failed to execute goal ... (default-testCompile) on project prism-api: Compilation failure
 ```
 
 ### Phase 3 — Full test suite (all tests pass)
 
 ```
-PASS src/routes/health.test.ts
-PASS src/routes/users.test.ts
-  users
-    POST /api/users
-      ✓ creates a user with valid body (11ms)
-      ✓ returns 400 when name is missing (4ms)
-      ✓ returns 400 when email is missing (3ms)
-      ✓ returns 400 when email format is invalid (3ms)
-
-Test Suites: 2 passed, 2 total
-Tests:       5 passed, 5 total
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.prism.health.HealthControllerTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Running com.prism.user.UserControllerTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
 ```
 
 ### Phase 5 — Project checks
 
 ```
-$ eslint src
+$ mvn checkstyle:check
+(no violations — exit 0)
+
+$ mvn compile
 (no output — exit 0)
 
-$ tsc --noEmit
-(no output — exit 0)
-
-$ tsc
-(no output — exit 0)
+$ mvn package -DskipTests
+[INFO] BUILD SUCCESS
 ```
 
 ## Instructions
@@ -148,11 +144,11 @@ $ tsc
 
 **Phase 0**: SKIP. The "## Pre-scanned project" section above IS your complete Phase 0 output.
 
-**Phase 1**: Write the test file (`src/routes/users.test.ts`) as a code block in your response. Do not call Write or Edit.
+**Phase 1**: Write the test file (`src/test/java/com/prism/user/UserControllerTest.java`, using `@WebMvcTest` + `MockMvc`, matching the pattern shown in `HealthControllerTest.java` above) as a code block in your response. Do not call Write or Edit.
 
-**Phase 2**: The pre-baked Phase 1 run IS your test run output. State why the test fails using that output.
+**Phase 2**: The pre-baked Phase 1 run IS your test run output. State why the build fails using that output (a compilation error, since the referenced production class doesn't exist yet — Java's compile step is the "red" signal here, not a runtime failure).
 
-**Phase 3**: Write the production code (`src/routes/users.ts` and any required changes to `src/app.ts`) as code blocks in your response. Do not call Write or Edit.
+**Phase 3**: Write the production code (`src/main/java/com/prism/user/UserController.java` and any required DTO/validation classes) as code blocks in your response. Do not call Write or Edit.
 
 **Phase 4**: Skip.
 

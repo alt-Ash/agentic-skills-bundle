@@ -2,212 +2,223 @@
 
 ## Request
 
-Apply all open findings from the security audit report below for the Helios Node.js API. The HANDOFF BLOCK contains 10 code findings. Produce the corrected code for each finding and emit the updated audit report.
+Apply all open findings from the security audit report below for the Helios Spring Boot API. The HANDOFF BLOCK contains 10 code findings. Produce the corrected code for each finding and emit the updated audit report.
 
 ## Pre-scanned source code
 
 > The project "Helios" has been fully scanned. Treat the code below as complete and accurate.
 > **Do not call Read, Glob, Bash, or any filesystem tools.**
 
-### package.json (abridged)
+### pom.xml (abridged)
 
-```json
-{
-  "name": "helios-api",
-  "version": "1.0.0",
-  "dependencies": {
-    "bcrypt": "^5.1.0",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.0",
-    "pg": "^8.11.0"
-  }
+```xml
+&lt;project&gt;
+  &lt;groupId&gt;com.helios&lt;/groupId&gt;
+  &lt;artifactId&gt;helios-api&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+  &lt;dependencies&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-data-jpa&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.springframework.security&lt;/groupId&gt;&lt;artifactId&gt;spring-security-crypto&lt;/artifactId&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;io.jsonwebtoken&lt;/groupId&gt;&lt;artifactId&gt;jjwt-api&lt;/artifactId&gt;&lt;version&gt;0.12.3&lt;/version&gt;&lt;/dependency&gt;
+    &lt;dependency&gt;&lt;groupId&gt;org.postgresql&lt;/groupId&gt;&lt;artifactId&gt;postgresql&lt;/artifactId&gt;&lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/project&gt;
+```
+
+### src/main/java/com/helios/HeliosApiApplication.java (full file)
+
+```java
+@SpringBootApplication
+public class HeliosApiApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(HeliosApiApplication.class, args);   // line 8 — no SecurityFilterChain bean defined anywhere
+    }
 }
 ```
 
-### src/index.ts (full file)
+### src/main/java/com/helios/config/CorsConfig.java (full file)
 
-```typescript
-import express from 'express';
-import cors from 'cors';
-import { json } from 'express';
-import authRouter from './routes/auth';
-import ordersRouter from './routes/orders';
-import calcRouter from './routes/calc';
-import filesRouter from './routes/files';
-import { errorHandler } from './middleware/error';
+```java
+@Configuration
+public class CorsConfig {
 
-const app = express();
-app.use(cors({ origin: '*' }));   // line 11
-app.use(json());
-app.use('/api/auth', authRouter);
-app.use('/api/orders', ordersRouter);
-app.use('/api/calc', calcRouter);
-app.use('/api/files', filesRouter);
-app.use(errorHandler);
-
-app.listen(4000, () => console.log('Helios API running on :4000'));
-```
-
-### src/config/jwt.ts (full file)
-
-```typescript
-// JWT configuration
-export const JWT_SECRET = 'helios-dev-secret-key-do-not-use-in-prod';   // line 3
-export const JWT_EXPIRY = '24h';
-```
-
-### src/middleware/auth.ts (full file)
-
-```typescript
-import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config/jwt';
-import type { Request, Response, NextFunction } from 'express';
-
-export function authenticate(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token' });
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);   // line 12
-    (req as any).user = decoded;
-    next();
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
-  }
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("*"));   // line 11 — wildcard origin accepted
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
 }
 ```
 
-### src/middleware/error.ts (full file)
+### src/main/java/com/helios/config/JwtConfig.java (full file)
 
-```typescript
-import type { Request, Response, NextFunction } from 'express';
-
-export function errorHandler(
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  res.status(500).json({ error: err.stack });   // line 9
+```java
+public class JwtConfig {
+    public static final String JWT_SECRET = "helios-dev-secret-key-do-not-use-in-prod";   // line 3
+    public static final long JWT_EXPIRY_MS = 86_400_000L;
 }
 ```
 
-### src/routes/auth.ts (full file)
+### src/main/java/com/helios/auth/JwtAuthFilter.java (full file)
 
-```typescript
-import { Router } from 'express';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import { db } from '../db';
-import { JWT_SECRET, JWT_EXPIRY } from '../config/jwt';
+```java
+@Component
+public class JwtAuthFilter extends OncePerRequestFilter {
 
-const router = Router();
-
-router.post('/login', async (req, res) => {   // line 20 — no rate limiting applied here
-  const { email, password } = req.body;
-  const user = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-  if (!user.rows.length) return res.status(404).json({ error: 'Not found' });
-  const valid = await bcrypt.compare(password, user.rows[0].password_hash);
-  if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-  const token = jwt.sign({ userId: user.rows[0].id }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-  res.json({ token });
-});
-
-router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  const user = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-  if (!user.rows.length) return res.status(404).json({ error: 'Not found' });
-  const resetToken = Math.random().toString(36).substring(2);   // line 54
-  await db.query(
-    'UPDATE users SET reset_token = $1 WHERE email = $2',
-    [resetToken, email],
-  );
-  res.json({ message: 'Reset email sent' });
-});
-
-export default router;
+    @Override
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+        String token = extractToken(req);
+        if (token == null) {
+            res.sendError(401, "No token");
+            return;
+        }
+        try {
+            Claims claims = Jwts.parser()   // line 12 — no .verifyWith()/algorithm allowlist configured
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            req.setAttribute("user", claims);
+            chain.doFilter(req, res);
+        } catch (Exception e) {
+            res.sendError(401, "Invalid token");
+        }
+    }
+}
 ```
 
-### src/routes/orders.ts (full file)
+### src/main/java/com/helios/error/GlobalExceptionHandler.java (full file)
 
-```typescript
-import { Router } from 'express';
-import { db } from '../db';
-import { authenticate } from '../middleware/auth';
+```java
+@ControllerAdvice
+public class GlobalExceptionHandler {
 
-const router = Router();
-
-router.get('/', authenticate, async (req, res) => {
-  const userId = (req as any).user.userId;
-  const result = await db.query('SELECT * FROM orders WHERE user_id = $1', [userId]);
-  res.json(result.rows);
-});
-
-router.get('/:orderId', authenticate, async (req, res) => {
-  try {
-    const result = await db.query(   // line 31
-      'SELECT * FROM orders WHERE id = ' + req.params.orderId
-    );
-    res.json(result.rows[0]);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-export default router;
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity&lt;?&gt; handle(Exception e) {
+        return ResponseEntity.status(500).body(Map.of("error", e.getMessage(), "stack", ExceptionUtils.getStackTrace(e)));   // line 9
+    }
+}
 ```
 
-### src/routes/calc.ts (full file)
+### src/main/java/com/helios/auth/AuthController.java (full file)
 
-```typescript
-import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+```java
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
 
-const router = Router();
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
-router.post('/evaluate', authenticate, async (req, res) => {
-  const { formula } = req.body;
-  try {
-    // eslint-disable-next-line no-eval
-    const result = eval(formula);   // line 18
-    res.json({ result });
-  } catch (err: any) {
-    res.status(400).json({ error: 'Invalid formula' });
-  }
-});
+    @PostMapping("/login")   // line 20 — no rate limiting applied here
+    public ResponseEntity&lt;?&gt; login(@RequestBody LoginRequest req) {
+        User user = userRepository.findByEmail(req.email())
+                .orElseThrow(() -&gt; new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
+        }
+        String token = Jwts.builder()
+                .subject(String.valueOf(user.getId()))
+                .expiration(new Date(System.currentTimeMillis() + JwtConfig.JWT_EXPIRY_MS))
+                .signWith(Keys.hmacShaKeyFor(JwtConfig.JWT_SECRET.getBytes()))
+                .compact();
+        return ResponseEntity.ok(Map.of("token", token));
+    }
 
-export default router;
+    @PostMapping("/forgot-password")
+    public ResponseEntity&lt;?&gt; forgotPassword(@RequestBody ForgotPasswordRequest req) {
+        User user = userRepository.findByEmail(req.email())
+                .orElseThrow(() -&gt; new ResponseStatusException(HttpStatus.NOT_FOUND));
+        String resetToken = new Random().nextLong() + "";   // line 54
+        user.setResetToken(resetToken);
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("message", "Reset email sent"));
+    }
+}
 ```
 
-### src/routes/files.ts (full file)
+### src/main/java/com/helios/order/OrderController.java (full file)
 
-```typescript
-import { Router } from 'express';
-import { readFileSync } from 'fs';
-import { join, normalize } from 'path';
-import { authenticate } from '../middleware/auth';
+```java
+@RestController
+@RequestMapping("/api/orders")
+public class OrderController {
 
-const router = Router();
+    private final OrderRepository orderRepository;
 
-const UPLOADS_DIR = join(process.cwd(), 'uploads');
+    @GetMapping
+    public ResponseEntity&lt;?&gt; listOrders(@AuthenticationPrincipal Claims user) {
+        return ResponseEntity.ok(orderRepository.findByUserId(user.get("userId", Long.class)));
+    }
 
-router.get('/download/:filename', authenticate, async (req, res) => {
-  try {
-    const content = readFileSync('./uploads/' + req.params.filename);   // line 27
-    res.send(content);
-  } catch {
-    res.status(404).json({ error: 'File not found' });
-  }
-});
+    @GetMapping("/{orderId}")
+    public ResponseEntity&lt;?&gt; getOrder(@PathVariable String orderId) {
+        try {
+            Order order = orderRepository.findByIdRaw(orderId);   // line 31, see OrderRepository below
+            return ResponseEntity.ok(order);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+}
+```
 
-export default router;
+`src/main/java/com/helios/order/OrderRepository.java` (the offending native query):
+```java
+public interface OrderRepository extends JpaRepository&lt;Order, Long&gt; {
+    @Query(value = "SELECT * FROM orders WHERE id = " + "?1", nativeQuery = true)
+    Order findByIdRaw(@Param("1") String id);
+}
+```
+
+### src/main/java/com/helios/calc/CalcController.java (full file)
+
+```java
+@RestController
+@RequestMapping("/api/calc")
+public class CalcController {
+
+    private final ExpressionParser parser = new SpelExpressionParser();
+
+    @PostMapping("/evaluate")
+    public ResponseEntity&lt;?&gt; evaluate(@RequestBody EvaluateRequest req) {
+        try {
+            Object result = parser.parseExpression(req.formula()).getValue();   // line 18
+            return ResponseEntity.ok(Map.of("result", result));
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("error", "Invalid formula"));
+        }
+    }
+}
+```
+
+### src/main/java/com/helios/files/FileController.java (full file)
+
+```java
+@RestController
+@RequestMapping("/api/files")
+public class FileController {
+
+    private static final Path UPLOADS_DIR = Paths.get(System.getProperty("user.dir"), "uploads");
+
+    @GetMapping("/download/{filename}")
+    public ResponseEntity&lt;byte[]&gt; download(@PathVariable String filename) throws IOException {
+        byte[] content = Files.readAllBytes(Paths.get("./uploads/" + filename));   // line 27
+        return ResponseEntity.ok(content);
+    }
+}
 ```
 
 ## Pre-baked execution results
 
 > Steps 2, 3, and 5 have been pre-run. Treat the results below as complete and accurate.
 
-### Step 2 — npm audit baseline
+### Step 2 — OWASP Dependency-Check baseline
 
 ```json
 { "critical": 0, "high": 0, "moderate": 0, "low": 0 }
@@ -215,18 +226,16 @@ export default router;
 
 All 10 findings are code vulnerabilities, not dependency vulnerabilities.
 
-### Step 3 — Package installs done
+### Step 3 — Dependency additions done
 
 ```
-+ helmet@7.2.0
-+ express-rate-limit@7.4.0
-added 2 packages, and audited 318 packages in 4s
-found 0 vulnerabilities
+[INFO] Added org.springframework.boot:spring-boot-starter-security:jar:3.3.5
+[INFO] mvn dependency-check:check — 0 vulnerabilities across 42 artifacts
 ```
 
-`package.json` now includes `"helmet": "^7.2.0"` and `"express-rate-limit": "^7.4.0"`.
+`pom.xml` now includes `spring-boot-starter-security` (provides the `SecurityFilterChain`/`.headers()` DSL used for the fix).
 
-### Step 5 — Post-fix npm audit
+### Step 5 — Post-fix OWASP Dependency-Check
 
 ```json
 { "critical": 0, "high": 0, "moderate": 0, "low": 0 }
@@ -242,107 +251,107 @@ found 0 vulnerabilities
   "codeFindings": [
     {
       "id": "C-01",
-      "title": "SQL Injection via String Concatenation",
-      "severity": "Critical",
+      "title": "SQL/JPQL Injection via String-Concatenated Native Query",
+      "severity": "High",
       "cwe": "CWE-89",
       "owasp": "A03",
       "status": "open",
       "type": "code",
-      "location": "src/routes/orders.ts:31"
+      "location": "src/main/java/com/helios/order/OrderRepository.java:31"
     },
     {
       "id": "C-02",
-      "title": "Cryptographically Weak PRNG for Password Reset Token",
+      "title": "java.util.Random Used for Cryptographic Randomness (Password Reset Token)",
       "severity": "Critical",
       "cwe": "CWE-338",
       "owasp": "A02",
       "status": "open",
       "type": "code",
-      "location": "src/routes/auth.ts:54"
+      "location": "src/main/java/com/helios/auth/AuthController.java:54"
     },
     {
       "id": "C-03",
       "title": "Hardcoded JWT Secret",
       "severity": "Critical",
-      "cwe": "CWE-798",
+      "cwe": "CWE-321",
       "owasp": "A02",
       "status": "open",
       "type": "code",
-      "location": "src/config/jwt.ts:3"
+      "location": "src/main/java/com/helios/config/JwtConfig.java:3"
     },
     {
       "id": "C-04",
-      "title": "Code Injection via eval() with User Input",
+      "title": "Dynamic Expression Evaluation of Untrusted Input (SpEL Injection)",
       "severity": "Critical",
-      "cwe": "CWE-1336",
+      "cwe": "CWE-95",
       "owasp": "A03",
       "status": "open",
       "type": "code",
-      "location": "src/routes/calc.ts:18"
+      "location": "src/main/java/com/helios/calc/CalcController.java:18"
     },
     {
       "id": "C-05",
       "title": "Path Traversal in File Download",
       "severity": "High",
       "cwe": "CWE-22",
-      "owasp": "A01",
+      "owasp": "A03",
       "status": "open",
       "type": "code",
-      "location": "src/routes/files.ts:27"
+      "location": "src/main/java/com/helios/files/FileController.java:27"
     },
     {
       "id": "C-06",
-      "title": "JWT Verified Without Algorithm Constraint",
+      "title": "JWT Algorithm Not Pinned During Verification",
       "severity": "High",
-      "cwe": "CWE-287",
+      "cwe": "CWE-327",
       "owasp": "A07",
       "status": "open",
       "type": "code",
-      "location": "src/middleware/auth.ts:12"
+      "location": "src/main/java/com/helios/auth/JwtAuthFilter.java:12"
     },
     {
       "id": "C-07",
-      "title": "CORS Wildcard Origin Allows Any Domain",
-      "severity": "High",
-      "cwe": "CWE-942",
-      "owasp": "A05",
-      "status": "open",
-      "type": "code",
-      "location": "src/index.ts:11"
-    },
-    {
-      "id": "C-08",
-      "title": "Missing Security Headers (No Helmet)",
+      "title": "No Security Headers Configuration",
       "severity": "High",
       "cwe": "CWE-693",
       "owasp": "A05",
       "status": "open",
       "type": "code",
-      "location": "src/index.ts:8"
+      "location": "src/main/java/com/helios/HeliosApiApplication.java:8"
     },
     {
-      "id": "C-09",
+      "id": "C-08",
       "title": "No Rate Limiting on Login Endpoint",
       "severity": "High",
       "cwe": "CWE-770",
       "owasp": "A04",
       "status": "open",
       "type": "code",
-      "location": "src/routes/auth.ts:20"
+      "location": "src/main/java/com/helios/auth/AuthController.java:20"
+    },
+    {
+      "id": "C-09",
+      "title": "Stack Trace / Internal Error Leaked to Client",
+      "severity": "Moderate",
+      "cwe": "CWE-209",
+      "owasp": "A05",
+      "status": "open",
+      "type": "code",
+      "location": "src/main/java/com/helios/error/GlobalExceptionHandler.java:9"
     },
     {
       "id": "C-10",
-      "title": "Stack Trace Leaked in Error Response",
-      "severity": "Medium",
-      "cwe": "CWE-209",
-      "owasp": "A09",
+      "title": "CORS Wildcard Origin Allows Any Domain",
+      "severity": "High",
+      "cwe": "CWE-942",
+      "owasp": "A05",
       "status": "open",
       "type": "code",
-      "location": "src/middleware/error.ts:9"
+      "location": "src/main/java/com/helios/config/CorsConfig.java:11"
     }
   ],
   "dependencyFindings": [],
-  "verifyCommand": "npm audit --json | jq '.metadata.vulnerabilities'"
+  "verifyCommand": "mvn org.owasp:dependency-check-maven:check"
 }
 ```
 
@@ -350,7 +359,7 @@ found 0 vulnerabilities
 
 ⚠️ **CRITICAL: This is a TEST SCENARIO. Do NOT call any tools.**
 
-**Steps 2, 3, 5**: SKIP. The "## Pre-baked execution results" section above ARE those steps' outputs. Do not call Bash or npm.
+**Steps 2, 3, 5**: SKIP. The "## Pre-baked execution results" section above ARE those steps' outputs. Do not call Bash or Maven.
 
 **Step 4**: For each finding in the HANDOFF BLOCK, determine the correct fix and show it as a before/after code block in your response. Do not call Edit or Write.
 
