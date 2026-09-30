@@ -1,0 +1,39 @@
+required:
+  - pattern: 'agent_contract:'
+    label: hasAgentContract
+  - pattern: 'issue_result:'
+    label: hasIssueResult
+  - pattern: '## Acceptance criteria'
+    label: hasAcceptanceCriteria
+  - pattern: 'success_signals:'
+    label: hasSuccessSignals
+  - pattern: 'failure_signals:'
+    label: hasFailureSignals
+  - pattern: 'inputs:'
+    label: hasInputs
+  - pattern: 'outputs:'
+    label: hasOutputs
+
+forbidden:
+  - "I cannot"
+  - "I don't have access"
+  - "I don't have information"
+  - "I will skip"
+  - "files don't exist"
+  - "files do not exist"
+
+tools:
+  expected:
+    - mcp__issue-tickets__create_issue
+  forbidden:
+    - Write
+    - Edit
+    - Bash
+
+yamlBlocks:
+  - startPattern: 'agent_contract:'
+    label: agentContractValid
+    requiredFields: [type, inputs, outputs, success_signals, failure_signals]
+  - startPattern: 'issue_result:'
+    label: issueResultValid
+    requiredFields: [status, title]
