@@ -112,6 +112,23 @@ class DefaultScanSessionTest {
     }
 
     @Test
+    void aZeroMillisecondBaselineDoesNotTripOnSubsequentFastResponses() {
+        // Regression: a sub-ms first response on loopback recorded baseline=0, and 0 >= 0 * 3
+        // tripped the breaker on the very first request (seen on Linux CI, not macOS).
+        assertThat(DefaultScanSession.latencyTripped(0, 0)).isFalse();
+        assertThat(DefaultScanSession.latencyTripped(2, 0)).isFalse();
+        assertThat(DefaultScanSession.latencyTripped(2, 1)).isFalse();
+    }
+
+    @Test
+    void latencyStillTripsAtThreeTimesAFlooredBaseline() {
+        assertThat(DefaultScanSession.latencyTripped(30, 0)).isTrue();
+        assertThat(DefaultScanSession.latencyTripped(150, 50)).isTrue();
+        assertThat(DefaultScanSession.latencyTripped(149, 50)).isFalse();
+        assertThat(DefaultScanSession.latencyTripped(1_000, -1)).isFalse();
+    }
+
+    @Test
     void doesNotTripWhenTheTargetIsHealthy() throws IOException {
         String target = startServer(n -> 200, n -> 1);
         var session = new DefaultScanSession(new ScanSessionOptions(target, 100, 0, 1));

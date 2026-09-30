@@ -35,6 +35,12 @@ final class DefaultScanSession implements ScanSession {
     private static final int CIRCUIT_WINDOW_SIZE = 20;
     private static final double CIRCUIT_ERROR_RATE_THRESHOLD = 0.4;
     private static final int CIRCUIT_LATENCY_MULTIPLIER = 3;
+    /**
+     * Floor for the latency baseline. A sub-millisecond first response (common on loopback)
+     * records a 0ms baseline, and {@code avg >= 0 * 3} would trip on the very first request;
+     * below ~10ms, clock resolution and scheduler jitter swamp any real slowdown signal anyway.
+     */
+    static final long MIN_BASELINE_LATENCY_MS = 10;
     private static final Duration REQUEST_TIMEOUT = Duration.ofMillis(5000);
 
     private final String target;
@@ -178,10 +184,18 @@ final class DefaultScanSession implements ScanSession {
         }
 
         double avgLatency = window.stream().mapToLong(RequestRecord::latencyMs).average().orElse(0);
-        long baseline = baselineLatencyMs.get();
-        if (baseline >= 0 && avgLatency >= baseline * (double) CIRCUIT_LATENCY_MULTIPLIER) {
+        if (latencyTripped(avgLatency, baselineLatencyMs.get())) {
             aborted.set(true);
         }
+    }
+
+    /** {@code baselineMs < 0} means no baseline has been recorded yet. */
+    static boolean latencyTripped(double avgLatencyMs, long baselineMs) {
+        if (baselineMs < 0) {
+            return false;
+        }
+        long effectiveBaseline = Math.max(baselineMs, MIN_BASELINE_LATENCY_MS);
+        return avgLatencyMs >= effectiveBaseline * (double) CIRCUIT_LATENCY_MULTIPLIER;
     }
 
     @Override
