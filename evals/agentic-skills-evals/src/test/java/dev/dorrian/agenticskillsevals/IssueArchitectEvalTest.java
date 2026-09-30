@@ -53,7 +53,7 @@ class IssueArchitectEvalTest extends AbstractEvalTest {
                 "structure", "Does the response include a complete issue body with all required sections (Metadata, Context, Goal, Scope, Acceptance criteria)?",
                 "agent_contract", "Is there a complete agent_contract: YAML block with type, inputs, outputs, success_signals, and failure_signals fields?",
                 "issue_result", "Does the response include an issue_result: YAML block with status and correct fields?",
-                "specificity", "Are file paths and component names from the project context referenced accurately (not invented)?",
+                "specificity", "Are file paths and class names from the project context referenced accurately (not invented)?",
                 "actionability", "Could a developer implement this without asking further questions?");
     }
 

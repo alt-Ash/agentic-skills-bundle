@@ -1,365 +1,444 @@
 # Lumio — Fictional Project Reference
 
-> This document describes a realistic fictional React + TypeScript project used for eval testing.
+> This document describes a realistic fictional Spring Boot + Java project used for eval testing.
 > Use this as a substitute for actual project context. Treat it as Phase 2 output (full project scan).
 
 ## Project Overview
 
-**Lumio** is a task management SPA built with React 18, TypeScript 5, Vite, and Vitest. No UI component library. Plain CSS with CSS variables for theming.
+**Lumio** is a task-management REST API built with Spring Boot 3.5, Java 21, and Maven. It backs a separate web client (not in this repo). PostgreSQL for persistence, Flyway for schema migrations, stateless JWT auth via Spring Security's OAuth2 resource server support.
 
 ## Stack
 
-- **Runtime**: Node 18+
-- **Frontend**: React 18.2, TypeScript 5.0, React Router 7
-- **Build**: Vite 5, SWC transpilation
-- **Testing**: Vitest, @testing-library/react
-- **Styling**: Plain CSS with CSS variables, no Tailwind/MUI/Radix
-- **State**: React Context only, no Redux/Zustand
-- **API**: fetch-based, no GraphQL
+- **Runtime**: Java 21 (Temurin), Spring Boot 3.5.9
+- **Build**: Maven 3.9 via the Maven Wrapper (`./mvnw`)
+- **Web**: Spring MVC (`spring-boot-starter-web`), JSON via Jackson
+- **Persistence**: Spring Data JPA (Hibernate 6), PostgreSQL 16, Flyway migrations
+- **Validation**: Jakarta Bean Validation (`spring-boot-starter-validation`)
+- **Security**: Spring Security, stateless JWT (HS256) issued by `AuthController`
+- **Testing**: JUnit 5, Mockito, AssertJ, `@WebMvcTest` slices, Testcontainers (PostgreSQL) for repository/integration tests
+- **API style**: REST/JSON under `/api`, no GraphQL, no WebFlux
 
 ## Directory Structure
 
 ```
 lumio/
 ├── src/
-│   ├── App.tsx              (root router setup)
-│   ├── main.tsx             (entry point, createRoot)
-│   ├── index.css            (global reset)
-│   ├── api/
-│   │   ├── tasks.ts         (GET/POST/PATCH /api/tasks)
-│   │   └── auth.ts          (POST /api/auth/login, /logout)
-│   ├── components/
-│   │   ├── Navigation.tsx    (navbar, logout button, no dark mode toggle yet)
-│   │   ├── TaskList/
-│   │   │   ├── TaskList.tsx  (main list view, renders TaskCard)
-│   │   │   └── TaskCard.tsx  (individual task row, edit/delete inline)
-│   │   └── Common/
-│   │       └── ErrorBoundary.tsx
-│   ├── features/
-│   │   ├── auth/
-│   │   │   ├── LoginForm.tsx (form with email/password, no client validation yet)
-│   │   │   └── useAuth.ts    (custom hook, useState for user + token)
-│   │   └── tasks/
-│   │       ├── CreateTask.tsx (modal, adds new task)
-│   │       └── useTaskList.ts (custom hook, fetch/refetch)
-│   ├── styles/
-│   │   ├── theme.css        (CSS variables, colors, spacing)
-│   │   └── forms.css        (input, button, form base styles)
-│   ├── types/
-│   │   └── index.ts         (Task, User, AuthToken interfaces)
-│   └── utils/
-│       └── storage.ts       (localStorage helpers)
-├── public/
-│   └── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── vitest.config.ts
+│   ├── main/
+│   │   ├── java/com/example/lumio/
+│   │   │   ├── LumioApplication.java          (@SpringBootApplication entry point)
+│   │   │   ├── config/
+│   │   │   │   ├── SecurityConfig.java        (SecurityFilterChain, JWT decoder, permits /api/auth/**)
+│   │   │   │   └── JwtProperties.java         (@ConfigurationProperties("lumio.jwt"))
+│   │   │   ├── auth/
+│   │   │   │   ├── AuthController.java        (POST /api/auth/login, /api/auth/logout)
+│   │   │   │   ├── AuthService.java           (credential check, token issuance)
+│   │   │   │   ├── LoginRequest.java          (record: email, password — no @NotBlank on password yet)
+│   │   │   │   └── TokenResponse.java         (record: token, expiresAt)
+│   │   │   ├── task/
+│   │   │   │   ├── TaskController.java        (GET/POST /api/tasks, PATCH/DELETE /api/tasks/{id})
+│   │   │   │   ├── TaskService.java           (business logic, ownership checks)
+│   │   │   │   ├── TaskRepository.java        (JpaRepository<Task, UUID>, findByOwnerId only)
+│   │   │   │   ├── Task.java                  (@Entity: id, title, description, status, dueDate, owner, timestamps)
+│   │   │   │   ├── TaskStatus.java            (enum: TODO, IN_PROGRESS, DONE)
+│   │   │   │   ├── CreateTaskRequest.java     (record, @NotBlank title)
+│   │   │   │   ├── UpdateTaskRequest.java     (record, all fields optional)
+│   │   │   │   └── TaskResponse.java          (record DTO + static from(Task))
+│   │   │   ├── user/
+│   │   │   │   ├── User.java                  (@Entity: id, email, passwordHash)
+│   │   │   │   └── UserRepository.java        (findByEmail)
+│   │   │   └── common/
+│   │   │       ├── GlobalExceptionHandler.java (@RestControllerAdvice → RFC 7807 ProblemDetail)
+│   │   │       └── NotFoundException.java
+│   │   └── resources/
+│   │       ├── application.yml
+│   │       ├── application-local.yml
+│   │       └── db/migration/
+│   │           ├── V1__create_users.sql
+│   │           └── V2__create_tasks.sql
+│   └── test/
+│       └── java/com/example/lumio/
+│           ├── auth/AuthControllerTest.java       (@WebMvcTest + MockMvc, AuthService mocked)
+│           ├── task/TaskControllerTest.java       (@WebMvcTest + MockMvc, TaskService mocked)
+│           ├── task/TaskServiceTest.java          (plain JUnit 5 + Mockito)
+│           ├── task/TaskRepositoryIT.java         (@DataJpaTest + Testcontainers PostgreSQL)
+│           └── TestcontainersConfiguration.java   (@TestConfiguration, @ServiceConnection PostgreSQLContainer)
+├── .mvn/wrapper/maven-wrapper.properties
+├── mvnw
+├── mvnw.cmd
+├── pom.xml
+├── compose.yaml                               (local PostgreSQL 16)
 └── README.md
 ```
 
 ## Key Files — Content Snapshots
 
-### `package.json`
+### `pom.xml` (excerpt)
 
-```json
-{
-  "name": "lumio",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:ui": "vitest --ui"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router": "^7.0.0"
-  },
-  "devDependencies": {
-    "@testing-library/react": "^14.0.0",
-    "@types/react": "^18.0.0",
-    "@types/react-dom": "^18.0.0",
-    "@vitejs/plugin-react-swc": "^3.0.0",
-    "typescript": "^5.0.0",
-    "vite": "^5.0.0",
-    "vitest": "^1.0.0"
-  }
-}
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.9</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.example</groupId>
+  <artifactId>lumio</artifactId>
+  <version>1.0.0</version>
+  <name>lumio</name>
+  <description>Task management REST API</description>
+
+  <properties>
+    <java.version>21</java.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>
 ```
 
-### `src/App.tsx`
+All dependency versions (Spring, Hibernate, Flyway, PostgreSQL driver, JUnit 5, Mockito, Testcontainers) are managed by the Spring Boot parent BOM — none are pinned in this POM.
 
-```typescript
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router';
-import Navigation from './components/Navigation';
-import TaskList from './components/TaskList/TaskList';
-import LoginForm from './features/auth/LoginForm';
-import { useAuth } from './features/auth/useAuth';
-import './index.css';
+### `src/main/resources/application.yml`
 
-export default function App() {
-  const { user } = useAuth();
+```yaml
+spring:
+  application:
+    name: lumio
+  datasource:
+    url: jdbc:postgresql://localhost:5432/lumio
+    username: ${LUMIO_DB_USER:lumio}
+    password: ${LUMIO_DB_PASSWORD:lumio}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
-  return (
-    <Router>
-      <Navigation />
-      <main className="container">
-        <Routes>
-          <Route path="/login" element={<LoginForm />} />
-          <Route path="/" element={user ? <TaskList /> : <LoginForm />} />
-        </Routes>
-      </main>
-    </Router>
-  );
-}
+server:
+  port: 8080
+  error:
+    include-stacktrace: never
+
+lumio:
+  jwt:
+    secret: ${LUMIO_JWT_SECRET}
+    ttl: 8h
 ```
 
-### `src/components/Navigation.tsx`
+### `src/main/java/com/example/lumio/task/TaskController.java`
 
-```typescript
-import React from 'react';
-import { useAuth } from '../features/auth/useAuth';
-import './Navigation.css';
+```java
+package com.example.lumio.task;
 
-export default function Navigation() {
-  const { user, logout } = useAuth();
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
 
-  return (
-    <nav className="navbar">
-      <div className="nav-brand">
-        <h1>Lumio</h1>
-      </div>
-      {user && (
-        <div className="nav-actions">
-          <span className="user-email">{user.email}</span>
-          <button onClick={logout} className="btn-logout">
-            Logout
-          </button>
-        </div>
-      )}
-    </nav>
-  );
-}
-```
+import java.util.List;
+import java.util.UUID;
 
-### `src/styles/theme.css`
+@RestController
+@RequestMapping("/api/tasks")
+public class TaskController {
 
-```css
-:root {
-  --color-primary: #2563eb;
-  --color-primary-dark: #1e40af;
-  --color-text: #1f2937;
-  --color-text-light: #6b7280;
-  --color-bg: #ffffff;
-  --color-bg-light: #f9fafb;
-  --color-border: #e5e7eb;
-  --color-error: #dc2626;
-  --color-success: #16a34a;
+    private final TaskService taskService;
 
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-
-  --font-size-sm: 0.875rem;
-  --font-size-md: 1rem;
-  --font-size-lg: 1.125rem;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: var(--color-bg);
-  color: var(--color-text);
-  line-height: 1.5;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--spacing-md);
-}
-```
-
-### `src/features/auth/LoginForm.tsx`
-
-```typescript
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { login } from '../../api/auth';
-import { useAuth } from './useAuth';
-
-export default function LoginForm() {
-  const navigate = useNavigate();
-  const { setUser, setToken } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    // BUG: No client-side validation. Empty password is submitted to API.
-    // Expected: block submission if password is empty.
-    // Current: form sends { email, password: '' } → API rejects but UX is poor.
-
-    try {
-      const { token, user } = await login(email, password);
-      setToken(token);
-      setUser(user);
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
+    public TaskController(TaskService taskService) {
+        this.taskService = taskService;
     }
-  };
 
-  return (
-    <form onSubmit={handleSubmit} className="login-form">
-      <h2>Login</h2>
-      {error && <div className="error-message">{error}</div>}
-      <div className="form-group">
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
-      <div className="form-group">
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </div>
-      <button type="submit" disabled={loading}>
-        {loading ? 'Logging in...' : 'Login'}
-      </button>
-    </form>
-  );
+    // NOTE: returns every task for the owner — no filtering, sorting, paging, or search yet.
+    @GetMapping
+    public List<TaskResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        return taskService.listForOwner(UUID.fromString(jwt.getSubject()));
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public TaskResponse create(@AuthenticationPrincipal Jwt jwt,
+                               @Valid @RequestBody CreateTaskRequest request) {
+        return taskService.create(UUID.fromString(jwt.getSubject()), request);
+    }
+
+    @PatchMapping("/{id}")
+    public TaskResponse update(@AuthenticationPrincipal Jwt jwt,
+                               @PathVariable UUID id,
+                               @Valid @RequestBody UpdateTaskRequest request) {
+        return taskService.update(UUID.fromString(jwt.getSubject()), id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        taskService.delete(UUID.fromString(jwt.getSubject()), id);
+    }
 }
 ```
 
-### `src/components/TaskList/TaskList.tsx`
+### `src/main/java/com/example/lumio/task/TaskRepository.java`
 
-```typescript
-import React, { useEffect } from 'react';
-import { useTaskList } from '../../features/tasks/useTaskList';
-import TaskCard from './TaskCard';
-import CreateTask from '../../features/tasks/CreateTask';
-import './TaskList.css';
+```java
+package com.example.lumio.task;
 
-export default function TaskList() {
-  const { tasks, loading, error, refetch } = useTaskList();
+import org.springframework.data.jpa.repository.JpaRepository;
 
-  useEffect(() => {
-    refetch();
-  }, []);
+import java.util.List;
+import java.util.UUID;
 
-  if (loading) return <div>Loading tasks...</div>;
-  if (error) return <div className="error">{error}</div>;
+public interface TaskRepository extends JpaRepository<Task, UUID> {
 
-  return (
-    <div className="task-list-container">
-      <div className="task-list-header">
-        <h2>My Tasks</h2>
-        <CreateTask onCreated={refetch} />
-      </div>
-      <div className="task-list">
-        {tasks.length === 0 ? (
-          <p className="empty-state">No tasks yet. Create one to get started!</p>
-        ) : (
-          tasks.map((task) => <TaskCard key={task.id} task={task} onUpdate={refetch} />)
-        )}
-      </div>
-    </div>
-  );
+    List<Task> findByOwnerId(UUID ownerId);
 }
 ```
 
-### `tsconfig.json`
+### `src/main/java/com/example/lumio/auth/LoginRequest.java`
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "jsx": "react-jsx"
-  },
-  "include": ["src"],
-  "exclude": ["node_modules"]
+```java
+package com.example.lumio.auth;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+// BUG: password has no @NotBlank. An empty password reaches AuthService,
+// which fails the BCrypt comparison and returns 401 instead of a 400 with a
+// field-level validation error. Expected: 400 ProblemDetail naming "password".
+public record LoginRequest(
+        @NotBlank @Email String email,
+        String password) {
+}
+```
+
+### `src/main/java/com/example/lumio/auth/AuthController.java`
+
+```java
+package com.example.lumio.auth;
+
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
+    @PostMapping("/login")
+    public TokenResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request.email(), request.password());
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        // Stateless JWT: the client discards the token. No server-side denylist yet.
+        return ResponseEntity.noContent().build();
+    }
+}
+```
+
+### `src/main/resources/db/migration/V2__create_tasks.sql`
+
+```sql
+CREATE TABLE tasks (
+    id          UUID PRIMARY KEY,
+    owner_id    UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    title       VARCHAR(200) NOT NULL,
+    description TEXT,
+    status      VARCHAR(20)  NOT NULL DEFAULT 'TODO',
+    due_date    DATE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_tasks_owner_id ON tasks (owner_id);
+```
+
+### `src/test/java/com/example/lumio/task/TaskControllerTest.java` (excerpt)
+
+```java
+package com.example.lumio.task;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(TaskController.class)
+class TaskControllerTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @MockitoBean
+    TaskService taskService;
+
+    @Test
+    void list_returnsOwnersTasks() throws Exception {
+        when(taskService.listForOwner(any())).thenReturn(List.of(TaskFixtures.response("Write report")));
+
+        mockMvc.perform(get("/api/tasks")
+                        .with(jwt().jwt(j -> j.subject("7f1c0a52-3c1e-4d0b-9a57-2f3b8c1d9e10"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Write report"));
+    }
+}
+```
+
+### `src/test/java/com/example/lumio/TestcontainersConfiguration.java`
+
+```java
+package com.example.lumio;
+
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
+
+@TestConfiguration(proxyBeanMethods = false)
+public class TestcontainersConfiguration {
+
+    @Bean
+    @ServiceConnection
+    PostgreSQLContainer<?> postgresContainer() {
+        return new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
+    }
 }
 ```
 
 ### `README.md`
 
-```markdown
+````markdown
 # Lumio
 
-A task management SPA built with React 18 and TypeScript. Simple, fast, no external UI libraries.
+A task-management REST API built with Spring Boot 3.5 and Java 21. Serves the Lumio web client.
 
 ## Getting Started
 
+Requires JDK 21 and Docker (for PostgreSQL and Testcontainers).
+
 ```bash
-npm install
-npm run dev
+docker compose up -d          # local PostgreSQL 16
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+The API listens on [http://localhost:8080/api](http://localhost:8080/api).
 
 ## Development
 
-- `npm run test` — run Vitest suite
-- `npm run build` — build for production
-- `npm run preview` — preview production build locally
+- `./mvnw test` — unit and `@WebMvcTest` slice tests (JUnit 5 + Mockito)
+- `./mvnw verify` — full build including Testcontainers-backed `*IT` integration tests
+- `./mvnw package` — build the executable jar (`target/lumio-1.0.0.jar`)
 
 ## Architecture
 
-- **React Router** for client-side navigation
-- **React Context** for global state (auth, theme)
-- **Custom hooks** for data fetching (tasks, auth)
-- **Plain CSS with CSS variables** for styling (no build-time CSS-in-JS)
+- **Layered by feature**: `controller → service → repository` inside each package (`auth`, `task`, `user`)
+- **DTOs as Java records**; entities never leave the service layer
+- **Errors** mapped to RFC 7807 `ProblemDetail` by `GlobalExceptionHandler`
+- **Schema** owned by Flyway (`ddl-auto: validate`)
 
 ## Known Issues
 
-- Login form lacks client-side validation (password field can be empty)
-- Navigation bar has no dark mode toggle
-- Task list doesn't support filtering/sorting
-```
+- `LoginRequest.password` lacks `@NotBlank` (empty password yields 401 instead of 400)
+- `GET /api/tasks` has no filtering, sorting, paging, or search
+- Logout is client-side only; issued JWTs stay valid until expiry
+````
 
 ---
 
@@ -373,11 +452,10 @@ Each scenario `.md` will reference this fictional project. Example:
 > The project has been fully scanned. Use the context below as Phase 2 output.
 > Do not call Read, Glob, Bash, or any filesystem tools.
 
-**Project**: Lumio (task management SPA, React 18 + TypeScript)
+**Project**: Lumio (task-management REST API, Spring Boot 3.5 + Java 21)
 
 ### Key files:
-- src/features/auth/LoginForm.tsx — form component with BUG noted below
-- src/components/Navigation.tsx — navbar component
-- src/styles/theme.css — CSS variables, no dark mode yet
+- src/main/java/com/example/lumio/auth/LoginRequest.java — request record with BUG noted below
+- src/main/java/com/example/lumio/task/TaskController.java — task REST endpoints
+- src/main/java/com/example/lumio/task/TaskRepository.java — Spring Data JPA repository, no search queries yet
 ```
-

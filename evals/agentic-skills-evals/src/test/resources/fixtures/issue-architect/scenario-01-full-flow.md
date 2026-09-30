@@ -2,7 +2,7 @@
 
 ## Request
 
-Add a global keyboard shortcut (Cmd+K / Ctrl+K) that opens a command palette. The palette should allow users to quickly search and navigate to tasks.
+The Lumio web client is adding a global Cmd+K / Ctrl+K command palette so users can quickly search for and jump to tasks. Add the backend support it needs: a quick-search endpoint that returns the caller's matching tasks (by title/description), ranked and capped to a small result set, fast enough to be called as the user types.
 
 This should be posted as an issue to GitHub — do not return a draft.
 
@@ -13,15 +13,17 @@ This should be posted as an issue to GitHub — do not return a draft.
 > Use only the information provided here.
 
 ### Stack
-- React 18.2, TypeScript 5.0, Vite, React Router 7
-- Plain CSS (no UI library)
-- No existing command palette or global keyboard handler
+- Spring Boot 3.5.9, Java 21, Maven (`./mvnw`)
+- Spring MVC REST API under `/api`, Spring Data JPA + PostgreSQL 16, Flyway migrations
+- Stateless JWT auth (Spring Security OAuth2 resource server); the task owner is the JWT `sub`
+- No existing search endpoint, full-text index, or query-by-text repository method
 
-### Navigation component
-**File**: `src/components/Navigation.tsx` — renders navbar with Lumio logo, user email, logout button. No command palette integration yet.
+### Task controller
+**File**: `src/main/java/com/example/lumio/task/TaskController.java` — `GET/POST /api/tasks`, `PATCH/DELETE /api/tasks/{id}`. `GET /api/tasks` returns every task for the owner, with no filtering, paging, or search.
 
-### App entry
-**File**: `src/App.tsx` — root router setup, mounted at `<main>` element.
+### Task persistence
+**File**: `src/main/java/com/example/lumio/task/TaskRepository.java` — `JpaRepository<Task, UUID>` with only `findByOwnerId(UUID)`.
+**File**: `src/main/resources/db/migration/V2__create_tasks.sql` — `tasks` table (`title VARCHAR(200)`, `description TEXT`, `status`, `due_date`, `owner_id`); only index is `idx_tasks_owner_id`. Latest migration is `V2`.
 
 ### Repository
 - **GitHub repo**: `example-org/lumio` (fictional)
@@ -29,9 +31,9 @@ This should be posted as an issue to GitHub — do not return a draft.
 - **Hosted at**: `github.com/example-org/lumio`
 
 ### Development stack
-- Package: `lumio@1.0.0`
-- Scripts: `dev` (Vite), `build`, `test` (Vitest)
-- No command-line interface or keyboard event handler utilities exist yet
+- Artifact: `com.example:lumio:1.0.0` (parent `spring-boot-starter-parent` 3.5.9)
+- Commands: `./mvnw spring-boot:run` (run), `./mvnw test` (JUnit 5 + Mockito, `@WebMvcTest` slices), `./mvnw verify` (adds Testcontainers PostgreSQL `*IT` tests)
+- Existing test conventions: `TaskControllerTest` (`@WebMvcTest` + MockMvc + `@MockitoBean TaskService`), `TaskRepositoryIT` (`@DataJpaTest` + Testcontainers)
 
 ## Instructions
 
