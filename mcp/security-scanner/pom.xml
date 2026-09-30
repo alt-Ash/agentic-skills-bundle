@@ -60,6 +60,22 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!--
+            The localhost com.sun.net.httpserver.HttpServer fixtures write
+            headers and body separately on a kept-alive connection; on Linux
+            Nagle + delayed ACK then stalls every request after the first by
+            ~40ms, which the latency circuit breaker (correctly) reads as a
+            12x slowdown. Disable Nagle on the test server.
+          -->
+          <systemPropertyVariables>
+            <sun.net.httpserver.nodelay>true</sun.net.httpserver.nodelay>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>
