@@ -18,7 +18,7 @@ pr:
     include: [main]
 
 variables:
-  nodeVersion: "20.x"
+  jdkVersion: "1.21"             # Maven@4 jdkVersionOption format
 
 pool:
   vmImage: ubuntu-latest
@@ -40,7 +40,7 @@ trigger:
     include: [main, release/*]
     exclude: [experimental/*]
   paths:
-    include: [src/**]
+    include: [src/**, pom.xml, build.gradle*]
   tags:
     include: ["v*"]
 
@@ -115,15 +115,18 @@ jobs:
   - job: MatrixTest
     strategy:
       matrix:
-        node18:
-          nodeVersion: "18.x"
-        node20:
-          nodeVersion: "20.x"
+        jdk17:
+          jdkVersion: "1.17"
+        jdk21:
+          jdkVersion: "1.21"
       maxParallel: 2
     steps:
-      - task: NodeTool@0
+      - task: Maven@4
         inputs:
-          versionSpec: $(nodeVersion)
+          mavenPOMFile: pom.xml
+          goals: verify
+          javaHomeOption: JDKVersion
+          jdkVersionOption: $(jdkVersion)
 ```
 
 ## Deployment jobs
@@ -152,30 +155,43 @@ steps:
   - checkout: self
     fetchDepth: 1                  # shallow clone for speed
 
-  - task: NodeTool@0
+  # Maven: builds, runs tests, and publishes Surefire JUnit results in one task
+  - task: Maven@4
+    displayName: Build and test (Maven)
     inputs:
-      versionSpec: $(nodeVersion)
+      mavenPOMFile: pom.xml
+      goals: verify
+      options: -B
+      javaHomeOption: JDKVersion
+      jdkVersionOption: $(jdkVersion)  # 'default' | '1.21' | '1.17' | '1.11' | ...
+      publishJUnitResults: true
+      testResultsFiles: "**/surefire-reports/TEST-*.xml"
 
-  - script: npm ci
-    displayName: Install dependencies
+  # Gradle equivalent (uses the project's wrapper). Gradle@4's jdkVersionOption
+  # tops out at '1.17', so for JDK 21 point javaHomeOption at the hosted agent's
+  # preinstalled JDK instead (JAVA_HOME_21_X64 on Microsoft-hosted images).
+  # - task: Gradle@4
+  #   inputs:
+  #     gradleWrapperFile: gradlew
+  #     tasks: build
+  #     javaHomeOption: Path
+  #     jdkDirectory: $(JAVA_HOME_21_X64)
+  #     publishJUnitResults: true
+  #     testResultsFiles: "**/TEST-*.xml"
 
-  - bash: |
-      npm test
-      echo "Tests done"
-    displayName: Run tests
-    env:
-      CI: true
+  - bash: ./mvnw -B verify         # plain-script alternative to the Maven@4 task
+    displayName: Run tests (wrapper)
 
   - pwsh: Write-Host "Windows step"
 
-  - task: PublishTestResults@2
+  - task: PublishTestResults@2     # only needed when tests ran outside Maven@4/Gradle@4
     inputs:
       testResultsFormat: JUnit
-      testResultsFiles: "**/junit.xml"
+      testResultsFiles: "**/TEST-*.xml"
 
   - task: PublishPipelineArtifact@1
     inputs:
-      targetPath: dist
+      targetPath: target            # build/libs for Gradle
       artifact: drop
 
   - download: current
@@ -226,38 +242,40 @@ Azure Key Vault.
 
 ```yaml
 variables:
-  - group: production-secrets     # contains NPM_TOKEN, DATABASE_URL, etc.
+  - group: production-secrets     # contains MAVEN_REPO_TOKEN, DATABASE_URL, etc.
 
 steps:
-  - script: npm publish
+  - script: ./mvnw -B deploy -s .mvn/settings.xml
     env:
-      NPM_TOKEN: $(NPM_TOKEN)     # never use $(SECRET) directly in script args
+      MAVEN_REPO_TOKEN: $(MAVEN_REPO_TOKEN)  # read via ${env.MAVEN_REPO_TOKEN} in settings.xml; never put $(SECRET) in script args
 ```
 
 Never print secret variables — ADO masks them but logging is bad practice.
 
 ## Templates
 
-**Step template (`templates/install.yml`):**
+**Step template (`templates/maven-build.yml`):**
 ```yaml
 parameters:
-  - name: nodeVersion
+  - name: jdkVersion
     type: string
-    default: "20.x"
+    default: "1.21"
 
 steps:
-  - task: NodeTool@0
+  - task: Maven@4
     inputs:
-      versionSpec: ${{ parameters.nodeVersion }}
-  - script: npm ci
+      mavenPOMFile: pom.xml
+      goals: verify
+      javaHomeOption: JDKVersion
+      jdkVersionOption: ${{ parameters.jdkVersion }}
 ```
 
 **Usage:**
 ```yaml
 steps:
-  - template: templates/install.yml
+  - template: templates/maven-build.yml
     parameters:
-      nodeVersion: "22.x"
+      jdkVersion: "1.17"
 ```
 
 Templates also work for `jobs:`, `stages:`, and `variables:`.
@@ -309,21 +327,40 @@ resources:
           include: [main]
 
   containers:
-    - container: node20
-      image: node:20-alpine
+    - container: jdk21
+      image: eclipse-temurin:21-jdk
 ```
 
 ## Caching
 
 ```yaml
-- task: Cache@2
-  inputs:
-    key: 'npm | "$(Agent.OS)" | package-lock.json'
-    restoreKeys: |
-      npm | "$(Agent.OS)"
-    path: $(npm_config_cache)
-  displayName: Cache npm
+variables:
+  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+  MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+
+steps:
+  - task: Cache@2
+    inputs:
+      key: 'maven | "$(Agent.OS)" | **/pom.xml'
+      restoreKeys: |
+        maven | "$(Agent.OS)"
+        maven
+      path: $(MAVEN_CACHE_FOLDER)
+    displayName: Cache Maven local repo
+
+  - task: Maven@4
+    inputs:
+      mavenPOMFile: pom.xml
+      mavenOptions: '-Xmx3072m $(MAVEN_OPTS)'  # pass MAVEN_OPTS through or the task overwrites it
 ```
+
+For Gradle, set the `GRADLE_USER_HOME` variable to `$(Pipeline.Workspace)/.gradle`,
+cache that path with `Cache@2` (key e.g. `'gradle | "$(Agent.OS)" | **/build.gradle.kts'`
+— swap in `build.gradle` for Groovy DSL — with `restoreKeys` falling back to
+`gradle | "$(Agent.OS)"` then `gradle`), pass `--build-cache` in the `Gradle@4`
+task's `options` (or set `org.gradle.caching=true` in `gradle.properties`), and
+run `./gradlew --stop` as a final step so the daemon doesn't hold files open when
+the post-job cache save runs.
 
 ## Security hardening
 
@@ -331,17 +368,16 @@ resources:
 - Grant service connections only the permissions needed for the job
 - Enable branch policies — require PR reviews before merging to `main`
 - Use Variable Groups linked to Azure Key Vault for secrets rotation
-- Pin task versions (`NodeTool@0` → specify exact version in task properties)
+- Pin task major versions explicitly (`Maven@4`, `Gradle@4`) — never rely on an implicit latest
 - Enable audit logging in the ADO organisation settings
 
 ## Common tasks
 
 | Task | Purpose |
 |---|---|
-| `NodeTool@0` | Install Node.js |
-| `UsePythonVersion@0` | Install Python |
-| `DotNetCoreCLI@2` | .NET build/test/publish |
-| `Maven@4` / `Gradle@3` | Java builds |
+| `Maven@4` / `Gradle@4` | Java builds (JDK selection + JUnit result publishing built in; `Gradle@4` has no `1.21` JDK option — use `javaHomeOption: Path`) |
+| `JavaToolInstaller@1` | Install a specific JDK and set `JAVA_HOME` |
+| `NodeTool@0` / `UsePythonVersion@0` / `DotNetCoreCLI@2` | Other stacks (Node.js, Python, .NET) |
 | `Docker@2` | Build/push Docker images |
 | `KubernetesManifest@1` | Deploy to AKS |
 | `AzureWebApp@1` | Deploy to App Service |

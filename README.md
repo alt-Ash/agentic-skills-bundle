@@ -1,6 +1,6 @@
 # Agentic Skills Bundle
 
-A curated collection of reusable AI agent skills, sub-agents, and MCP servers for Node.js and React projects — installed via a single guided CLI into any AI coding assistant's config.
+A curated collection of reusable AI agent skills, sub-agents, and MCP servers for Java/Spring Boot projects — installed via a single guided CLI into any AI coding assistant's config.
 
 This repo **produces** skills and agents; it does not consume them. `agentic-skills` copies files from here into your own AI tool configuration (globally or per-project).
 
@@ -119,6 +119,18 @@ Runs a fast, diff-scoped OWASP Top 10:2025 pattern check on the current change s
 Separates genuine scope from noise in a ticket, PBI, or User Story, in both directions — classifies content as signal, flagged aside, open item, or noise, and never silently discards any of it.
 
 **Use when:** a ticket is being read (via `issue-tickets` `pull_ticket`) or drafted, and it mixes the real requirement with questions, asides, meeting-note pastes, or unresolved "to be elaborated" markers. Used internally by `pr-reviewer`, `issue-architect`, and `issue-implementer`.
+
+#### `validation-loop`
+
+Bounded iterate-fix-reverify protocol for any caller-supplied gate set — build/test/lint (`./mvnw verify`, `./gradlew check`), an OWASP Dependency-Check re-scan, a live endpoint re-check. Defines cheapest-first gate ordering, introduced-vs-pre-existing failure classification, and a uniform hard-stop template; the caller always supplies the concrete gates and fixes.
+
+**Use when:** an agent needs to iterate until a set of checks pass rather than declaring success after the first pass. Used internally by `dev-orchestrator`, `issue-implementer`, `security-implementor`, and `spring-boot-backend-engineer`.
+
+#### `parallel-feature-build`
+
+Splits one feature into independent, file-scoped slices and builds them with parallel generic workers, each on its own isolated working tree where the host tool supports it. Falls back to sequential work when slices are not provably independent.
+
+**Use when:** a feature cleanly decomposes into two or more slices with no shared files, migration ordering, or config edits. Used internally by `dev-orchestrator`.
 
 ## Adding new skills
 

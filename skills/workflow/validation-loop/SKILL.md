@@ -2,8 +2,9 @@
 name: validation-loop
 description:
   Bounded iterate-fix-reverify protocol for any domain-specific gate set —
-  build/test/lint, `npm audit`, a browser console/network/snapshot recheck,
-  or any other pass/fail check a caller supplies. Use whenever an agent needs
+  build/test/lint (`./mvnw verify`, `./gradlew check`), an OWASP
+  Dependency-Check re-scan, a live endpoint re-check, or any other pass/fail
+  check a caller supplies. Use whenever an agent needs
   to iterate until a set of checks pass rather than declaring success after
   the first pass. Defines gate-discovery convention, cheapest-first
   ordering, introduced-vs-pre-existing failure classification, a
@@ -17,7 +18,7 @@ description:
 Every agent in this repo that fixes something eventually has to answer the
 same question: how do I know I'm actually done? Four of them — implementing a
 ticket, orchestrating a feature, patching a security finding, debugging a
-browser bug — each answer it with their own slightly different prose, and two
+failing Spring Boot endpoint — each answer it with their own slightly different prose, and two
 of them never state a stopping condition at all, which means a stubborn
 failure can loop forever instead of surfacing to a human. This skill is the
 one shared protocol: bounded retries, before/after measurement, a strict rule
@@ -31,17 +32,25 @@ Before entering the loop, the caller states its own ordered gate list. If the
 caller doesn't already know its gates (most agents implementing project code
 changes do not), discover them:
 
-- Read `package.json`'s `scripts` field, or `pyproject.toml` / `Makefile` /
+- Read `pom.xml` (Maven — prefer the `./mvnw` wrapper when it exists) or
+  `build.gradle` / `build.gradle.kts` (Gradle — prefer `./gradlew`) for the
+  plugins and lifecycle actually configured (Surefire/Failsafe, Checkstyle,
+  SpotBugs, Spotless, JaCoCo, etc.); or `pyproject.toml` / `Makefile` /
   `go.mod` / `Cargo.toml` for other ecosystems.
 - Read `AGENTS.md` / `CLAUDE.md` / `README.md` for documented commands.
-- Typical gates, cheapest first: **lint/typecheck**, **build**, **tests**
-  (full suite, then targeted tests for the changed area).
+- Typical gates, cheapest first: **lint/static analysis + compile**, **build**,
+  **tests** (full suite — e.g. `./mvnw test` / `./gradlew test`, or
+  `./mvnw verify` / `./gradlew check` to include integration tests and
+  configured checks — then targeted tests for the changed area, e.g.
+  `./mvnw test -Dtest=FooServiceTest` / `./gradlew test --tests "*FooServiceTest"`).
 - **If a gate's command doesn't exist in the project, skip that gate. Never
   invent one.**
 
-A caller with a fixed, non-discoverable gate (e.g. "re-run `npm audit --json`"
-or "reload the page and recheck console/network/snapshot") skips discovery
-and states its gate directly.
+A caller with a fixed, non-discoverable gate (e.g. "re-run OWASP
+Dependency-Check — `mvn org.owasp:dependency-check-maven:check`, or
+`./gradlew dependencyCheckAnalyze` with the `org.owasp.dependencycheck`
+plugin applied" or "re-probe the running app via the `security-scanner` MCP")
+skips discovery and states its gate directly.
 
 ## The loop
 
@@ -71,8 +80,8 @@ Stop iterating and surface to the user — do not keep retrying — the moment
    - **N = 10** for build/test/lint-shaped loops (implementing project code
      changes).
    - **N = 5** for higher-signal-per-cycle loops, where each iteration is an
-     expensive, high-information re-check (a full `npm audit` re-run, a full
-     browser reload-and-recheck) — non-convergence is diagnosable sooner in
+     expensive, high-information re-check (a full OWASP Dependency-Check
+     re-scan, a full endpoint re-exercise) — non-convergence is diagnosable sooner in
      these loops than in a build/test/lint loop.
 
 When stopping, report exactly which condition fired, the last failure output

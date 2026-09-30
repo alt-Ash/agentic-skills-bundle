@@ -17,13 +17,13 @@ permissions:
   contents: read        # always set explicitly
 
 env:
-  NODE_VERSION: "20"
+  JAVA_VERSION: "21"
 
 jobs:
   <job-id>:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 ```
 
 ## Triggers (`on`)
@@ -33,7 +33,7 @@ jobs:
 on:
   push:
     branches: [main]
-    paths: ["src/**", "package.json"]
+    paths: ["src/**", "pom.xml", "build.gradle*", "settings.gradle*", "gradle/**"]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
@@ -87,7 +87,7 @@ jobs:
 strategy:
   fail-fast: false
   matrix:
-    node: [18, 20, 22]
+    java: ["17", "21", "25"]
     os: [ubuntu-latest, windows-latest]
 runs-on: ${{ matrix.os }}
 ```
@@ -97,29 +97,33 @@ runs-on: ${{ matrix.os }}
 ```yaml
 steps:
   - name: Checkout
-    uses: actions/checkout@v4      # always pin to a version tag or SHA
+    uses: actions/checkout@v7      # always pin to a version tag or SHA
 
-  - name: Set up Node
-    uses: actions/setup-node@v4
+  - name: Set up JDK
+    uses: actions/setup-java@v6
     with:
-      node-version: ${{ env.NODE_VERSION }}
-      cache: npm
+      distribution: temurin          # or zulu, corretto, microsoft, liberica, ...
+      java-version: ${{ env.JAVA_VERSION }}
+      cache: maven                   # or gradle / sbt — keyed on pom.xml / *.gradle* etc.
 
-  - name: Install
-    run: npm ci
+  - name: Build and test (Maven)
+    run: ./mvnw -B verify            # -B = batch mode, no interactive download progress
 
-  - name: Test
-    run: npm test
-    env:
-      CI: true
+  # Gradle equivalent (use cache: gradle above):
+  # - name: Build and test (Gradle)
+  #   run: ./gradlew build
 
   - name: Upload artifact
-    uses: actions/upload-artifact@v4
+    uses: actions/upload-artifact@v7
     with:
-      name: dist
-      path: dist/
+      name: app-jar
+      path: target/*.jar             # build/libs/*.jar for Gradle
       retention-days: 7
 ```
+
+`java-version-file: .java-version` can replace `java-version` to keep the JDK
+version in one place. Prefer the project's wrapper (`./mvnw`, `./gradlew`) over
+a runner-installed `mvn`/`gradle` so CI uses the pinned build-tool version.
 
 ### Conditional steps
 
@@ -138,7 +142,7 @@ steps:
 ```yaml
 # Access secrets
 env:
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  MAVEN_REPO_TOKEN: ${{ secrets.MAVEN_REPO_TOKEN }}
 
 # GitHub-provided variables
 github.sha          # commit SHA
@@ -153,16 +157,18 @@ Never echo secrets — they are masked but logging them is bad practice.
 ## Caching
 
 ```yaml
-- uses: actions/cache@v4
+- uses: actions/cache@v6
   with:
-    path: ~/.npm
-    key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+    path: ~/.m2/repository
+    key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
     restore-keys: |
-      npm-${{ runner.os }}-
+      maven-${{ runner.os }}-
 ```
 
-Prefer `cache:` option in `setup-node`, `setup-python`, etc. over manual cache
-steps — it handles save/restore automatically.
+Prefer the `cache:` option in `setup-java` (`maven` | `gradle` | `sbt`), or
+`setup-python`/`setup-node` etc. for other stacks, over manual cache steps — it
+handles save/restore automatically and hashes the right build files
+(`**/pom.xml`, `**/*.gradle*`, `**/gradle-wrapper.properties`, ...).
 
 ## Permissions (least privilege)
 
@@ -200,19 +206,20 @@ on:
 ## Composite actions (`.github/actions/<name>/action.yml`)
 
 ```yaml
-name: Setup and Cache
-description: Install deps with caching
+name: Setup JDK and Cache
+description: Install the JDK with Maven dependency caching and resolve deps
 inputs:
-  node-version:
-    default: "20"
+  java-version:
+    default: "21"
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-java@v6
       with:
-        node-version: ${{ inputs.node-version }}
-        cache: npm
-    - run: npm ci
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+        cache: maven
+    - run: ./mvnw -B dependency:go-offline
       shell: bash
 ```
 
@@ -234,7 +241,7 @@ jobs:
 ## Security hardening
 
 - Pin all third-party actions to a full commit SHA:
-  `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683`
+  `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`
 - Use `pull_request_target` with care — it has write access; validate inputs
 - Set `GITHUB_TOKEN` to the minimum permissions needed
 - Use `github.event.pull_request.head.sha` for PR context, not `github.sha`
@@ -244,14 +251,14 @@ jobs:
 
 | Action | Purpose |
 |---|---|
-| `actions/checkout@v4` | Clone the repo |
-| `actions/setup-node@v4` | Install Node.js with cache |
-| `actions/setup-python@v5` | Install Python |
-| `actions/upload-artifact@v4` | Save build output |
-| `actions/download-artifact@v4` | Retrieve build output |
-| `actions/cache@v4` | Manual cache control |
-| `github/codeql-action/analyze@v3` | SAST scanning |
-| `docker/build-push-action@v6` | Build and push Docker images |
+| `actions/checkout@v7` | Clone the repo |
+| `actions/setup-java@v6` | Install a JDK (`distribution` + `java-version`) with Maven/Gradle cache |
+| `actions/setup-node@v7` / `actions/setup-python@v7` | Other stacks (Node.js, Python) |
+| `actions/upload-artifact@v7` | Save build output |
+| `actions/download-artifact@v8` | Retrieve build output |
+| `actions/cache@v6` | Manual cache control |
+| `github/codeql-action/analyze@v4` | SAST scanning |
+| `docker/build-push-action@v7` | Build and push Docker images |
 
 ## Debugging
 

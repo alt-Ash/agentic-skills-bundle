@@ -21,7 +21,7 @@ _2–3 sentences: what the project is, what it does, who uses it_
 ## Project Structure
 
 {{PROJECT_STRUCTURE}}
-_Paragraph describing top-level organization: monorepo vs single app, key directories_
+_Paragraph describing top-level organization: multi-module vs single module, base package, key directories_
 
 ```
 {{DIRECTORY_TREE}}
@@ -35,17 +35,17 @@ _Main scripts, app entry files, server start points_
 ## Key Modules
 
 {{KEY_MODULES}}
-_Top-level dirs under src/ with one-line description each_
+_Modules or top-level packages under the base package, one-line description each_
 
 ## Data Flow
 
 {{DATA_FLOW}}
-_How data moves: REST/GraphQL/tRPC, state management (Redux/Zustand/Context), key patterns_
+_How data moves: REST/GraphQL endpoints, persistence (JPA/JDBC), messaging, outbound HTTP clients, key patterns_
 
 ## Build Pipeline
 
 {{BUILD_PIPELINE}}
-_Scripts from package.json: dev, build, preview, test, deploy_
+_Build commands: Maven phases/plugin goals or Gradle tasks (build, test, run, package, image) and CI build steps_
 
 ## Testing Strategy
 

@@ -74,7 +74,7 @@ dispatched from `App.main`.
 + `registry/HooksRegistry` register the 5 hooks into a target project's
 Claude Code `settings.json` (merging into any existing `hooks` block rather
 than clobbering it). This is scoped to **Claude Code only** for now — the
-other 6 tools in `AgentToolRegistry` don't have a documented hook-config
+other 7 tools in `AgentToolRegistry` don't have a documented hook-config
 schema to build against; extending hook registration to them is unstarted,
 not just unimplemented.
 
@@ -163,7 +163,7 @@ either (`package.json`'s `files`/`prepack` don't reference it) — dev-only tool
 - **New agent:** add `agents/<name>.md` — auto-discovered.
 - **New command:** add `.opencode/commands/<name>.md` (the single source of truth, installed to every tool with `supportsCommands: true` in `AgentToolRegistry` — currently OpenCode and Claude Code) and map it to its backing skill/agent via `CommandRegistry` in `bin/agentic-skills-cli`. Keep the frontmatter to `description` (+ optional `subtask`) — quote the `description` value if it contains a colon, since unquoted colons break strict YAML frontmatter parsers.
 - **New local MCP:** there is currently no descriptor/registry pattern for this. Write bespoke build/install/config/uninstall logic directly in `bin/agentic-skills-cli`'s `mcp/local/` package, following `SecurityScannerMcpInstaller` as a reference implementation. Both `issue-tickets` and `security-scanner` are Java/Spring Boot Maven projects (not Node/TS) — the installer shells out to `mvn -q -DskipTests package` and copies the resulting self-contained fat jar (`target/<name>.jar`); the config-builder method launches it via `java -jar <path>` instead of `node <entryPoint>`. A brand-new local MCP could still be Node/TS if that's a better fit for it — this repo now has precedent for both toolchains side by side.
-- **New hook provider / new hook type:** add the Java class under `hooks/agentic-skills-hooks/src/main/java/.../hooks/`, register the new `hookType` in `HookDispatcher`, and add a matching `HookDescriptor` entry to `bin/agentic-skills-cli`'s `HooksRegistry`. Registration is currently Claude-Code-only — extending it to another tool means adding that tool's hook-config schema to `HookRegistrar` first (none of the other 6 tools have one documented yet).
+- **New hook provider / new hook type:** add the Java class under `hooks/agentic-skills-hooks/src/main/java/.../hooks/`, register the new `hookType` in `HookDispatcher`, and add a matching `HookDescriptor` entry to `bin/agentic-skills-cli`'s `HooksRegistry`. Registration is currently Claude-Code-only — extending it to another tool means adding that tool's hook-config schema to `HookRegistrar` first (none of the other 7 tools have one documented yet).
 
 ### Test suites
 

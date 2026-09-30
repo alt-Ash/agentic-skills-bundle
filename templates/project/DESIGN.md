@@ -80,7 +80,7 @@ _Add a subsection per component family as the system grows._
 
 {{ACCESSIBILITY_STANDARDS}}
 _WCAG level, screen reader requirements, keyboard nav expectations, enforcement tooling. Example:_
-_WCAG AA. eslint-plugin-jsx-a11y configured (warn level). Keyboard nav required for all interactive elements._
+_WCAG AA. Automated axe checks run in UI tests. Keyboard nav required for all interactive elements._
 
 ---
 

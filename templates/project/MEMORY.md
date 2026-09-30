@@ -42,14 +42,14 @@ _Why this framework, why this library, key architectural choices and the reasoni
 ## Key Constraints
 
 {{KEY_CONSTRAINTS}}
-_Node version, browser support targets, performance budgets, security requirements_
+_Java/runtime version, framework generation, supported platforms, performance budgets, security requirements_
 
 ---
 
 ## Naming Conventions
 
 {{NAMING_CONVENTIONS}}
-_Files, components, functions, CSS classes, API endpoints, env vars_
+_Packages, classes, methods, test classes, API endpoints, config properties, env vars_
 
 ---
 

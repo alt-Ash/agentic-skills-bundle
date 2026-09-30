@@ -30,12 +30,13 @@ Follow these phases in strict order. Do not skip or reorder them.
 
 Before writing anything, collect the facts you need:
 
-1. Read `package.json` (or the equivalent manifest for the project language) to identify:
-   - The test runner and how to invoke it (e.g., `vitest`, `jest`, `pytest`, `go test`).
-   - The test file naming convention (e.g., `*.test.ts`, `*.spec.ts`, `_test.go`).
-   - Available check scripts: `lint`, `typecheck`, `build`, `check`, `validate`, or similar.
-2. Identify the directory structure for tests (co-located, `__tests__/`, `tests/`, etc.).
-3. Read any existing test files near the code you will touch to understand the testing patterns in use (assertion style, mocking approach, fixtures).
+1. Read `pom.xml` or `build.gradle` / `build.gradle.kts` (or the equivalent manifest for the project language — `pyproject.toml`, `go.mod`, `package.json`, …) to identify:
+   - The test framework and how to invoke it (e.g., JUnit 5 via `./mvnw test` or `./gradlew test` — prefer the wrapper when present; `pytest`, `go test` elsewhere).
+   - How to run a single test (e.g., `./mvnw test -Dtest=UserServiceTest`, `./gradlew test --tests "*UserServiceTest"`).
+   - The test file naming convention (e.g., `*Test.java` for Surefire unit tests, `*IT.java` for Failsafe integration tests, `test_*.py`, `_test.go`).
+   - Available check plugins/tasks: Checkstyle, SpotBugs, PMD, Spotless, JaCoCo, `./mvnw verify`, `./gradlew check`, or similar.
+2. Identify the directory structure for tests (`src/test/java/` mirroring the main package, `src/integrationTest/`, `tests/`, etc.).
+3. Read any existing test files near the code you will touch to understand the testing patterns in use (assertion style — AssertJ vs JUnit `Assertions`; mocking approach — Mockito, `@MockitoBean`/`@MockBean`; slice tests like `@WebMvcTest`/`@DataJpaTest` vs `@SpringBootTest`; fixtures, Testcontainers).
 4. Use any installed skills relevant to the project language, framework, or testing tool.
 
 Do not write any code until Phase 0 is complete.
@@ -60,7 +61,7 @@ Inspect the test output carefully.
 
 - **Acceptable red:** The test fails because the production code does not yet implement the required behavior (e.g., function returns wrong value, feature not found, assertion fails on actual vs expected).
 - **Unacceptable red:** The test fails because of:
-  - Missing imports or unresolved modules.
+  - Missing imports or unresolved modules in the test itself (for Java, a `cannot find symbol` compile error for something the test should already be able to reference — as opposed to the production class/method under test not existing yet, which is an acceptable red).
   - Syntax errors in the test file.
   - Missing test doubles (mocks, stubs, fakes) that are needed for isolation.
   - Wrong test setup or teardown.
@@ -101,10 +102,10 @@ Re-run the full test suite after any refactor to confirm nothing broke.
 
 Run every available check found in Phase 0, in this order if all exist:
 
-1. Lint (e.g., `eslint`, `ruff`, `golangci-lint`)
-2. Type check (e.g., `tsc --noEmit`, `mypy`, `go vet`)
-3. Build (e.g., `tsc`, `vite build`, `go build`)
-4. Any other scripts labeled `check`, `validate`, `ci`, or similar.
+1. Lint / static analysis (e.g., Checkstyle, SpotBugs, PMD, Spotless via their configured Maven goals or Gradle tasks; `ruff`, `golangci-lint` elsewhere)
+2. Type check / compile (e.g., `./mvnw test-compile`, `./gradlew compileJava compileTestJava`; `mypy`, `go vet` elsewhere)
+3. Build (e.g., `./mvnw verify` or `./mvnw package`, `./gradlew build`; `go build` elsewhere)
+4. Any other configured aggregate checks (e.g., `./gradlew check`, or scripts labeled `check`, `validate`, `ci`, or similar).
 
 For each check:
 - Run it.
@@ -163,6 +164,6 @@ was added. No unrelated refactoring was performed.
 - Do not modify a test to make it pass — fix the production code instead.
 - Do not declare the task done if any test is failing.
 - Do not declare the task done if any available project check is failing.
-- Do not add `console.log`, `print`, or debug statements as permanent code.
+- Do not add `System.out.println`, `printStackTrace()`, `print`, `console.log`, or other debug statements as permanent code.
 - Do not refactor code that is outside the scope of the current change.
 - Do not guess at test runner commands — read them from the project manifest.

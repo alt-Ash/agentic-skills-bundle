@@ -25,6 +25,47 @@ Use compact context/handoff from `templates/COMPACT-CONTEXT.md` and `templates/C
 3. Detect the Spring Boot major version in use (`spring-boot-starter-parent` version in `pom.xml`, or the Spring Boot Gradle plugin version) — a 2.x -> 3.x crossing imposes its own breaking changes independent of the JDK hop.
 4. Emit compact context: `Context: java-version-migrator; <project type>; build=<maven|gradle>; versions=JDK <from> -> <to>; files=<read>; gaps=<items>`.
 
+## Context Block
+
+When full blocks are required, emit this after First Actions and before any file change:
+
+```
+***CONTEXT BLOCK***
+Skill/Agent : java-version-migrator
+Timestamp   : <ISO-8601 date>
+
+### Project
+- Type            : <Spring Boot API | Quarkus | Micronaut | plain Java library | monorepo | unknown>
+- Build tool      : <Maven (./mvnw) | Gradle (./gradlew) | unknown>
+- Multi-module    : <yes — modules: <list> | no>
+
+### Runtime & tooling versions
+- JDK version     : <current version + distribution, e.g. "17 temurin">
+- Spring Boot     : <version | "—">
+- Test runner     : <JUnit 5 | JUnit 4 | TestNG | none>
+- OpenRewrite     : <rewrite-maven-plugin / Gradle plugin version | not configured>
+
+### Migration context
+- Current version : <e.g. "JDK 17">
+- Target version  : <e.g. "JDK 21">
+- Migration hops  : <e.g. "17 → 21 (single hop)" | "17 → 21 → 25">
+- Spring Boot hop : <e.g. "2.7 → 3.x (framework migrator required)" | "none">
+- Native/JNI      : <yes — libraries: <list> | no>
+
+### Infrastructure
+- CI/CD           : <GitHub Actions | Azure Pipelines | GitLab CI | none | unknown>
+- Docker          : <yes — base image: <image:tag> | no>
+- JDK pin files   : <.sdkmanrc | .java-version | toolchains.xml | none>
+
+### Files read
+- pom.xml (or build.gradle / build.gradle.kts)
+- <any other files read>
+
+### Gaps / unknowns
+- <description or "none">
+***END CONTEXT BLOCK***
+```
+
 ## Workflow
 
 | Step | Action |
@@ -68,4 +109,44 @@ Compact handoff:
 
 ```text
 Handoff: java-version-migrator; status=<completed|partial|blocked>; changed=<files>; checks=<commands>; blockers=<none|items>; next=JDK <from> -> <to>, framework=Spring Boot <version|none>, dependency blockers=<items>
+```
+
+## Handoff Block
+
+When full blocks are required, emit this instead of the compact handoff:
+
+```
+***HANDOFF BLOCK***
+Skill/Agent : java-version-migrator
+Timestamp   : <ISO-8601 date>
+Status      : completed | partial | blocked
+
+### What was done
+- Migrated JDK <from> -> <to> via hops: <list>
+- Spring Boot: <from> -> <to> | unchanged
+- OpenRewrite recipes run: <recipe names | none>
+- Removed/deprecated API usages fixed: <count + summary>
+
+### Artifacts produced
+| File | Change |
+|------|--------|
+| pom.xml / build.gradle | modified — Java release/toolchain -> <to> |
+| <CI file, Dockerfile, .sdkmanrc> | modified — <description> |
+| <source file> | modified — <API replacement> |
+
+### Checks
+| Check        | Result |
+|--------------|--------|
+| compile      | ✅ passed / ❌ failed / ⚪ n/a |
+| tests        | ✅ passed / ❌ failed / ⚪ n/a |
+| build        | ✅ passed / ❌ failed / ⚪ n/a |
+| docker build | ✅ passed / ❌ failed / ⚪ n/a |
+| license scan | ✅ passed / ❌ failed / ⚪ n/a |
+
+### Blocked items
+- <dependency or API that cannot support the target JDK, with reason | "—">
+
+### For the next agent or step
+<Final JDK/Spring Boot versions, remaining dependency blockers, and any runtime flags (e.g. --add-opens) that were added and should be revisited>
+***END HANDOFF BLOCK***
 ```

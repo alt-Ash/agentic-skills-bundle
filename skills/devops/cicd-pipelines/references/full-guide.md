@@ -46,7 +46,7 @@ Pipeline Task Progress:
 
 **Reliability**
 - Fail fast: put cheap, quick checks first (lint → test → build → deploy)
-- Use caching for dependencies (npm, pip, Maven, etc.)
+- Use caching for dependencies (Maven `~/.m2`, Gradle `~/.gradle`, or pip/npm for other stacks)
 - Set explicit timeouts on every job
 - Always clean up temporary credentials and resources
 
@@ -104,7 +104,7 @@ Skill     : cicd-pipelines
 Platform  : <GitHub Actions | Azure DevOps | both>
 Task      : <create | fix | optimize | review>
 Repo      : <monorepo | single-app>
-Stack     : <Node.js | Python | .NET | Java | other>
+Stack     : <Java/Spring Boot (Maven | Gradle) | Node.js | Python | .NET | other>
 Envs      : <dev | staging | production>
 Runners   : <ubuntu-latest | self-hosted | windows | macos>
 Secrets   : <GitHub Secrets | Azure Key Vault | other>

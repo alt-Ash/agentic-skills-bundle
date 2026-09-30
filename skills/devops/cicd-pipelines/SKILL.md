@@ -38,20 +38,56 @@ If platform is unclear, ask before proceeding.
 - Pin third-party actions/tasks to commit SHA when security matters.
 - Apply least privilege to tokens and service connections.
 - Put cheap checks before expensive jobs; parallelize independent work.
-- Cache by lockfile hash, set job timeouts, and avoid unnecessary checkouts.
+- Cache by build-file hash (`pom.xml`, `*.gradle*`, `gradle-wrapper.properties`), set job timeouts, and avoid unnecessary checkouts.
 - Build once, publish artifact, and promote it across environments.
 - Keep repeated logic in reusable workflows/templates.
 
 Compact context:
 
 ```text
-Context: cicd-pipelines; platform=<GitHub Actions|Azure DevOps|both>; task=<create|fix|optimize|review>; stack=<name>; files=<read>; gaps=<items>
+Context: cicd-pipelines; platform=<GitHub Actions|Azure DevOps|both>; task=<create|fix|optimize|review>; stack=<java-maven|java-gradle|other>; files=<read>; gaps=<items>
 ```
 
 Compact handoff:
 
 ```text
 Handoff: cicd-pipelines; status=<completed|partial|blocked>; changed=<files>; checks=<syntax/tests>; blockers=<none|items>; next=<risk summary>
+```
+
+## CONTEXT BLOCK template
+
+When full blocks are required, emit this after gathering requirements and before editing any pipeline file:
+
+```
+***CONTEXT BLOCK***
+Skill/Agent : cicd-pipelines
+Timestamp   : <ISO-8601 date>
+
+### Pipeline
+- Platform        : <GitHub Actions | Azure DevOps | both>
+- Task            : <create | fix | optimize | review>
+- Existing file   : <path, e.g. .github/workflows/ci.yml or azure-pipelines.yml | none>
+- Triggers        : <push | PR | schedule | manual | workflow_call>
+- Runners/agents  : <ubuntu-latest | windows-latest | self-hosted pool>
+
+### Project
+- Type            : <Spring Boot API | Quarkus | Micronaut | monorepo | other stack>
+- Build tool      : <Maven (./mvnw) | Gradle (./gradlew) | other>
+- JDK version     : <version + distribution, e.g. "21 temurin" | "—">
+- Test runner     : <JUnit 5 | JUnit 5 + Testcontainers | none>
+- Artifact        : <jar | container image | none>
+
+### Delivery
+- Environments    : <dev | staging | production | none>
+- Secrets store   : <GitHub Secrets/Environments | Azure Key Vault / Variable Group | other>
+- Deploy target   : <App Service | AKS | container registry | Maven repository | none>
+
+### Files read
+- <pipeline file(s), pom.xml / build.gradle*, Dockerfile, ...>
+
+### Gaps / unknowns
+- <description or "none">
+***END CONTEXT BLOCK***
 ```
 
 ## HANDOFF BLOCK template
@@ -77,9 +113,8 @@ Status      : completed | partial | blocked
 ### Checks
 | Check     | Result |
 |-----------|--------|
+| yaml syntax | ✅ passed / ❌ failed / ⚪ n/a |
 | tests     | ✅ passed / ❌ failed / ⚪ n/a |
-| lint      | ✅ passed / ❌ failed / ⚪ n/a |
-| typecheck | ✅ passed / ❌ failed / ⚪ n/a |
 | build     | ✅ passed / ❌ failed / ⚪ n/a |
 
 ### Blocked items

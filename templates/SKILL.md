@@ -50,7 +50,7 @@ category: frontend | backend           # pick one
 
 | Input | Source | Required |
 |-------|--------|----------|
-| <input name> | `package.json` / user prompt / `.nvmrc` | Yes / No |
+| <input name> | `pom.xml` / `build.gradle(.kts)` / user prompt / `.java-version` / `.sdkmanrc` | Yes / No |
 
 ---
 
@@ -58,14 +58,14 @@ category: frontend | backend           # pick one
 
 > This phase collects inputs and emits compact context. No work happens until this phase is complete.
 
-1. Read `package.json` and note: <specific fields to check>
+1. Read `pom.xml` (or `build.gradle` / `build.gradle.kts`) and note: <specific fields to check, e.g. `<java.version>`, Spring Boot parent version, `java { toolchain { … } }`>
 2. Check for <file or config>: <command or read instruction>
 3. Ask the user if <gap condition>.
 
 > At the end of this phase, emit compact context by default (see `templates/COMPACT-CONTEXT.md`). Use the full `templates/CONTEXT-BLOCK.md` only when a downstream parser, user request, or agent handoff requires it:
 
 ```
-Context: <skill-name>; <project type>; pkg=<manager>; ts=<yes|no>; versions=<key versions>; files=<paths read>; gaps=<none|items>
+Context: <skill-name>; <project type>; build=<maven|gradle>; java=<version>; versions=<key versions>; files=<paths read>; gaps=<none|items>
 ```
 
 ---

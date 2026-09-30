@@ -3,7 +3,7 @@
 Use this by default in skills. Emit the full `templates/CONTEXT-BLOCK.md` only when a downstream parser, user request, or agent handoff explicitly needs the full structure.
 
 ```text
-Context: <skill>; <project type>; pkg=<npm|pnpm|yarn>; ts=<yes|no>; versions=<key versions>; files=<paths read>; gaps=<none|items>
+Context: <skill>; <project type>; build=<maven|gradle>; java=<version>; versions=<key versions>; files=<paths read>; gaps=<none|items>
 ```
 
 Rules:

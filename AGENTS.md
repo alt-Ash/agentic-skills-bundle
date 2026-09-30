@@ -22,11 +22,13 @@ Global paths such as the following are completely out of scope:
 - `~/.config/opencode/commands/`
 - `~/.claude/`
 - `~/.cursor/`
+- `~/.gemini/`
+- `~/.codex/`
 - `~/.vscode/`
 - `~/.codeium/`
 - `~/.config/zed/`
 
-These paths exist only inside `bin/install.js` as **install targets** — destination paths the CLI writes to when a user runs the installer in their own environment. They are not relevant to development work on this repository.
+These paths exist only inside the installer (`bin/agentic-skills-cli`'s `AgentToolRegistry`/`McpConfigRegistry`) as **install targets** — destination paths the CLI writes to when a user runs the installer in their own environment. They are not relevant to development work on this repository.
 
 **Do not validate, check, or troubleshoot anything based on the absence or presence of files in any global config path.**
 
@@ -74,7 +76,7 @@ agentic-skills-bundle/
 
 ## How skills are structured
 
-Each skill is a plain directory. Drop a new folder under `skills/<category>/` and it is automatically discovered by the installer — no changes to `bin/install.js` are needed.
+Each skill is a plain directory. Drop a new folder under `skills/<category>/` and it is automatically discovered by the installer — no changes to `bin/agentic-skills-cli` are needed.
 
 Recommended structure for a new skill:
 
@@ -129,7 +131,7 @@ lives there, not in the shim.
 The CLI prompts the user to choose:
 
 1. **Install target** — global agent config or a specific project directory
-2. **AI agent** — OpenCode, Claude Code, Cursor, VS Code, Windsurf, or Zed AI
+2. **AI agent** — OpenCode, Claude Code, Cursor, Gemini CLI, OpenAI Codex CLI, VS Code, Windsurf, or Zed AI
 3. **Skills** — any combination from `skills/`
 4. **Agents** — any combination from `agents/` (for agents that support sub-agents)
 5. **Commands** — optional slash commands paired with selected skills or agents (for tools with `supportsCommands: true` — currently OpenCode and Claude Code)
