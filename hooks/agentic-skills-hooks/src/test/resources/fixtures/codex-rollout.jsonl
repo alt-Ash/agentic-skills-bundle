@@ -1,0 +1,3 @@
+{"type":"TurnContext","model":"codex-mini"}
+{"type":"UserMessage","message":"Refactor this code"}
+{"type":"TokenCount","usage":{"input_tokens":300,"cached_input_tokens":50}}

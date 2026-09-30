@@ -1,8 +1,10 @@
 node_modules/
 dist/
 
-# Maven build output (mcp/issue-tickets, mcp/security-scanner Java projects)
+# Maven build output (mcp/issue-tickets, mcp/security-scanner, bin/agentic-skills-cli,
+# hooks/agentic-skills-hooks Java projects)
 target/
+dependency-reduced-pom.xml
 *.log
 
 .idea/
