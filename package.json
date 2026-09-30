@@ -16,10 +16,10 @@
     "test:cli": "mvn -f bin/agentic-skills-cli/pom.xml test",
     "test:security-scanner": "mvn -f mcp/security-scanner/pom.xml test",
     "test:issue-tickets": "mvn -f mcp/issue-tickets/pom.xml test",
-    "eval": "vitest run --config evals/vitest.config.ts evals/behavioral",
-    "eval:select": "tsx evals/eval-selector.ts",
-    "report": "tsx evals/report.ts",
-    "eval:baseline": "tsx evals/report.ts --save-baseline"
+    "eval": "mvn -f evals/agentic-skills-evals/pom.xml test",
+    "eval:select": "mvn -q -DskipTests package -f evals/agentic-skills-evals/pom.xml && java -cp evals/agentic-skills-evals/target/agentic-skills-evals.jar dev.dorrian.agenticskillsevals.cli.EvalCli select",
+    "report": "mvn -q -DskipTests package -f evals/agentic-skills-evals/pom.xml && java -cp evals/agentic-skills-evals/target/agentic-skills-evals.jar dev.dorrian.agenticskillsevals.cli.EvalCli report",
+    "eval:baseline": "mvn -q -DskipTests package -f evals/agentic-skills-evals/pom.xml && java -cp evals/agentic-skills-evals/target/agentic-skills-evals.jar dev.dorrian.agenticskillsevals.cli.EvalCli report --save-baseline"
   },
   "files": [
     "bin/install.js",
@@ -52,7 +52,6 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "^1.0.0",
-    "@inquirer/checkbox": "^5.2.0",
     "@types/js-yaml": "^4.0.9",
     "glob": "^11.0.0",
     "gray-matter": "^4.0.3",

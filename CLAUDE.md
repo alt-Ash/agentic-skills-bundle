@@ -13,7 +13,7 @@ This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers
 ```bash
 pnpm start              # run the interactive CLI installer
 pnpm test               # structural tests (agent/skill file validation)
-pnpm run eval           # behavioral LLM evaluations — invoke actual models, run sparingly
+pnpm run eval           # behavioral LLM evaluations (Java) — invoke actual models, run sparingly
 pnpm run test:hooks     # hook unit tests (spawns compiled hooks as child processes)
 pnpm run test:e2e       # analytics pipeline integration test
 pnpm run test:cli       # JUnit suite for bin/agentic-skills-cli (the Java installer)
@@ -109,6 +109,55 @@ working directory), and optional fire-and-forget POST to
 
 Provider detection (`ProviderDetector`) is best-effort from hook payload shape: Gemini is flagged by `hook_event_name == "AfterTool"`; Cursor by having both `model` and `user_email`/`conversation_id`; Codex by `model` alone; everything else is Claude.
 
+### Evals (`evals/`)
+
+`evals/agentic-skills-evals/` (behavioral evals — real, billed model calls, run sparingly)
+is a plain-Java-21 Maven project, same no-Spring-Boot reasoning as the installer/hooks
+(short-lived CLI invocations). Unlike those two, it doesn't call a completions API at
+all — it speaks the `claude` CLI's bidirectional control protocol directly via
+`ProcessBuilder` (`claude -p --input-format stream-json --output-format stream-json
+--verbose`, an `initialize` control_request declaring hook interest, then
+`hook_callback`/`mcp_message` control_request/control_response round-trips). This gets
+real tool execution, real MCP wiring, and — the part a plain completions API can't
+give you — live `PreToolUse`/`PostToolUse` hook interception of a session in progress,
+not just post-hoc transcript parsing. **This protocol is not publicly documented by
+Anthropic**; it was reverse-engineered via live experimentation (verified against a
+real `claude` subprocess, cross-checked against the community `.NET`/Rust Agent SDK
+wrappers' own reverse-engineering) and can drift across `claude` CLI releases with no
+changelog to consult — see the `claude-cli-control-protocol` memory entry for the
+exact verified wire frames if this needs re-validating after a CLI upgrade.
+
+`protocol/ControlProtocolTransport` (the low-level wire client) and
+`protocol/ClaudeSession` (the reusable, ergonomic wrapper — `query()`-only use with no
+hooks registered is just the degenerate case of the same class) are deliberately
+generic, not eval-specific: `HooksRegistry`/`HookRegistrar` (see above) mediate
+Claude Code hook registration for *live* sessions today, so `ClaudeSession` is a
+candidate to eventually back a real-time guard component, but nothing currently wires
+it into a live session — it's used here only to replay canned scenarios offline.
+`mcp/InProcessMcpBridge` replaces the old TS harness's separate-subprocess mock MCP
+server with an in-process JSON-RPC 2.0 dispatcher (one less moving part, verified
+against a real `mcp_message` round-trip).
+
+`golden/GoldenChecker` (deterministic required/forbidden/tool-call/YAML-block checks)
+and `judge/Judge` (a second `ClaudeSession` call scoring the response 1–5 per rubric
+dimension) gate each scenario; `eval/AbstractEvalTest` is a JUnit 5 `@TestFactory` base
+class that four concrete classes (`IssueArchitectEvalTest`,
+`SecurityAuditorEvalTest`, `SecurityImplementorEvalTest`, `TddEngineerEvalTest`)
+extend, one `DynamicTest` per fixture scenario under `src/test/resources/fixtures/`.
+`cli/EvalCli` is the Main-Class for the shaded jar: `check <agent> [scenario]` (drives
+the JUnit Platform Launcher against the same test classes — one source of truth, no
+duplicated scenario-running logic; loads them from `target/test-classes` via a child
+classloader since they're compiled to test scope, not the main jar), `select`
+(interactive picker, JLine3), `report [--save-baseline]` (windowed pass-rate/judge/cost
+trend + regression alerts, replacing the old `report.ts`).
+
+A `/eval-agent` slash command (`.opencode/commands/eval-agent.md`) runs `EvalCli check`
+for on-demand regression checks after editing an agent — deliberately **not** wired
+into `CommandRegistry`/any installer registry, since it needs a locally-built jar and a
+local `claude login` session; it's a repo-contributor tool, never installed for end
+users of this npm package. This module itself is never bundled in the npm package
+either (`package.json`'s `files`/`prepack` don't reference it) — dev-only tooling.
+
 ### Extension patterns
 
 - **New skill:** add a directory to `skills/<category>/` — auto-discovered, no installer changes needed.
@@ -122,7 +171,7 @@ Provider detection (`ProviderDetector`) is best-effort from hook payload shape: 
 | Suite | Config | What it covers |
 |---|---|---|
 | `evals/structural/` | `evals/vitest.config.ts` | Validates agent frontmatter fields and skill file structure |
-| `evals/behavioral/` | `evals/vitest.config.ts` | LLM-invoked scenario evals (expensive) |
+| `evals/agentic-skills-evals/` | `mvn -f evals/agentic-skills-evals/pom.xml test` | LLM-invoked scenario evals (Java, expensive — real billed model calls) |
 | `hooks/tests/` | `hooks/vitest.config.ts` | Spawns the built hooks jar (`java -jar ... <hookType>`) as a child process, asserts event output — cross-language black-box test, deliberately kept in a different toolchain than the JUnit suite it sits alongside |
 | `e2e/` | `e2e/vitest.config.ts` | Analytics pipeline integration |
 

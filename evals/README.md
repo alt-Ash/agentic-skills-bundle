@@ -1,8 +1,19 @@
 # Evals — how the system works
 
 This document explains the evaluation system end to end: the folder layout, what every
-file does, the exact control flow of a run, how grading works (deterministic + LLM judge),
+class does, the exact control flow of a run, how grading works (deterministic + LLM judge),
 how results are persisted, and the token-efficiency reporting/comparison workflow.
+
+The behavioral harness is a plain-Java-21 Maven project (`evals/agentic-skills-evals/`). It
+speaks the `claude` CLI's bidirectional control protocol directly via `ProcessBuilder` — not
+a plain completions API, and not the official TypeScript/Python Agent SDK (no Java SDK
+exists) — to get real tool execution, real MCP wiring, and live `PreToolUse`/`PostToolUse`
+hook-based tool-call interception. That protocol is **not publicly documented by
+Anthropic**; the exact verified wire frames (the `initialize` handshake with hook
+declarations, `hook_callback` request/response, and confirmation that a `deny` decision
+genuinely blocks execution) are recorded in this session's memory as
+`claude_cli_control_protocol.md` — read that before touching `ClaudeSession`/
+`ControlProtocolTransport`, don't re-derive it from scratch.
 
 It is intentionally detailed about the *logic* of each part so you can extend it without
 reverse-engineering the code.
@@ -25,8 +36,8 @@ A run executes the agent against a scenario, grades it both ways, prints a summa
 persists a timestamped JSON record. The **report** tool then aggregates many runs to track
 token efficiency and quality over time.
 
-No API key is required: both the agent under test and the judge run through the
-**Claude Code SDK** (`@anthropic-ai/claude-code`), which uses your local `claude login` auth.
+No API key is required: both the agent under test and the judge run through the local
+`claude` CLI (checked for a valid `claude login` session before anything starts).
 
 ---
 
@@ -35,48 +46,58 @@ No API key is required: both the agent under test and the judge run through the
 ```
 evals/
 ├── README.md                     ← this file
-├── .gitignore                    ← ignores node_modules/ and results/
-├── vitest.config.ts              ← Vitest config (node env, 180s test timeout)
-├── report.ts                     ← token-efficiency report + window comparison
-├── eval-selector.ts              ← interactive picker; runs scenarios ×N (pass@k / pass^k)
+├── .gitignore                    ← ignores results/
+├── vitest.config.ts              ← still used by evals/structural/ only (unrelated, unaffected)
 │
-├── structural/                   ← static checks on the agent .md files (no model calls)
-│   ├── agents.test.ts            ← frontmatter + body + HANDOFF BLOCK validation
-│   └── skills.test.ts            ← skill file validation
+├── structural/                   ← static checks on the agent .md files (no model calls) — TS/Vitest, untouched
+│   ├── agents.test.ts
+│   └── skills.test.ts
 │
-├── behavioral/                   ← the actual agent evals (model calls)
-│   ├── <agent>.eval.ts           ← one per agent; defines scenarios + pass logic
-│   ├── lib/
-│   │   ├── eval-runner.ts        ← the engine: runs a scenario, grades, persists
-│   │   ├── provider.ts           ← Claude Code SDK wrapper (agent + judge), token capture
-│   │   ├── golden.ts             ← loads golden YAML, runs deterministic checks
-│   │   ├── golden.test.ts        ← unit tests for the golden checker
-│   │   ├── judge.ts              ← LLM-as-judge: prompt, parse, score
-│   │   └── parse-agent.ts        ← reads agents/<agent>.md → {frontmatter, systemPrompt}
-│   └── fixtures/
-│       └── <agent>/
-│           ├── scenario-NN-*.md            ← the input prompt
-│           ├── scenario-NN-*.golden.yaml   ← expected behavior (deterministic spec + referenceAnswer)
-│           └── scenario-NN-*-mcp.json      ← (optional) mocked MCP tools for this scenario
-│
-├── mocks/
-│   └── mcp-mock-server.ts        ← fake MCP server: serves canned tool responses over JSON-RPC
-│
-└── results/                      ← git-ignored; created on first run
-    ├── history/                  ← one JSON per (agent, scenario, run) — the source of truth
-    ├── transcripts/              ← full turn-by-turn transcript per run
-    ├── REPORT.md                 ← human-readable token-efficiency report
-    ├── report.json               ← machine-readable version of the same
-    └── baselines.json            ← (optional) pinned window stats from `eval:baseline`
+└── agentic-skills-evals/         ← the behavioral harness (model calls) — Java/Maven
+    ├── pom.xml                   ← plain Java 21, no Spring Boot (short-lived CLI invocations, no AI-client
+    │                               library needed since the control protocol is spoken directly)
+    ├── src/main/java/dev/dorrian/agenticskillsevals/
+    │   ├── protocol/
+    │   │   ├── ControlProtocolTransport.java   ← low-level wire client: spawns `claude -p
+    │   │   │                                     --input-format stream-json --output-format stream-json
+    │   │   │                                     --verbose`, does the initialize handshake, background
+    │   │   │                                     NDJSON reader, control_request/control_response correlation
+    │   │   ├── ClaudeSession.java              ← the reusable, ergonomic wrapper (builder + query()) — the
+    │   │   │                                     component the plan calls out as usable both for these
+    │   │   │                                     offline scenarios and, later, a live-guard use (not built)
+    │   │   ├── HookDecision.java               ← allow/deny/modify wire payloads for hook callbacks
+    │   │   └── ChatResult.java, ToolCallRecord.java
+    │   ├── mcp/InProcessMcpBridge.java         ← JSON-RPC 2.0 dispatcher for in-process MCP mocking —
+    │   │                                         replaces the old mcp-mock-server.ts subprocess design entirely
+    │   ├── golden/GoldenSpec.java, GoldenChecker.java   ← deterministic string/tool/YAML checks
+    │   ├── judge/Judge.java                    ← LLM-as-judge: rubric prompt, parse, score
+    │   ├── agent/AgentFrontmatter.java, AgentParser.java   ← reads agents/<agent>.md → {frontmatter, systemPrompt}
+    │   └── cli/EvalCli.java, EvalSelector.java, EvalReport.java   ← Main-Class + the 3 subcommands
+    ├── src/test/java/dev/dorrian/agenticskillsevals/
+    │   ├── IssueArchitectEvalTest.java, SecurityAuditorEvalTest.java,
+    │   │   SecurityImplementorEvalTest.java, TddEngineerEvalTest.java   ← one per agent, JUnit 5 @TestFactory
+    │   └── (unit tests for the above main classes, zero real API cost)
+    ├── src/test/resources/fixtures/
+    │   └── <agent>/
+    │       ├── scenario-NN-*.md            ← the input prompt
+    │       ├── scenario-NN-*.golden.yaml   ← expected behavior (deterministic spec + referenceAnswer)
+    │       └── scenario-NN-*-mcp.json      ← (optional) mocked MCP tools for this scenario
+    └── results/                  ← git-ignored (matched by evals/.gitignore's `results/` pattern), created on
+        ├── history/                first run
+        ├── transcripts/
+        ├── REPORT.md
+        ├── report.json
+        └── baselines.json        ← (optional) pinned window stats from `eval:baseline`
 ```
 
 ### Naming conventions that matter
 
-- `behavioral/<agent>.eval.ts` — the **filename stem is the agent name**. The selector derives
-  the agent from this, and looks for fixtures in `fixtures/<agent>/`.
-- `fixtures/<agent>/scenario-NN-*.md` — discovered automatically. The `.md` is the input.
-- `*.golden.yaml` — the matching spec. Same stem as the `.md`.
-- `*-mcp.json` — optional mocked MCP tools, referenced explicitly from the eval file.
+- Each agent has one JUnit test class (`<Agent>EvalTest`), mapped to its CLI-facing name via
+  a small static registry in `EvalCli.AGENT_TEST_CLASSES` (e.g. `issue-architect` →
+  `IssueArchitectEvalTest`). Fixtures live in `src/test/resources/fixtures/<agent>/`.
+- `*.golden.yaml` — the matching spec for a `.md` scenario. Same stem.
+- `*-mcp.json` — optional mocked MCP tools, wired in via `InProcessMcpBridge`, not a
+  separate subprocess.
 - **`holdout` in a scenario name** marks it as a held-out validation case. The report tags
   these `held-out: yes`. Convention: refine prompts against non-holdout cases, validate on
   holdout cases to avoid overfitting.
@@ -87,14 +108,29 @@ evals/
 
 | Script | Command | What it does |
 |---|---|---|
-| `npm test` | `vitest run … evals/structural` | Static checks on agent/skill `.md` files. No model calls. |
-| `npm run eval` | `vitest run … evals/behavioral` | Runs **all** behavioral evals once. |
-| `npm run eval:select` | `tsx evals/eval-selector.ts` | Interactive picker; `--runs=N` to repeat. |
-| `npm run report` | `tsx evals/report.ts` | Build `REPORT.md` + `report.json` from history. |
-| `npm run eval:baseline` | `tsx evals/report.ts --save-baseline` | Same as report, plus pin current window to `baselines.json`. |
+| `npm test` | `vitest run … evals/structural` | Static checks on agent/skill `.md` files. No model calls. Unaffected by this harness. |
+| `npm run eval` | `mvn -f evals/agentic-skills-evals/pom.xml test` | Runs **all** behavioral evals once, for real. |
+| `npm run eval:select` | builds the jar, then `EvalCli select` | Interactive checkbox picker (agent → scenario tree, built on `org.jline:jline`). |
+| `npm run report` | builds the jar, then `EvalCli report` | Build `REPORT.md` + `report.json` from history. |
+| `npm run eval:baseline` | builds the jar, then `EvalCli report --save-baseline` | Same as report, plus pin current window to `baselines.json`. |
+
+A single agent/scenario battery can also be run directly without going through npm:
+`java -cp evals/agentic-skills-evals/target/agentic-skills-evals.jar dev.dorrian.agenticskillsevals.cli.EvalCli check <agent-name>`
+(the jar must already be built — `mvn -q -DskipTests package -f evals/agentic-skills-evals/pom.xml`).
+Note: the JUnit Platform Launcher can't precisely select one `@TestFactory`-generated
+scenario before its containing test class runs, so `check <agent> <scenario>` runs every
+scenario for that agent and prints a note telling you to scan the output for the one you
+named — this is a real JUnit limitation, not a bug.
 
 Override the model for any behavioral run with `EVAL_MODEL=<model>` (default
 `claude-haiku-4-5-20251001`).
+
+There's also a `/eval-agent` slash command (`.opencode/commands/eval-agent.md`) for repo
+contributors to run a quick check against an agent right after editing it, without
+remembering the Maven/CLI invocation. It is **deliberately not installed for end users** —
+it's absent from every installer registry (`CommandRegistry` etc. in `bin/agentic-skills-cli`)
+because it requires a locally-built jar and a `claude login` session, neither of which
+should be a prerequisite for consumers of this npm package.
 
 ---
 
@@ -110,7 +146,8 @@ example (it includes a fake stack, file paths, repo, and explicit phase-by-phase
 
 ### 4.2 `scenario-NN-*.golden.yaml` — the expected behavior
 
-Parsed by `loadGolden()` into a `GoldenSpec`. Fields:
+Parsed by `GoldenSpec`/`GoldenChecker` (SnakeYAML-based, a direct port of the original TS
+logic). Fields:
 
 ```yaml
 required:                 # substrings that MUST appear in the response
@@ -123,7 +160,7 @@ forbidden:                # substrings that must NOT appear
 
 tools:
   expected:               # tools the agent MUST call (by tool name)
-    - mcp__ob-tickets__create_issue
+    - mcp__issue-tickets__create_issue
   forbidden:              # tools the agent must NOT call
     - Write
     - Edit
@@ -138,28 +175,32 @@ referenceAnswer: |        # notes on the ideal answer — fed to the LLM judge (
   An ideal answer asks exactly ONE clarifying question and stops...
 ```
 
-**How each field is checked** (see `runGoldenChecks` in `golden.ts`):
+**How each field is checked** (see `GoldenChecker`):
 
-- `required[]` → `details[label] = response.includes(pattern)`.
-- `forbidden[]` → key auto-generated as `notContains_<first 20 chars, non-word→_>`; value is
-  `!response.includes(pattern)`.
-- `tools.expected[]` → `details[toolUsed_<tool>] = (toolCalls[tool] ?? 0) > 0`.
-- `tools.forbidden[]` → `details[toolNotUsed_<tool>] = (toolCalls[tool] ?? 0) === 0`.
-- `yamlBlocks[]` → finds `startPattern`, slices to the closing ` ``` ` fence (or the next blank
-  line for bare YAML), `yaml.load`s it, takes the first top-level key, and asserts every
-  `requiredFields` entry exists under it.
+- `required[]` → `details[label] = response.contains(pattern)`.
+- `forbidden[]` → key auto-generated from the pattern text; value is `!response.contains(pattern)`.
+- `tools.expected[]` → `details[toolUsed_<tool>] = (toolCalls[tool] ?? 0) > 0`. Tool tallies
+  come from `ChatResult`'s tool-call tracking, which accumulates every `tool_use` block seen
+  across the whole session — sourced from live hook callbacks when hooks are registered,
+  otherwise from the assistant message stream directly. This is strictly more precise than
+  the original TS harness's after-the-fact stream-json parsing.
+- `tools.forbidden[]` → `details[toolNotUsed_<tool>] = (toolCalls[tool] ?? 0) == 0`.
+- `yamlBlocks[]` → finds `startPattern`, slices to the closing fence (or the next blank
+  line for bare YAML), parses it via SnakeYAML, takes the first top-level key, and asserts
+  every `requiredFields` entry exists under it.
 - `referenceAnswer` → **not** a deterministic check; passed to the judge as ideal-answer notes.
 
 Every check writes a boolean into `details`. `passed` = count of `true`, `total` = count of all.
 
-> **Important coupling:** `eval-runner.ts` hard-asserts a baseline set on **every** scenario
-> (see §6): `notContains_I_cannot`, `notContains_I_don_t_have_access`, `notContains_I_will_skip`,
-> and `toolNotUsed_Write/Edit/Bash`. So every `golden.yaml` must declare those forbidden strings
-> and forbidden tools, or the corresponding `details` keys won't exist and the assertion fails.
+> **Important coupling:** `AbstractEvalTest` hard-asserts a baseline set on **every**
+> scenario: no "I cannot"/"I don't have access"/"I will skip" phrases, and no
+> Write/Edit/Bash tool use. So every `golden.yaml` must declare those forbidden strings and
+> forbidden tools, or the corresponding `details` keys won't exist and the assertion fails.
 
 ### 4.3 `scenario-NN-*-mcp.json` — mocked tools (optional)
 
-Defines fake MCP tools and their canned responses. Consumed by `mcp-mock-server.ts`. Shape:
+Defines fake MCP tools and their canned responses, loaded by `InProcessMcpBridge`. Shape
+(unchanged from the original TS harness):
 
 ```json
 {
@@ -175,100 +216,75 @@ Defines fake MCP tools and their canned responses. Consumed by `mcp-mock-server.
 ```
 
 `"response"` is returned verbatim, **unless** it is the literal `"{{dynamic}}"`, in which case
-`buildToolResponse()` synthesizes a realistic payload from the call arguments (e.g. for
-`create_issue` it returns a fake issue URL/number). This lets the agent complete a
-"create the issue" flow without touching a real service.
+the bridge synthesizes a realistic payload from the call arguments (e.g. for `create_issue`
+it returns a fake issue URL/number). Unlike the original design (a separate `tsx` subprocess
+speaking MCP JSON-RPC over its own stdio), the mock tools now run **in-process** — the
+control protocol's `mcp_message` control_request/control_response frames route `tools/list`/
+`tools/call` directly into `InProcessMcpBridge`, no subprocess involved.
 
 ---
 
-## 5. The eval file (`behavioral/<agent>.eval.ts`)
+## 5. The eval class (`<Agent>EvalTest extends AbstractEvalTest`)
 
-Each agent has one. It builds an `EvalConfig` and calls `runEval(config)`. Key fields
-(`EvalConfig` in `eval-runner.ts`):
+Each agent has one JUnit 5 test class. `AbstractEvalTest` is a `@TestFactory` base class;
+concrete subclasses supply the per-agent configuration and override a few template methods
+(protected, overridable methods rather than TS's function-valued config fields — more
+idiomatic Java):
 
-| Field | Purpose |
+| What | Purpose |
 |---|---|
-| `agentName` | Label + used to locate fixtures and name result files. |
-| `agentPath` | Path to `agents/<agent>.md`; parsed for system prompt + description. |
-| `fixturesDir` | Where the `scenario-*.md` / `.golden.yaml` live. |
-| `resultsDir` | Where `history/` and `transcripts/` get written. |
-| `scenarios[]` | Which scenario stems to run. |
-| `judgeCriteria` | Default rubric: `{ criterion_key: description }` (rated 1–5 each). |
-| `judgeThreshold?` | Optional pass threshold for the judge (default 3). |
-| `prescannedPrefix?` | `{ trigger, prefix }` — if the scenario text contains `trigger`, the `prefix` is prepended to the system prompt (used to force "skip filesystem, use embedded context" mode). |
-| `isPassed(...)` | **The pass decision** — pure function of `(scenarioName, goldenChecks, judgeResult)`. |
-| `scenarioOptions?(name)` | Per-scenario overrides: `allowedTools`, `mcpServers`, `judgeCriteria`. |
-| `additionalAssertions?(...)` | Extra `expect()`s beyond the runner's baseline asserts. |
+| agent name / path | Label + used to locate fixtures and name result files; path to `agents/<agent>.md`, parsed for system prompt + description. |
+| fixtures dir | Where the `scenario-*.md` / `.golden.yaml` live (a classpath resource root). |
+| scenario list | Which scenario stems to run. |
+| judge criteria | Default rubric: `{ criterion_key: description }` (rated 1–5 each). |
+| `prescannedPrefix` | `{ trigger, prefix }` — if the scenario text contains `trigger`, the `prefix` is prepended to the system prompt (used to force "skip filesystem, use embedded context" mode). |
+| `isPassed(...)` (override) | **The pass decision** — a pure function of `(scenarioName, goldenChecks, judgeResult)`. |
+| `scenarioOptions(name)` (override) | Per-scenario overrides: `allowedTools`, MCP wiring, `judgeCriteria`. |
+| `additionalAssertions(...)` (override) | Extra assertions beyond the runner's baseline asserts. |
 
-Example logic from `issue-architect.eval.ts`: some scenarios should produce a full issue (and
-call `create_issue`), while ambiguous/empty/injection scenarios should instead ask **one**
-clarifying question and call no tools. So:
-
-- `scenarioOptions` returns `allowedTools: []` + no MCP for ask-question scenarios, and
-  `allowedTools: [create_issue]` + the mocked MCP otherwise. It also swaps in injection-specific
-  judge criteria for the held-out injection case.
-- `isPassed` branches: ask-question scenarios require `asksQuestion` (+ `notContains_PWNED` for
-  the injection case) + judge pass; full-flow scenarios require `hasAgentContract` +
-  `toolUsed_create_issue` + judge pass.
+Example logic from `IssueArchitectEvalTest` (byte-for-byte parity with the original TS
+rubric/prompt text, verified via a programmatic diff during the port): some scenarios should
+produce a full issue (and call `create_issue`), while ambiguous/empty/injection scenarios
+should instead ask **one** clarifying question and call no tools. `scenarioOptions` swaps
+the allowed tools and MCP wiring accordingly; `isPassed` branches on which family of
+scenario it is.
 
 ---
 
-## 6. Control flow of a single run (`runEval` → per-scenario `it`)
+## 6. Control flow of a single run (`AbstractEvalTest`'s generated `DynamicTest`s)
 
-For each scenario in `config.scenarios`, Vitest runs one test. Steps, in order:
+For each scenario in the concrete class's scenario list, one `DynamicTest` runs. Steps, in order:
 
-1. **Load inputs.** Read `scenario-NN.md` (the user prompt) and `loadGolden(scenario.golden.yaml)`.
-
-2. **Build the system prompt.** `parseAgent()` splits `agents/<agent>.md` into frontmatter +
+1. **Load inputs.** Read `scenario-NN.md` (the user prompt) and the parsed `GoldenSpec`.
+2. **Build the system prompt.** `AgentParser` splits `agents/<agent>.md` into frontmatter +
    body; the body is the system prompt. If `prescannedPrefix.trigger` appears in the scenario
    text, prepend `prescannedPrefix.prefix` (forces skip-filesystem mode).
-
-3. **Resolve per-scenario options.** `scenarioOptions(name)` → `allowedTools`, `mcpServers`,
-   and the effective judge `criteria` (falls back to `config.judgeCriteria`).
-
-4. **Run the agent.** `provider.chat(systemPrompt, scenario, { allowedTools, agentName, mcpServers })`.
-   The provider (`ClaudeCodeProvider`) streams SDK events and accumulates:
-   - assistant text → `response`
-   - `tool_use` blocks → `toolCalls` (name → count) + transcript entries
-   - token usage from the final `result` event (input includes cache read/creation tokens;
-     `total_cost_usd` → `estimatedCostUsd`)
-   - `durationMs` (wall clock)
-
-5. **Sanity asserts.** `usage.totalTokens > 0` and `durationMs > 0` (catches a dead provider).
-
-6. **Deterministic grading.** `runGoldenChecks(response, spec, toolCalls)` → `checks.details`
-   (per-check booleans) + `passed`/`total`. `goldenFailures` = labels whose value is `false`.
-
-7. **LLM judge — only if deterministic grading is clean.** If `goldenFailures.length === 0`,
-   call `judgeResponse(...)`. Otherwise the judge is **skipped** with a synthetic
-   `{ passed: false, score: 0, ... }`. Rationale: don't spend judge tokens on a response that
-   already failed an objective check.
-
-8. **Assemble the result record** (see §8) including `model`, `gitSha`, token usage, tool calls,
+3. **Resolve per-scenario options.** `scenarioOptions(name)` → allowed tools, MCP wiring,
+   effective judge criteria.
+4. **Run the agent.** `ClaudeSession.query(prompt)` — spawns/reuses the `claude` control-protocol
+   session, accumulates assistant text and tool_use blocks across the whole turn sequence,
+   and captures final token usage/cost/session id from the terminal `result` event.
+5. **Sanity asserts.** Token usage and duration must be non-zero (catches a dead session).
+6. **Deterministic grading.** `GoldenChecker` runs the spec against the response + tool
+   tallies → `details` (per-check booleans) + `passed`/`total`. Failing labels become
+   `goldenFailures`.
+7. **LLM judge — only if deterministic grading is clean.** If there are no golden failures,
+   call `Judge`. Otherwise the judge is **skipped** with a synthetic zero-score result —
+   don't spend judge tokens on a response that already failed an objective check.
+8. **Assemble the result record** (see §8) including model, gitSha, token usage, tool calls,
    judge score/dimensions/rationale/reasoning, the full response, and `passed =
-   config.isPassed(scenarioName, checks, judgeResult)`.
-
-9. **Persist.** Write `history/<agent>-<scenario>-<ts>.json` (the record) and
-   `transcripts/<agent>-<scenario>-<ts>.json` (the turn-by-turn transcript).
-
+   isPassed(scenarioName, checks, judgeResult)`.
+9. **Persist.** Write `results/history/<agent>-<scenario>-<ts>.json` (the record) and
+   `results/transcripts/<agent>-<scenario>-<ts>.json` (the turn-by-turn transcript).
 10. **Console summary.** Deterministic ratio, judge score + per-dimension scores, rationale,
     tokens, duration, tool calls.
-
-11. **Baseline assertions (always).** The runner itself hard-asserts:
-    - `notContains_I_cannot`, `notContains_I_don_t_have_access`, `notContains_I_will_skip`
-    - `toolNotUsed_Write`, `toolNotUsed_Edit`, `toolNotUsed_Bash`
-
-    Then `config.additionalAssertions?(...)`, then finally
-    `expect(judgeResult.passed).toBe(true)`. Any failing `expect` fails the Vitest test.
-
-**Two senses of "pass":**
-- `result.passed` (the persisted boolean) = `config.isPassed(...)`. Used by the **report**.
-- Vitest test pass/fail = all the `expect()`s above hold. Used by **pass@k / pass^k** in the
-  selector. These usually agree but are computed independently.
+11. **Baseline assertions (always).** Same hard-asserted baseline set described in §4.2,
+    then any `additionalAssertions`, then the final judge-passed assertion. Any failing
+    assertion fails the `DynamicTest`.
 
 ---
 
-## 7. The LLM judge (`judge.ts`)
+## 7. The LLM judge (`Judge`)
 
 - **System prompt** instructs: rate each criterion 1–5 (1 = fails, 3 = acceptable, 5 = fully
   meets). Critically, it must **reason first, then score** — chain-of-thought before grading
@@ -277,94 +293,85 @@ For each scenario in `config.scenarios`, Vitest runs one test. Steps, in order:
   {"reasoning": "<evidence vs each criterion>", "dimensions": {"criterion_key": 4, ...}, "rationale": "<one-sentence overall>"}
   ```
 - **User prompt** is built from: agent description, the scenario, the agent response, an optional
-  `## Reference` section (from `golden.yaml`'s `referenceAnswer`), and the numbered criteria list.
+  reference-answer section (from the golden spec's `referenceAnswer`), and the numbered criteria list.
 - **Parsing** is defensive: prefer the `<result>…</result>` capture; fall back to slicing from the
-  first `{` to the last `}`. Then **strip ASCII control chars** (` –` → space) before
-  `JSON.parse`, because judges routinely emit raw newlines inside the `reasoning` string which
-  would otherwise make the JSON invalid.
+  first `{` to the last `}`. Then strip stray control characters before parsing, because judges
+  routinely emit raw newlines inside the `reasoning` string which would otherwise make the JSON invalid.
 - **Scoring.** `score` = mean of all dimension values, rounded to 1 decimal. `passed` =
-  `mean >= passingThreshold` (default 3, overridable via `EvalConfig.judgeThreshold`).
-- `reasoning` is persisted for debugging but is **not** part of the pass decision.
+  `mean >= passingThreshold` (default 3).
+- The judge call itself runs through the same `ClaudeSession`/control-protocol machinery as
+  the agent under test — there's no separate API client.
 
 ---
 
-## 8. Result record (`history/<agent>-<scenario>-<ts>.json`)
+## 8. Result record (`results/history/<agent>-<scenario>-<ts>.json`)
 
-One file per run. Fields the report depends on are in **bold**:
+One file per run:
 
 ```jsonc
 {
   "agent": "issue-architect",
-  "provider": "claude-code",
-  "judgeModel": "claude-code",
-  "model": "claude-haiku-4-5-20251001",   // ← EVAL_MODEL or default; attributes tokens to a model
-  "gitSha": "3462038",                     // ← git rev-parse --short HEAD; attributes to a prompt version
-  "scenario": "scenario-05-empty",
+  "provider": "claude-cli-control-protocol",
+  "judgeModel": "claude-cli-control-protocol",
+  "model": "claude-haiku-4-5-20251001",
+  "gitSha": "a999a2b",
+  "scenario": "scenario-01-full-flow",
   "goldenFailures": [],
-  "deterministicChecks": { "details": { "...": true }, "passed": 9, "total": 9 },
-  "tokenUsage": { "inputTokens": 0, "outputTokens": 0, "totalTokens": 0, "estimatedCostUsd": 0 },
-  "toolCalls": { "mcp__ob-tickets__create_issue": 1 },
-  "durationMs": 34210,
-  "judgeScore": 5,
-  "judgeDimensions": { "clarification": 5, "restraint": 5 },
+  "deterministicChecks": { "details": { "...": true }, "passed": 19, "total": 19 },
+  "tokenUsage": { "inputTokens": 35, "outputTokens": 4841, "estimatedCostUsd": 0.044 },
+  "toolCalls": { "mcp__issue-tickets__create_issue": 1 },
+  "durationMs": 43565,
+  "judgeScore": 5.0,
+  "judgeDimensions": { "specificity": 5, "actionability": 5, "issue_result": 5, "agent_contract": 5, "structure": 5 },
   "judgeRationale": "…",
-  "judgeReasoning": "…",
-  "agentResponse": "…full text…",
-  "transcriptFile": "transcripts/issue-architect-scenario-05-empty-<ts>.json",
-  "passed": true,                          // ← config.isPassed(...)
-  "timestamp": "2026-06-03T11:56:50.984Z"  // ← sort key for windowing
+  "agentResponse": "…full text, accumulated across every assistant message in the session…",
+  "transcriptFile": "transcripts/issue-architect-scenario-01-full-flow-<ts>.json",
+  "passed": true,
+  "timestamp": "2026-09-30T11:41:59.140757Z"
 }
 ```
 
-`history/` is the **source of truth** for the report. It is git-ignored, append-only in
-practice (one file per run), and never mutated.
+`results/history/` is the **source of truth** for the report. It is git-ignored (via
+`evals/.gitignore`'s `results/` pattern, which matches at any depth under `evals/`), append-only
+in practice, and never mutated.
 
 ---
 
-## 9. Reliability: pass@k / pass^k (`eval-selector.ts`)
+## 9. Reliability: pass@k / pass^k (`EvalCli select`)
 
 LLM outputs are non-deterministic, so a single pass means little. The selector:
 
-1. Discovers agents from `*.eval.ts` and scenarios from `fixtures/<agent>/`.
-2. Presents an interactive checkbox picker.
-3. With `--runs=N`, runs each selection N times and reports:
-   - **pass@N** — passed at least once (did it *ever* work).
-   - **pass^N** — passed every time (is it *reliable*).
-   - **rate** — `passCount/N`.
+1. Discovers agents from `EvalCli.AGENT_TEST_CLASSES` and scenarios from the fixtures
+   classpath resources.
+2. Presents an interactive checkbox picker (built on `org.jline:jline`).
+3. Runs each selection, optionally repeated N times, reporting pass@N / pass^N / rate — same
+   semantics as the original TS selector.
 
-Each of the N runs writes its own history record, which is exactly what the report needs to
-build a window.
+Each run writes its own history record, which is exactly what the report needs to build a window.
 
 ---
 
-## 10. Token-efficiency report (`report.ts` → `npm run report`)
+## 10. Token-efficiency report (`EvalCli report` / `npm run report`)
 
 This is the workflow for "did my prompt change make the agent cheaper without making it worse".
 
 ### 10.1 What it does
 
-1. **Load** every `results/history/*.json` (tolerant of malformed/legacy files).
+1. **Load** every `results/history/*.json`.
 2. **Group** by `agent::scenario`.
-3. For each group, sort by `timestamp` and split into two **windows**:
-   - **current** = last `N` runs (default `N=10`, override `--window=N`).
-   - **previous** = the `N` runs before that.
-4. **Per window** (`computeWindow`) compute: `passRate`, `meanJudge`, mean tokens
-   (total/input/output), `meanCostUsd`, `meanDurationMs`, and efficiency ratios
-   **`tokensPerPass`** and **`costPerPass`** (summed / number of passes — `Infinity` if zero
-   passes), plus the set of `gitShas` in the window.
-5. **Deltas** current vs previous: `tokenPct`, `costPct`, `judgeDelta`, `passRateDelta`.
-6. **Alerts** (advisory — they NEVER fail a test; configurable constants at the top of the file):
-   - **`QUALITY REGRESSION`** — judge dropped ≥ `JUDGE_DROP_THRESHOLD` (0.3) **or** pass-rate
-     dropped ≥ `PASS_DROP_THRESHOLD` (0.1). If tokens *also* dropped, the alert appends
-     "(and cheaper — do not accept blindly)" so a cheaper-but-worse change is not mistaken for a win.
-   - **`EFFICIENCY WIN`** — tokens dropped ≥ `TOKEN_PCT_THRESHOLD` (10%) **and** quality held.
-   - **`TOKEN SPIKE`** — tokens rose ≥ `TOKEN_PCT_THRESHOLD` (10%).
-7. **Write** `results/REPORT.md` (alerts section + per-group table with a `Held-out` column) and
-   `results/report.json` (machine-readable). `--save-baseline` also pins each group's current
-   window into `results/baselines.json`.
+3. For each group, sort by `timestamp` and split into two **windows**: current = last `N`
+   runs (default 10, override `--window=N`), previous = the `N` runs before that.
+4. **Per window** compute pass rate, mean judge score, mean tokens, mean cost, mean
+   duration, and the set of git SHAs in the window.
+5. **Deltas** current vs previous: token %, cost %, judge delta, pass-rate delta.
+6. **Alerts** (advisory — never fail a run): `QUALITY REGRESSION` (judge dropped ≥0.3 or
+   pass-rate dropped ≥10%), `EFFICIENCY WIN` (tokens dropped ≥10% with no quality
+   regression), `TOKEN SPIKE` (tokens rose ≥10%).
+7. **Write** `results/REPORT.md` + `results/report.json`. `--save-baseline` also pins the
+   current window into `results/baselines.json`.
 
-`signedPct` caps extreme values at `>+999%` / `<-999%` to keep legacy zero-token records from
-rendering absurd percentages.
+Handles a sparse/empty previous window gracefully (no crash — a first-ever run for a
+scenario just gets no delta computed).
 
 ### 10.2 The token-efficiency loop (the actual workflow)
 
@@ -372,56 +379,58 @@ rendering absurd percentages.
 1. npm run eval:select -- --runs=10      # ≥10 runs → a current window of history
 2. npm run report                        # snapshot current token/quality stats
 3. trim the agent prompt in agents/<agent>.md
-4. re-run 10×, then npm run report        # new window becomes "current", old becomes "previous"
+4. re-run 10×, then npm run report       # new window becomes "current", old becomes "previous"
 5. read the alerts:
      EFFICIENCY WIN      → keep the edit
      QUALITY REGRESSION  → revert/iterate (even if it was cheaper)
      TOKEN SPIKE         → investigate
 ```
 
-Because windows are purely time-ordered slices of `history/`, you don't pin anything manually —
-just run, edit, run again, and compare. The optional baseline (`eval:baseline`) is there if you
-want a fixed reference point instead of a rolling one.
-
 ---
 
-## 11. The provider layer (`provider.ts`)
+## 11. The `ClaudeSession`/`ControlProtocolTransport` layer
 
-- `ClaudeCodeProvider` wraps `@anthropic-ai/claude-code`'s `query()`. Both the agent under test
-  and the judge use it — no API key, uses local `claude login` auth (checked by
-  `hasClaudeCodeAuth()`).
-- `chat()` passes the agent body as `customSystemPrompt`, the scenario as `prompt`, restricts
-  tools via `allowedTools`, and — when a scenario provides mocked MCP — wires `mcpServers` with
-  `strictMcpConfig: true` so only the mock is available.
-- `mcpMockFromFixture(path, name)` returns an MCP stdio config that launches
-  `mocks/mcp-mock-server.ts` with the fixture path. The mock speaks MCP JSON-RPC over stdio and
-  returns the canned/`{{dynamic}}` responses described in §4.3.
-- Token capture reads the SDK `result` event: input tokens **include** cache read + cache
-  creation tokens, so they reflect true input cost.
+This is the reusable component the whole harness is built on — read
+`claude_cli_control_protocol.md` (session memory) for the exact verified wire frames before
+touching it. Summary:
+
+- `ControlProtocolTransport` spawns `claude -p --input-format stream-json --output-format
+  stream-json --verbose [--model ...] [--system-prompt ...] [--allowedTools ...] [--mcp-config ...]`,
+  sends an `initialize` control_request declaring any registered hooks as the first stdin
+  line, and runs a background thread parsing NDJSON frames from stdout, dispatching
+  `hook_callback` and `mcp_message` control_requests to registered Java handlers.
+- `ClaudeSession` wraps that behind a builder (`model`, `systemPrompt`, `allowedTools`,
+  `registerPreToolUseHook`/`registerPostToolUseHook`, `inProcessMcpServer`) and a single
+  `query(prompt) -> ChatResult` method. Query-only use (no hooks registered) is just the
+  degenerate case — hooks are entirely optional.
+- Token/cost capture reads the terminal `result` event: input tokens include cache read +
+  cache creation tokens. The response **text** is the full accumulation of every assistant
+  text block seen across the session (see `ClaudeSession.query()`'s comment for why this
+  matters — the terminal event's own `result` field is only the *last* message's text,
+  which silently drops earlier-phase content in any multi-turn response).
+- This protocol is undocumented by Anthropic and may drift across `claude` CLI releases —
+  treat the memory file as a snapshot, not a permanent spec.
 
 ---
 
 ## 12. Extending the system
 
 **Add a scenario to an existing agent:**
-1. Create `fixtures/<agent>/scenario-NN-*.md` (the input).
-2. Create `fixtures/<agent>/scenario-NN-*.golden.yaml`. Always include the baseline `forbidden`
-   strings (`I cannot`, `I don't have access`, `I will skip`) and `tools.forbidden`
-   (`Write`, `Edit`, `Bash`) — the runner hard-asserts them (§6).
+1. Create `src/test/resources/fixtures/<agent>/scenario-NN-*.md` (the input).
+2. Create `scenario-NN-*.golden.yaml`. Always include the baseline `forbidden` strings and
+   `tools.forbidden` (`Write`, `Edit`, `Bash`) — the runner hard-asserts them (§6).
 3. (Optional) add `scenario-NN-*-mcp.json` if the agent calls tools, and wire it in
-   `scenarioOptions`.
-4. Add the scenario stem to the `scenarios[]` array in `<agent>.eval.ts`.
-5. Make sure `isPassed` handles it. The selector auto-discovers it; no selector change needed.
+   `scenarioOptions` via `InProcessMcpBridge`.
+4. Add the scenario stem to the concrete `<Agent>EvalTest` class's scenario list.
+5. Make sure `isPassed` handles it.
 
 **Add a new agent:**
-1. Create `behavioral/<agent>.eval.ts` with an `EvalConfig` and `runEval(config)`.
-2. Create `fixtures/<agent>/` with at least one scenario pair.
+1. Create `<Agent>EvalTest extends AbstractEvalTest` with the agent's config.
+2. Add it to `EvalCli.AGENT_TEST_CLASSES`.
+3. Create `src/test/resources/fixtures/<agent>/` with at least one scenario pair.
 
-**Mark a held-out case:** put `holdout` in the scenario name. Refine against non-holdout cases;
-validate on holdout ones to avoid overfitting. The report tags them automatically.
-
-**Tune alert sensitivity:** edit the constants at the top of `report.ts`
-(`DEFAULT_WINDOW`, `TOKEN_PCT_THRESHOLD`, `JUDGE_DROP_THRESHOLD`, `PASS_DROP_THRESHOLD`).
+**Mark a held-out case:** put `holdout` in the scenario name. Refine against non-holdout
+cases; validate on holdout ones to avoid overfitting. The report tags them automatically.
 
 ---
 
