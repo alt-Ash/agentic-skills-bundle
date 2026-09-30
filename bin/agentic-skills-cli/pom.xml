@@ -66,6 +66,20 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
+        <configuration>
+          <!--
+            Redirect every path AgentToolRegistry/McpConfigRegistry/the MCP
+            installers/ShellProfileEnvWriter resolve at test-JVM class-load
+            time (via HomeDir.resolve()) at a scratch directory under
+            target/, so the whole suite never reads or writes the real
+            developer's $HOME. This is what makes positive-path detector
+            tests (see detect/InstalledSkillAgentCommandDetectorTest)
+            possible without touching real machine state.
+          -->
+          <environmentVariables>
+            <AGENTIC_SKILLS_HOME_OVERRIDE>${project.build.directory}/test-home</AGENTIC_SKILLS_HOME_OVERRIDE>
+          </environmentVariables>
+        </configuration>
       </plugin>
     </plugins>
   </build>

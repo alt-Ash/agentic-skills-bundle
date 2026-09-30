@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillscli.registry;
 
+import dev.dorrian.agenticskillscli.HomeDir;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
@@ -23,7 +25,7 @@ public final class McpConfigRegistry {
     }
 
     private static Path home(String... segments) {
-        Path p = Paths.get(System.getProperty("user.home"));
+        Path p = HomeDir.resolve();
         for (String s : segments) {
             p = p.resolve(s);
         }

@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillscli.registry;
 
+import dev.dorrian.agenticskillscli.HomeDir;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -18,7 +20,7 @@ import java.nio.file.Paths;
 public final class HooksJarLocation {
 
     public static final Path DEFAULT_INSTALL_DIR =
-        Paths.get(System.getProperty("user.home"), ".agentic-skills", "hooks");
+        HomeDir.resolve().resolve(".agentic-skills").resolve("hooks");
     public static final String JAR_NAME = "agentic-skills-hooks.jar";
 
     private HooksJarLocation() {

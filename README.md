@@ -304,7 +304,7 @@ Consumes a `@security-auditor` report's Handoff Block and applies every fixable 
 
 Agent files live in `agents/<agent-name>.md`. Add the file there and it appears in the installer. See `templates/AGENT.md` for the full template.
 
-If the agent requires MCP servers, add an entry to `AGENT_MCP_SERVERS` in `bin/install.js`.
+If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `bin/agentic-skills-cli` (the Java installer — see [Requirements](#requirements)).
 
 ## Global MCP tools
 
@@ -330,7 +330,7 @@ Up-to-date library documentation MCP. Works on the free tier with no key; an opt
 
 ## Local MCP servers
 
-The CLI also builds and installs these from source (`mcp/<name>`) into your AI agent configuration. Both are Java/Spring Boot projects built via Maven at install time (see [Requirements](#requirements)) — everything else in this repo is Node.js.
+The CLI also builds and installs these from source (`mcp/<name>`) into your AI agent configuration. Both are Java/Spring Boot projects built via Maven at install time (see [Requirements](#requirements)).
 
 ### `issue-tickets`
 
@@ -364,5 +364,6 @@ A shared circuit breaker aborts the rest of a scan the moment the target's error
 
 ## Requirements
 
-- Node.js ≥ 18
-- Java 21+ and Maven — only needed if you install the `issue-tickets` or `security-scanner` MCP servers (both are Java/Spring, built from source via Maven at install time; everything else in this installer is pure Node.js)
+- Node.js ≥ 18 — runs the `agentic-skills`/`agentic-skills-uninstall` CLI entrypoints (thin shims that launch the installer)
+- **Java 21+ JRE — required to run the installer itself.** The interactive wizard is a Java application (`bin/agentic-skills-cli`), bundled as a prebuilt jar and launched by the Node shim; a JRE alone is enough (e.g. [Adoptium](https://adoptium.net)), you don't need a full JDK or Maven just to run `agentic-skills`.
+- Maven — only needed if you *install* the `issue-tickets` or `security-scanner` MCP servers (both are Java/Spring, built from source via Maven at install time, same as before)

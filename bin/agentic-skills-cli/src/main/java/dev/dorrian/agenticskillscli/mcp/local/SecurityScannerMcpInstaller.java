@@ -1,5 +1,6 @@
 package dev.dorrian.agenticskillscli.mcp.local;
 
+import dev.dorrian.agenticskillscli.HomeDir;
 import dev.dorrian.agenticskillscli.PackageRoot;
 import dev.dorrian.agenticskillscli.registry.McpServerConfig;
 
@@ -23,7 +24,7 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.list;
 public final class SecurityScannerMcpInstaller {
 
     public static final Path DEFAULT_INSTALL_DIR =
-        Paths.get(System.getProperty("user.home"), ".config", "opencode", "mcp", "security-scanner");
+        HomeDir.resolve().resolve(".config").resolve("opencode").resolve("mcp").resolve("security-scanner");
     private static final String JAR_NAME = "security-scanner.jar";
 
     private SecurityScannerMcpInstaller() {

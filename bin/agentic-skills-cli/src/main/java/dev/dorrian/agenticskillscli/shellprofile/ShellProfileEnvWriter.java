@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillscli.shellprofile;
 
+import dev.dorrian.agenticskillscli.HomeDir;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -37,7 +39,7 @@ public final class ShellProfileEnvWriter {
 
     public static Path resolveShellProfileFile() {
         String shell = System.getenv().getOrDefault("SHELL", "");
-        Path home = Paths.get(System.getProperty("user.home"));
+        Path home = HomeDir.resolve();
         return shell.contains("zsh") ? home.resolve(".zshrc") : home.resolve(".bashrc");
     }
 

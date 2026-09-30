@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillscli.registry;
 
+import dev.dorrian.agenticskillscli.HomeDir;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
@@ -31,7 +33,7 @@ public final class AgentToolRegistry {
     }
 
     private static Path home(String... segments) {
-        Path p = Paths.get(System.getProperty("user.home"));
+        Path p = HomeDir.resolve();
         for (String s : segments) {
             p = p.resolve(s);
         }
@@ -46,7 +48,7 @@ public final class AgentToolRegistry {
         }
         if (osName.contains("win")) {
             String appData = System.getenv("APPDATA");
-            Path base = appData != null ? Paths.get(appData) : Paths.get(System.getProperty("user.home"));
+            Path base = appData != null ? Paths.get(appData) : HomeDir.resolve();
             return base.resolve("Code").resolve("User");
         }
         return home(".config", "Code", "User");
