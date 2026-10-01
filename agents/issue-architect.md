@@ -12,6 +12,9 @@ permission:
   bash:
     "*": deny
     "git rev-parse*": allow
+    "cat pom.xml": allow
+    "cat build.gradle": allow
+    "cat build.gradle.kts": allow
     "cat package.json": allow
     "ls *": allow
   webfetch: allow
@@ -73,8 +76,8 @@ Use `glob`, `grep`, and `read` (NOT bash) to understand the codebase. Do this in
 
 Always read, when present:
 - `README.md`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `CONTRIBUTING.md`
-- `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`, `*.csproj`
-- `tsconfig.json`, `vite.config.*`, `next.config.*`, `webpack.config.*`
+- `pom.xml`, `build.gradle` / `build.gradle.kts`, `settings.gradle(.kts)` — or, for other ecosystems, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `*.csproj`
+- `src/main/resources/application.{yml,yaml,properties}`, `gradle/libs.versions.toml` — or, for other ecosystems, `tsconfig.json`, `vite.config.*`, `next.config.*`, `webpack.config.*`
 - Any `docs/` or `specs/` directory
 - Any `.github/ISSUE_TEMPLATE/` directory (to match the project's issue conventions)
 

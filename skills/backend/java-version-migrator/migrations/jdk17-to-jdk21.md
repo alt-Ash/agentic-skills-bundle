@@ -29,7 +29,7 @@
 
 ## OpenRewrite recipes
 
-Use [OpenRewrite](https://docs.openrewrite.org/) for automated, AST-based migration — the Java ecosystem's equivalent of the Node `codemod` tooling referenced elsewhere in this skill family.
+Use [OpenRewrite](https://docs.openrewrite.org/) for automated, AST-based migration — its recipes rewrite source and build files (`pom.xml` / `build.gradle(.kts)`) directly rather than just flagging issues.
 
 ```bash
 mvn org.openrewrite.maven:rewrite-maven-plugin:run \

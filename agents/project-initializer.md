@@ -24,7 +24,6 @@ permission:
     "cat .java-version": allow
     "cat .sdkmanrc": allow
     "cat .tool-versions": allow
-    "cat package.json": allow
     "ls *": allow
     "find . -maxdepth *": allow
   read: allow

@@ -22,6 +22,20 @@ permission:
     "git rev-parse*": allow
     "git fetch*": allow
     "git pull*": ask
+    "./mvnw test*": allow
+    "./mvnw verify*": allow
+    "./mvnw package*": allow
+    "./mvnw compile*": allow
+    "mvn test*": allow
+    "mvn verify*": allow
+    "mvn package*": allow
+    "mvn compile*": allow
+    "./gradlew test*": allow
+    "./gradlew build*": allow
+    "./gradlew check*": allow
+    "gradle test*": allow
+    "gradle build*": allow
+    "gradle check*": allow
     "npm test*": allow
     "npm run build*": allow
     "npm run test*": allow
@@ -129,7 +143,9 @@ Write the plan as a `todowrite` checklist. One item per acceptance criterion plu
 
 Before implementing, discover the project's verification commands using the
 `validation-loop` skill's "How to declare your gates" convention (read
-`package.json`/`pyproject.toml`/`Makefile`/`go.mod`/`Cargo.toml`, and
+`pom.xml`/`build.gradle(.kts)` first — preferring the `./mvnw`/`./gradlew`
+wrapper when present — or `package.json`/`pyproject.toml`/`Makefile`/`go.mod`/`Cargo.toml`
+for other ecosystems, and
 `AGENTS.md`/`CLAUDE.md`/`README.md` for documented commands; skip a gate with
 no command, never invent one). Remember the resulting gate list — typically
 lint/typecheck, build, and tests (full suite, then targeted tests for the

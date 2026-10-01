@@ -47,7 +47,7 @@ A decomposition is safe to parallelize only if **all** of the following hold:
 2. **No ordering dependency.** No slice's database migration, schema change, or
    generated artifact must land before another slice's work can start.
 3. **No shared-config collision.** No two slices edit the same shared file —
-   `package.json`, a shared types file, a shared config — even if the rest of
+   `pom.xml` / `build.gradle(.kts)`, a shared types file, a shared config — even if the rest of
    their file lists are disjoint.
 
 Compute the file list per slice up front and diff every pair. **Any overlap on
