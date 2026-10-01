@@ -17,7 +17,7 @@ Everything is Maven, driven from the root aggregator `pom.xml` via the wrapper (
 ./mvnw -pl bin/agentic-skills-cli -am package -DskipTests   # build the self-contained installer jar
 java -jar bin/agentic-skills-cli/target/agentic-skills.jar  # run the interactive installer from the built jar
 java -jar bin/agentic-skills-cli/target/agentic-skills.jar --package-root .   # ...against this checkout's content instead of the bundled copy
-./mvnw -pl bin/agentic-skills-cli test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest   # structural content checks
+./mvnw -pl bin/agentic-skills-cli -am test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest -Dsurefire.failIfNoSpecifiedTests=false   # structural content checks
 ./mvnw -pl evals/agentic-skills-evals -Pbilled-evals test -Dtest=TddEngineerEvalTest   # behavioral eval — REAL BILLED model calls, run sparingly
 ```
 
@@ -25,7 +25,7 @@ Run a single test file:
 
 ```bash
 # structural (one of the three content-validation classes)
-./mvnw -pl bin/agentic-skills-cli test -Dtest=AgentFileStructureTest
+./mvnw -pl bin/agentic-skills-cli -am test -Dtest=AgentFileStructureTest -Dsurefire.failIfNoSpecifiedTests=false
 
 # hooks: black-box IT against the packaged jar (failsafe runs after `package`)
 ./mvnw -pl hooks/agentic-skills-hooks verify -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=HookInvocationIT
@@ -167,7 +167,7 @@ users. This module is never bundled into `agentic-skills.jar` either — dev-onl
 
 | Suite | Config | What it covers |
 |---|---|---|
-| `bin/agentic-skills-cli`'s `content/` package | `./mvnw -pl bin/agentic-skills-cli test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest` | Validates agent/skill/command frontmatter fields and file structure — no model calls, no real API cost. Resolves the repo root independently of the shared `PackageRoot` singleton (which `PackageRootTest` repeatedly re-points at fake dirs in the same Surefire fork) so results don't depend on cross-class execution order. |
+| `bin/agentic-skills-cli`'s `content/` package | `./mvnw -pl bin/agentic-skills-cli -am test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest -Dsurefire.failIfNoSpecifiedTests=false` | Validates agent/skill/command frontmatter fields and file structure — no model calls, no real API cost. Resolves the repo root independently of the shared `PackageRoot` singleton (which `PackageRootTest` repeatedly re-points at fake dirs in the same Surefire fork) so results don't depend on cross-class execution order. |
 | `evals/agentic-skills-evals/` | `./mvnw -pl evals/agentic-skills-evals test` runs only the zero-cost classes; `-Pbilled-evals` (or an explicit `-Dtest=…EvalTest`) opts into the billed ones | LLM-invoked scenario evals (Java, expensive — real billed model calls) |
 | `hooks/agentic-skills-hooks/` | `./mvnw -pl hooks/agentic-skills-hooks verify` | Unit tests, then `HookInvocationIT` (failsafe, after `package`): spawns the shaded jar (`java -jar ... <hookType>`) as a child process and asserts the files it writes and the events it POSTs to a localhost capture server — catches manifest/main-class/bundling mistakes an in-classpath test can't |
 

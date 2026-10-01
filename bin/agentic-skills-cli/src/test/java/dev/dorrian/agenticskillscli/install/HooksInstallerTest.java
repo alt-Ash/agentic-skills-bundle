@@ -67,4 +67,26 @@ class HooksInstallerTest {
             tmp.resolve("nope.jar"), tmp.resolve("hooks/agentic-skills-hooks.jar"), settings));
         assertFalse(Files.exists(settings));
     }
+
+    @Test
+    void uninstallUnregistersTheHooksThenDeletesTheJar(@TempDir Path tmp) throws IOException {
+        Path bundledJar = tmp.resolve("agentic-skills-hooks.jar");
+        Path targetJar = tmp.resolve("home/.agentic-skills/hooks/agentic-skills-hooks.jar");
+        Path settings = tmp.resolve("home/.claude/settings.json");
+        Files.writeString(bundledJar, "hooks-v1");
+        HooksInstaller.installAndRegister(bundledJar, targetJar, settings);
+
+        int removed = HooksInstaller.uninstall(targetJar, settings);
+
+        assertEquals(6, removed);
+        assertFalse(Files.exists(targetJar));
+        assertFalse(Files.exists(targetJar.getParent()), "empty hooks dir should be removed");
+        assertFalse(new ObjectMapper().readTree(settings.toFile()).has("hooks"));
+    }
+
+    @Test
+    void uninstallIsSafeWhenNothingWasInstalled(@TempDir Path tmp) {
+        assertEquals(0, HooksInstaller.uninstall(tmp.resolve("hooks/agentic-skills-hooks.jar"), tmp.resolve("settings.json")));
+        assertFalse(Files.exists(tmp.resolve("settings.json")));
+    }
 }

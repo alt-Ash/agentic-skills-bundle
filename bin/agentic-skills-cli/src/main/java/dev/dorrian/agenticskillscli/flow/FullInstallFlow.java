@@ -28,7 +28,6 @@ import dev.dorrian.agenticskillscli.ui.ToolResults;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +65,7 @@ public final class FullInstallFlow {
         if (!selectedSkills.isEmpty()) {
             skillsInstallTarget = promptInstallTarget(prompter, "Install skills:");
             if ("project".equals(skillsInstallTarget)) {
-                projectPath = promptProjectPath(prompter);
+                projectPath = ProjectPathInput.prompt(prompter);
             }
         }
 
@@ -83,7 +82,7 @@ public final class FullInstallFlow {
                 boolean defaultProject = "project".equals(skillsInstallTarget);
                 agentInstallTarget = promptInstallTarget(prompter, "Install agents:", defaultProject);
                 if ("project".equals(agentInstallTarget) && projectPath == null) {
-                    projectPath = promptProjectPath(prompter);
+                    projectPath = ProjectPathInput.prompt(prompter);
                 }
             }
         }
@@ -388,22 +387,6 @@ public final class FullInstallFlow {
         // never changed the outcome of an explicit choice, so it's dropped here without behavior loss.
         String chosen = prompter.list(question, choices);
         return chosen.startsWith(Ansi.cyan("Global")) ? "global" : "project";
-    }
-
-    private static Path promptProjectPath(Prompter prompter) {
-        while (true) {
-            String input = prompter.input("Project path:", System.getProperty("user.dir"));
-            Path resolved = Paths.get(input).toAbsolutePath().normalize();
-            if (!Files.exists(resolved)) {
-                System.out.println("  " + Ansi.red("Path does not exist: " + resolved));
-                continue;
-            }
-            if (!Files.isDirectory(resolved)) {
-                System.out.println("  " + Ansi.red("Path must be a directory."));
-                continue;
-            }
-            return resolved;
-        }
     }
 
     record GlobalToolsSelection(List<String> selectedGlobalTools, String context7ApiKey) {
