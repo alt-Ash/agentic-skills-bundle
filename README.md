@@ -290,7 +290,7 @@ When you install for **Claude Code**, the CLI also copies a small hooks jar to `
 - Events are written **locally, in the project directory Claude Code is running in**: `ai-usage-events.json`, `hooks-events.json` and `.hooks-data/`. Add them to that project's `.gitignore`.
 - Nothing leaves your machine unless you set `ANALYTICS_SERVICE_URL`, in which case events are also POSTed there.
 - A hook can never block Claude Code: it always exits 0, even on internal errors.
-- To stop collecting, remove the `agentic-skills-hooks.jar` entries from the `hooks` block in `~/.claude/settings.json` — **the uninstaller does not remove them yet.**
+- To stop collecting, run `agentic-skills --uninstall` and select Claude Code: it removes the hook entries from `~/.claude/settings.json` (leaving any hooks of your own) and deletes `~/.agentic-skills/hooks/`. Event files already written in your projects are kept.
 
 ## Development
 
