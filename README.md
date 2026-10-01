@@ -59,6 +59,7 @@ Agents install into a parallel set of paths and support the same global/project 
 | Cursor | `~/.cursor/agents` | `.cursor/agents` |
 | Gemini CLI | `~/.gemini/agents` | `.gemini/agents` |
 | OpenAI Codex CLI | `~/.codex/agents` | `.codex/agents` |
+| VS Code (GitHub Copilot) | `~/.copilot/agents` | — (global only) |
 
 > [!NOTE]
 > For Claude Code, choosing a project target for both skills and agents places everything under the same scope (`.claude/skills` and `.claude/agents`). For Codex CLI, install reusable agent files into `.codex/agents` and keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope.
@@ -228,6 +229,8 @@ If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `
 
 The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill.
 
+MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf) and Zed**. Gemini CLI and Codex CLI receive skills and agents but no MCP configuration yet — add servers to their configs manually if you need them.
+
 For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), because Devin's docs give both locations. Uninstall removes them from both files.
 
 ### `figma-mcp`
@@ -259,13 +262,14 @@ Tools: `pull_ticket`, `create_issue`, `create_pull_request`
 
 **Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>` `url`/`connection`/`developerConnection`, then `<issueManagement><url>`, then the project `<url>`). GitHub is recognised by `github.com` and Azure DevOps by `dev.azure.com` or `visualstudio.com`, in https, ssh, or `scm:git:` form. Gradle build files are not read. If none of these match and only one provider has credentials configured, that provider is used.
 
-| Variable | Required for | Description |
-|---|---|---|
-| `AZURE_DEVOPS_ORG_URL` | Azure DevOps | Organisation URL, e.g. `https://dev.azure.com/myorg` |
-| `AZURE_DEVOPS_TOKEN` | Azure DevOps | Personal Access Token |
-| `GITHUB_TOKEN` | GitHub | Personal Access Token or App installation token |
+Credentials come from environment variables. The installer collects one or more accounts per provider and writes them to your shell profile (`~/.zshrc` or `~/.bashrc`) as base64-encoded JSON; for each provider the first variable set wins:
 
-Only the providers whose env vars are set are active — the rest degrade gracefully. Use **Update token** in the CLI to rotate an expired Azure DevOps or GitHub PAT without reinstalling anything else.
+| Provider | Variables, in precedence order | Account fields |
+|---|---|---|
+| Azure DevOps | `AZURE_DEVOPS_ACCOUNTS_B64` (base64 JSON) → `AZURE_DEVOPS_ACCOUNTS` (plain JSON) → legacy single account `AZURE_DEVOPS_ORG_URL` + `AZURE_DEVOPS_TOKEN` | `name`, `orgUrl`, `token` |
+| GitHub | `GITHUB_ACCOUNTS_B64` (base64 JSON) → `GITHUB_ACCOUNTS` (plain JSON) → legacy single account `GITHUB_TOKEN` | `name`, `token` |
+
+The JSON forms are arrays of accounts, e.g. `[{"name":"work","orgUrl":"https://dev.azure.com/myorg","token":"…"}]`. Variables are re-read on every call, so a rotated token takes effect without restarting the server. Only the providers with credentials are active — the rest degrade gracefully. Use **Update token** in the CLI to rotate an expired Azure DevOps or GitHub PAT without reinstalling anything else.
 
 ### `security-scanner`
 
@@ -280,6 +284,34 @@ Tools:
 - `get_scan_report({ scanId })` — retrieves a previously written report.
 
 A shared circuit breaker aborts the rest of a scan the moment the target's error rate or latency degrades sharply. Reports are written to `security-scans/<host>-<timestamp>.json` and `.md` in the calling process's working directory. See `mcp/security-scanner/README.md` for full development docs.
+
+## Usage analytics hooks (Claude Code)
+
+When you install for **Claude Code**, the CLI also copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it in `~/.claude/settings.json` for `SessionStart`/`SessionEnd`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure` and `Stop`. Each hook records a usage event — tool name, model and token counts, prompt/response *lengths* (never the prompt or response text), the Bash command for Bash tool calls (with secrets redacted), and a per-session git change summary.
+
+- Events are written **locally, in the project directory Claude Code is running in**: `ai-usage-events.json`, `hooks-events.json` and `.hooks-data/`. Add them to that project's `.gitignore`.
+- Nothing leaves your machine unless you set `ANALYTICS_SERVICE_URL`, in which case events are also POSTed there.
+- A hook can never block Claude Code: it always exits 0, even on internal errors.
+- To stop collecting, run `agentic-skills --uninstall` and select Claude Code: it removes the hook entries from `~/.claude/settings.json` (leaving any hooks of your own) and deletes `~/.agentic-skills/hooks/`. Event files already written in your projects are kept.
+
+## Development
+
+Everything builds with Maven via the wrapper — no Node.js anywhere:
+
+```bash
+./mvnw verify                                   # all modules: unit + integration tests
+./mvnw -pl bin/agentic-skills-cli -am package -DskipTests
+java -jar bin/agentic-skills-cli/target/agentic-skills.jar --package-root .   # run against this checkout's content
+```
+
+| Module | What it is |
+|---|---|
+| `bin/agentic-skills-cli` | The installer (plain Java 21); builds the self-contained `agentic-skills.jar` |
+| `hooks/agentic-skills-hooks` | The analytics hooks (plain Java 21) |
+| `mcp/issue-tickets`, `mcp/security-scanner` | The local MCP servers (Spring Boot + Spring AI) |
+| `evals/agentic-skills-evals` | Behavioral evals for the agents — real, billed model calls via the `claude` CLI, so they're excluded from `verify`; opt in with `-Pbilled-evals` |
+
+Releases are cut by pushing a `v<version>` tag matching the root `pom.xml` `revision`: CI then publishes the jar to GitHub Releases, the Homebrew tap and the JBang catalog via JReleaser.
 
 ## Requirements
 

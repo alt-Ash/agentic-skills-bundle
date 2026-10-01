@@ -1,0 +1,45 @@
+# Dependency updates for the Maven reactor and the GitHub Actions workflows.
+#
+# Minor/patch bumps are grouped into one PR per ecosystem per week so CI (which
+# already builds every module) validates them together. Major bumps still get
+# their own PR: they usually need real migration work (e.g. Spring Boot 4,
+# Jackson 3) and shouldn't ride along with routine updates.
+
+version: 2
+updates:
+  - package-ecosystem: "maven"
+    # Every pom: the root aggregator, the plain-Java modules that inherit it,
+    # and the two Spring Boot MCP servers, which have their own parent.
+    directories:
+      - "/"
+      - "/bin/agentic-skills-cli"
+      - "/hooks/agentic-skills-hooks"
+      - "/evals/agentic-skills-evals"
+      - "/mcp/issue-tickets"
+      - "/mcp/security-scanner"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(maven)"
+    groups:
+      maven-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
