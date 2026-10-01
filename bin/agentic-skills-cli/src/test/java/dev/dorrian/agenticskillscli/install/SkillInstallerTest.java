@@ -54,4 +54,61 @@ class SkillInstallerTest {
         assertTrue(result.success());
         assertTrue(result.skipped());
     }
+
+    // ─── Legacy locations (Windsurf project skills used to go to .windsurf/rules) ───
+
+    @Test
+    void removeFromWindsurfSkillsAlsoRemovesALegacyRulesCopy(@TempDir Path tempDir) throws IOException {
+        Path project = tempDir.resolve("project");
+        Path current = project.resolve(".windsurf").resolve("skills");
+        Path legacy = project.resolve(".windsurf").resolve("rules");
+        Files.createDirectories(current.resolve("react-migration"));
+        Files.writeString(current.resolve("react-migration").resolve("SKILL.md"), "x");
+        Files.createDirectories(legacy.resolve("react-migration"));
+        Files.writeString(legacy.resolve("react-migration").resolve("SKILL.md"), "x");
+        Files.writeString(legacy.resolve("my-own-rule.md"), "user content");
+
+        OperationResult result = SkillInstaller.remove("react-migration", current);
+
+        assertTrue(result.success());
+        assertFalse(result.skipped());
+        assertFalse(Files.exists(current.resolve("react-migration")));
+        assertFalse(Files.exists(legacy.resolve("react-migration")));
+        assertTrue(Files.exists(legacy.resolve("my-own-rule.md"))); // user's own rules untouched
+    }
+
+    @Test
+    void removeCleansUpAnInstallThatOnlyExistsAtTheLegacyRulesLocation(@TempDir Path tempDir) throws IOException {
+        Path current = tempDir.resolve(".windsurf").resolve("skills");
+        Path legacy = tempDir.resolve(".windsurf").resolve("rules");
+        Files.createDirectories(legacy.resolve("react-migration"));
+        Files.writeString(legacy.resolve("react-migration").resolve("SKILL.md"), "x");
+
+        OperationResult result = SkillInstaller.remove("react-migration", current);
+
+        assertTrue(result.success());
+        assertFalse(result.skipped());
+        assertFalse(Files.exists(legacy.resolve("react-migration")));
+    }
+
+    @Test
+    void legacyRulesDirectoryWithoutASkillFileIsLeftAlone(@TempDir Path tempDir) throws IOException {
+        Path current = tempDir.resolve(".windsurf").resolve("skills");
+        Path legacy = tempDir.resolve(".windsurf").resolve("rules");
+        Files.createDirectories(legacy.resolve("react-migration"));
+        Files.writeString(legacy.resolve("react-migration").resolve("notes.md"), "a user's own rule folder");
+
+        OperationResult result = SkillInstaller.remove("react-migration", current);
+
+        assertTrue(result.skipped());
+        assertTrue(Files.exists(legacy.resolve("react-migration").resolve("notes.md")));
+    }
+
+    @Test
+    void legacyLocationsOnlyApplyToTheWindsurfSkillsFolder(@TempDir Path tempDir) {
+        assertEquals(List.of(tempDir.resolve(".windsurf").resolve("rules")),
+            LegacySkillLocations.forTarget(tempDir.resolve(".windsurf").resolve("skills")));
+        assertEquals(List.of(), LegacySkillLocations.forTarget(tempDir.resolve(".claude").resolve("skills")));
+        assertEquals(List.of(), LegacySkillLocations.forTarget(tempDir.resolve("skills")));
+    }
 }
