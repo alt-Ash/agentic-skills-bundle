@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
  * Java port of {@code bin/install.js}'s shell-profile credential helpers:
  * {@code writeObTicketsEnvVars}, {@code resolveShellProfileFile}, {@code
  * decodeAccountsB64}, {@code readObTicketsAccounts}, {@code
- * overwriteObTicketsEnvVars}, {@code writeFigmaEnvVar}, and the base64
+ * overwriteObTicketsEnvVars}, and the base64
  * encode helpers. Ported field-for-field from the source read directly on
  * 2026-09-30.
  */
@@ -80,7 +80,7 @@ public final class ShellProfileEnvWriter {
         }
     }
 
-    /** Result of {@link #writeObTicketsEnvVars}/{@link #writeFigmaEnvVar}. */
+    /** Result of {@link #writeObTicketsEnvVars}. */
     public record WriteResult(Path profileFile, boolean skipped) {
     }
 
@@ -198,44 +198,6 @@ public final class ShellProfileEnvWriter {
 
         writeFull(profileFile, existing);
         return profileFile;
-    }
-
-    /**
-     * Appends the Figma access token export to the user's shell profile. Skips if already present.
-     *
-     * @deprecated Figma MCP is now configured against Figma's OAuth-only
-     *     hosted server (or the desktop app's local server), neither of which
-     *     reads {@code FIGMA_ACCESS_TOKEN}. Remove once the install flows stop
-     *     prompting for a token.
-     */
-    @Deprecated
-    public static WriteResult writeFigmaEnvVar(String accessToken) {
-        return writeFigmaEnvVar(resolveShellProfileFile(), accessToken);
-    }
-
-    /**
-     * Overload taking an explicit profile file — used by tests to avoid touching the real shell profile.
-     *
-     * @deprecated see {@link #writeFigmaEnvVar(String)}.
-     */
-    @Deprecated
-    public static WriteResult writeFigmaEnvVar(Path profileFile, String accessToken) {
-        String existing = readIfExists(profileFile);
-
-        List<String> lines = new ArrayList<>();
-        String marker = "# Figma MCP credentials";
-        if (!existing.contains(marker)) {
-            lines.add("");
-            lines.add(marker);
-        }
-        if (!existing.contains("FIGMA_ACCESS_TOKEN")) {
-            lines.add("export FIGMA_ACCESS_TOKEN=\"" + accessToken + "\"");
-        }
-
-        if (!lines.isEmpty()) {
-            append(profileFile, String.join("\n", lines) + "\n");
-        }
-        return new WriteResult(profileFile, lines.isEmpty());
     }
 
     private static String readIfExists(Path file) {

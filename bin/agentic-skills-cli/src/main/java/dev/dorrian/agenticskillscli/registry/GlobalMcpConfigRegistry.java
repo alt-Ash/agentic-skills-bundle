@@ -32,6 +32,11 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.of;
  */
 public final class GlobalMcpConfigRegistry {
 
+    /** Shown by the install flows: figma needs no token any more, but setup differs per tool. */
+    public static final String FIGMA_SETUP_NOTE =
+        "sign in via OAuth on first use (Claude Code, Cursor, VS Code); "
+            + "OpenCode/Windsurf/Zed use the Figma desktop app's Dev Mode server";
+
     /** Context7 hosted endpoint — github.com/upstash/context7 docs/resources/all-clients.mdx. */
     static final String CONTEXT7_URL = "https://mcp.context7.com/mcp";
 

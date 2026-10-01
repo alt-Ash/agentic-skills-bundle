@@ -190,20 +190,8 @@ public final class FullInstallFlow {
 
         SummaryPrinter.printInstallSummary(resultsByTool);
 
-        if (globalTools.selectedGlobalTools().contains("figma") && globalTools.figmaAccessToken() != null) {
-            try {
-                var result = ShellProfileEnvWriter.writeFigmaEnvVar(globalTools.figmaAccessToken());
-                if (result.skipped()) {
-                    System.out.println("  " + Ansi.dim("Figma MCP: FIGMA_ACCESS_TOKEN already present in shell profile — skipped."));
-                } else {
-                    System.out.println("  " + Ansi.green("Figma MCP: access token written to " + result.profileFile()));
-                    System.out.println("  " + Ansi.dim("Run `source " + result.profileFile() + "` or open a new terminal for the var to take effect."));
-                }
-            } catch (RuntimeException e) {
-                System.out.println("  " + Ansi.yellow("Figma MCP: could not write to shell profile: " + e.getMessage()));
-                System.out.println("  " + Ansi.dim("Add this line manually:"));
-                System.out.println("    export FIGMA_ACCESS_TOKEN=\"<your-token>\"");
-            }
+        if (globalTools.selectedGlobalTools().contains("figma")) {
+            System.out.println("  " + Ansi.dim("Figma MCP: " + GlobalMcpConfigRegistry.FIGMA_SETUP_NOTE));
             System.out.println();
         }
     }
@@ -288,6 +276,7 @@ public final class FullInstallFlow {
                 globalServers.put("figma-mcp", GlobalMcpConfigRegistry.figma(toolKey));
             }
             if (!globalServers.isEmpty()) {
+                JsonConfigStore.migrateLegacyNpxServers(globalServers, toolKey);
                 mcpResults.addAll(tryInstallMcpServers(globalServers, toolKey));
             }
         }
@@ -417,18 +406,18 @@ public final class FullInstallFlow {
         }
     }
 
-    record GlobalToolsSelection(List<String> selectedGlobalTools, String context7ApiKey, String figmaAccessToken) {
+    record GlobalToolsSelection(List<String> selectedGlobalTools, String context7ApiKey) {
     }
 
     private static GlobalToolsSelection promptGlobalTools(Prompter prompter) {
         if (!prompter.confirm("Install global MCP tools (Engram, Context7, Figma)?", true)) {
-            return new GlobalToolsSelection(List.of(), null, null);
+            return new GlobalToolsSelection(List.of(), null);
         }
 
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put("engram", Ansi.cyan("Engram") + "  " + Ansi.dim("— persistent memory for AI agents (binary must be installed)"));
         labels.put("context7", Ansi.cyan("Context7") + " " + Ansi.dim("— up-to-date library docs via MCP"));
-        labels.put("figma", Ansi.cyan("Figma") + "    " + Ansi.dim("— Figma design tool integration via MCP (requires FIGMA_ACCESS_TOKEN)"));
+        labels.put("figma", Ansi.cyan("Figma") + "    " + Ansi.dim("— Figma design tool integration via MCP (OAuth sign-in; no token needed)"));
 
         List<String> selectedLabels = prompter.checkbox("Select global tools to install:", new ArrayList<>(labels.values()), Set.of());
         List<String> selectedKeys = new ArrayList<>();
@@ -442,16 +431,7 @@ public final class FullInstallFlow {
             context7ApiKey = apiKey.isEmpty() ? null : apiKey;
         }
 
-        String figmaAccessToken = null;
-        if (selectedKeys.contains("figma")) {
-            System.out.println();
-            System.out.println("  " + Ansi.dim("Get a Figma token: figma.com → Settings → Security → Personal access tokens"));
-            System.out.println();
-            String token = prompter.password("Figma access token (blank to skip — set FIGMA_ACCESS_TOKEN manually):").trim();
-            figmaAccessToken = token.isEmpty() ? null : token;
-        }
-
-        return new GlobalToolsSelection(selectedKeys, context7ApiKey, figmaAccessToken);
+        return new GlobalToolsSelection(selectedKeys, context7ApiKey);
     }
 
     private static boolean promptJavaMcpOptIn(Prompter prompter, boolean alreadyInstalled, String question, String freshDescription) {

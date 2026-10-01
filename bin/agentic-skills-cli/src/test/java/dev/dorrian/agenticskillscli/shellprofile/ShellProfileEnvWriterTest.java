@@ -110,17 +110,6 @@ class ShellProfileEnvWriterTest {
     }
 
     @Test
-    void writeFigmaEnvVarAppendsExportLineAndSkipsOnSecondCall(@TempDir Path tempDir) throws IOException {
-        Path profileFile = tempDir.resolve("fake-rc");
-        ShellProfileEnvWriter.WriteResult first = ShellProfileEnvWriter.writeFigmaEnvVar(profileFile, "figma-token-123");
-        assertFalse(first.skipped());
-        assertTrue(Files.readString(profileFile).contains("export FIGMA_ACCESS_TOKEN=\"figma-token-123\""));
-
-        ShellProfileEnvWriter.WriteResult second = ShellProfileEnvWriter.writeFigmaEnvVar(profileFile, "figma-token-123");
-        assertTrue(second.skipped());
-    }
-
-    @Test
     void readObTicketsAccountsReturnsEmptyListsWhenProfileFileDoesNotExist(@TempDir Path tempDir) {
         ShellProfileEnvWriter.ObTicketsAccounts read = ShellProfileEnvWriter.readObTicketsAccounts(tempDir.resolve("nope"));
         assertTrue(read.azureOrgs().isEmpty());

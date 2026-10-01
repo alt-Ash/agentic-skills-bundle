@@ -162,6 +162,40 @@ class JsonConfigStoreTest {
     }
 
     @Test
+    void migrateLegacyNpxServersReplacesOnlyEntriesThatStillUseNpx(@TempDir Path tempDir) throws IOException {
+        Path configFile = tempDir.resolve("cfg.json");
+        Files.writeString(configFile, """
+            { "mcpServers": {
+                "context7":  { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] },
+                "figma-mcp": { "url": "https://my-own-proxy.example/mcp" },
+                "engram":    { "command": "engram" } } }
+            """);
+        McpConfigDef cfg = new McpConfigDef("cursor", configFile, "mcpServers", "stdio");
+
+        Set<String> replaced = JsonConfigStore.migrateLegacyNpxServersInFile(Map.of(
+            "context7", Map.of("url", "https://mcp.context7.com/mcp"),
+            "figma-mcp", Map.of("url", "https://mcp.figma.com/mcp"),
+            "not-installed", Map.of("url", "https://example/mcp")
+        ), cfg, configFile);
+
+        assertEquals(Set.of("context7"), replaced);
+        Map<String, Object> written = MAPPER.readValue(configFile.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> servers = (Map<String, Object>) written.get("mcpServers");
+        assertEquals(Map.of("url", "https://mcp.context7.com/mcp"), servers.get("context7"));
+        assertEquals(Map.of("url", "https://my-own-proxy.example/mcp"), servers.get("figma-mcp")); // user's own, kept
+        assertEquals(Map.of("command", "engram"), servers.get("engram"));
+        assertFalse(servers.containsKey("not-installed")); // migration never adds
+    }
+
+    @Test
+    void migrateLegacyNpxServersIsANoOpWithoutAConfigFile(@TempDir Path tempDir) {
+        McpConfigDef cfg = new McpConfigDef("cursor", tempDir.resolve("missing.json"), "mcpServers", "stdio");
+        assertTrue(JsonConfigStore.migrateLegacyNpxServersInFile(Map.of("context7", Map.of()), cfg, cfg.globalFile()).isEmpty());
+        assertFalse(Files.exists(cfg.globalFile()));
+    }
+
+    @Test
     void overwriteMcpServerEntryReturnsSkippedForUnknownTool() {
         OperationResult result = JsonConfigStore.overwriteMcpServerEntry("x", Map.of(), "unknown-tool");
         assertTrue(result.skipped());

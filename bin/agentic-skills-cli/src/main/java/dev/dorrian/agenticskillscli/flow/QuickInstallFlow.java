@@ -31,7 +31,7 @@ import java.util.Set;
 /**
  * Port of {@code bin/install.js}'s Quick-install branch (source read
  * directly, lines ~2388-2659, on 2026-09-30): a single tool checkbox,
- * optional Azure/GitHub/Figma credential collection, then an unconditional
+ * optional Azure/GitHub credential collection, then an unconditional
  * install of skills/commands/agents/global MCPs for every selected tool,
  * followed by an unconditional install (copy of the bundled prebuilt jars) of BOTH the issue-tickets and
  * security-scanner Java MCPs for every selected tool — no per-tool opt-in.
@@ -71,21 +71,12 @@ public final class QuickInstallFlow {
         List<AzureOrg> azureOrgs = CredentialPrompts.collectAzureOrgs(prompter);
         List<GithubAccount> githubAccounts = CredentialPrompts.collectGithubAccounts(prompter);
 
-        System.out.println();
-        System.out.println("  " + Ansi.bold("Figma MCP") + Ansi.dim(" — leave blank to skip (set FIGMA_ACCESS_TOKEN manually)"));
-        System.out.println("  " + Ansi.dim("Get a token: figma.com → Settings → Security → Personal access tokens"));
-        System.out.println();
-        String figmaAccessToken = prompter.password("Figma access token (blank to skip):").trim();
-        if (figmaAccessToken.isEmpty()) {
-            figmaAccessToken = null;
-        }
-
         List<CommandDescriptor> quickCommands = dedupedCommands(
             CommandInstaller.resolveForSkills(availableSkills),
             CommandInstaller.resolveForAgents(availableAgentFiles)
         );
 
-        printQuickSummary(quickTools, availableSkills, quickCommands, availableAgentFiles, azureOrgs, githubAccounts, figmaAccessToken);
+        printQuickSummary(quickTools, availableSkills, quickCommands, availableAgentFiles, azureOrgs, githubAccounts);
 
         if (!prompter.confirm("Proceed with installation?", true)) {
             System.out.println(Ansi.dim("\n  Installation cancelled.\n"));
@@ -113,6 +104,7 @@ public final class QuickInstallFlow {
             globalServers.put("engram", GlobalMcpConfigRegistry.engram(toolKey));
             globalServers.put("context7", GlobalMcpConfigRegistry.context7(toolKey, null));
             globalServers.put("figma-mcp", GlobalMcpConfigRegistry.figma(toolKey));
+            JsonConfigStore.migrateLegacyNpxServers(globalServers, toolKey);
             JsonConfigStore.installMcpServers(globalServers, toolKey);
 
             Map<String, Object> linkedMcps = new LinkedHashMap<>();
@@ -162,15 +154,6 @@ public final class QuickInstallFlow {
             System.out.println(Ansi.red("  security-scanner install failed: " + e.getMessage()));
         }
 
-        if (figmaAccessToken != null) {
-            try {
-                var result = ShellProfileEnvWriter.writeFigmaEnvVar(figmaAccessToken);
-                System.out.println(Ansi.dim("  Figma access token written to " + result.profileFile()));
-            } catch (RuntimeException e) {
-                System.out.println(Ansi.yellow("  Figma MCP: could not write token to shell profile: " + e.getMessage()));
-            }
-        }
-
         System.out.println();
         System.out.println(Ansi.boldGreen("  ✔ Quick install complete!"));
         System.out.println();
@@ -191,8 +174,7 @@ public final class QuickInstallFlow {
 
     private static void printQuickSummary(
         List<String> quickTools, List<SkillDescriptor> availableSkills, List<CommandDescriptor> quickCommands,
-        List<AgentDescriptor> availableAgentFiles, List<AzureOrg> azureOrgs, List<GithubAccount> githubAccounts,
-        String figmaAccessToken
+        List<AgentDescriptor> availableAgentFiles, List<AzureOrg> azureOrgs, List<GithubAccount> githubAccounts
     ) {
         System.out.println();
         System.out.println("  " + Ansi.bold("Ready to install"));
@@ -214,11 +196,7 @@ public final class QuickInstallFlow {
         } else {
             System.out.println("  " + Ansi.dim("GitHub   :") + " " + Ansi.cyan(joinAccountNames(githubAccounts)) + " " + Ansi.dim("[configured]"));
         }
-        if (figmaAccessToken == null) {
-            System.out.println("            " + Ansi.yellow("⚠ Figma token not provided — set FIGMA_ACCESS_TOKEN in your shell profile manually."));
-        } else {
-            System.out.println("  " + Ansi.dim("Figma    :") + " " + Ansi.cyan("token provided") + " " + Ansi.dim("[configured]"));
-        }
+        System.out.println("  " + Ansi.dim("Figma    :") + " " + Ansi.dim(GlobalMcpConfigRegistry.FIGMA_SETUP_NOTE));
         System.out.println();
     }
 

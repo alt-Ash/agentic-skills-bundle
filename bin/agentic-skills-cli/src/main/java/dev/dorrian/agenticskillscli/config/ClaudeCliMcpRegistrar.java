@@ -33,6 +33,19 @@ public final class ClaudeCliMcpRegistrar {
         return runQuiet(cli(), "mcp", "get", name) == 0;
     }
 
+    /** {@code claude mcp get <name>} output, or empty if the CLI is unavailable or the server unknown. */
+    public static String describe(String name) {
+        try {
+            Process process = new ProcessBuilder(cli(), "mcp", "get", name)
+                .redirectErrorStream(true)
+                .start();
+            String out = new String(process.getInputStream().readAllBytes());
+            return process.waitFor() == 0 ? out : "";
+        } catch (IOException | InterruptedException e) {
+            return "";
+        }
+    }
+
     public static OperationResult install(String name, Map<String, Object> serverConfig, boolean force) {
         if (!force && exists(name)) {
             return OperationResult.ok(name, true, CONFIG_LABEL);

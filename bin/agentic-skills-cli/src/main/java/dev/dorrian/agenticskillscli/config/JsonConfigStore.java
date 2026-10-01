@@ -161,6 +161,62 @@ public final class JsonConfigStore {
         return toInstall;
     }
 
+    /**
+     * Replaces entries that still launch via {@code npx} — the pre-2.0 context7/figma configs,
+     * which 2.0 points at hosted HTTP endpoints instead. Entries a user has customised to anything
+     * else, and servers not present at all, are left alone. Returns the names actually replaced.
+     */
+    public static Set<String> migrateLegacyNpxServersInFile(Map<String, Object> servers, McpConfigDef cfg, Path configFile) {
+        if (!Files.exists(configFile)) {
+            return Set.of();
+        }
+        Map<String, Object> existing = readJsonObject(configFile);
+        if (!(existing.get(cfg.mcpKey()) instanceof Map<?, ?> rawSection)) {
+            return Set.of();
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> section = (Map<String, Object>) rawSection;
+        Set<String> replaced = new LinkedHashSet<>();
+        for (Map.Entry<String, Object> entry : servers.entrySet()) {
+            if (isLegacyNpxEntry(section.get(entry.getKey()))) {
+                section.put(entry.getKey(), entry.getValue());
+                replaced.add(entry.getKey());
+            }
+        }
+        if (!replaced.isEmpty()) {
+            writeJsonObject(configFile, existing);
+        }
+        return replaced;
+    }
+
+    /** {@link #migrateLegacyNpxServersInFile} for a tool's global config (via the CLI for Claude Code). */
+    public static List<OperationResult> migrateLegacyNpxServers(Map<String, Object> servers, String toolKey) {
+        List<OperationResult> results = new ArrayList<>();
+        if ("claude".equals(toolKey)) {
+            for (Map.Entry<String, Object> entry : servers.entrySet()) {
+                if (ClaudeCliMcpRegistrar.describe(entry.getKey()).contains("npx")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> serverConfig = (Map<String, Object>) entry.getValue();
+                    results.add(overwriteMcpServerEntry(entry.getKey(), serverConfig, toolKey));
+                }
+            }
+            return results;
+        }
+        Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
+        if (cfgOpt.isEmpty()) {
+            return results;
+        }
+        McpConfigDef cfg = cfgOpt.get();
+        for (String name : migrateLegacyNpxServersInFile(servers, cfg, cfg.globalFile())) {
+            results.add(OperationResult.ok(name, false, cfg.globalFile().toString()));
+        }
+        return results;
+    }
+
+    static boolean isLegacyNpxEntry(Object entry) {
+        return entry != null && MAPPER.valueToTree(entry).toString().contains("\"npx\"");
+    }
+
     /** Removes server names from a single config file. Returns the names actually removed. */
     public static Set<String> uninstallMcpServersFromFile(List<String> serverNames, McpConfigDef cfg, Path configFile) {
         if (!Files.exists(configFile)) {
