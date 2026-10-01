@@ -2,8 +2,10 @@ package dev.dorrian.agenticskillscli.config;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,5 +35,40 @@ class ClaudeCliMcpRegistrarTest {
         );
         assertTrue(result.name().equals("test-server"));
         assertFalse(result.success(), "must fail gracefully against the overridden, nonexistent CLI");
+    }
+
+    @Test
+    void stdioServerArgsPutEnvBeforeTransportAndCommandAfterDoubleDash() {
+        Map<String, Object> cfg = new java.util.LinkedHashMap<>();
+        cfg.put("type", "stdio");
+        cfg.put("command", "engram");
+        cfg.put("args", List.of("mcp"));
+        cfg.put("env", Map.of("K", "v"));
+        assertEquals(
+            List.of("mcp", "add", "--scope", "user", "-e", "K=v", "--transport", "stdio", "engram", "--", "engram", "mcp"),
+            ClaudeCliMcpRegistrar.addArgs("engram", cfg)
+        );
+    }
+
+    @Test
+    void httpServerArgsUseHttpTransportAndUrlWithoutHeaders() {
+        assertEquals(
+            List.of("mcp", "add", "--scope", "user", "--transport", "http", "figma-mcp", "https://mcp.figma.com/mcp"),
+            ClaudeCliMcpRegistrar.addArgs("figma-mcp", Map.of("type", "http", "url", "https://mcp.figma.com/mcp"))
+        );
+    }
+
+    @Test
+    void httpServerArgsPutVariadicHeaderFlagsBeforeTransportSoTheyCannotSwallowNameAndUrl() {
+        Map<String, Object> cfg = Map.of(
+            "type", "http",
+            "url", "https://mcp.context7.com/mcp",
+            "headers", Map.of("Authorization", "Bearer abc123")
+        );
+        assertEquals(
+            List.of("mcp", "add", "--scope", "user", "--header", "Authorization: Bearer abc123",
+                "--transport", "http", "context7", "https://mcp.context7.com/mcp"),
+            ClaudeCliMcpRegistrar.addArgs("context7", cfg)
+        );
     }
 }

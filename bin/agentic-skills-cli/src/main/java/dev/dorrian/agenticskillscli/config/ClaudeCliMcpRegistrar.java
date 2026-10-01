@@ -38,7 +38,47 @@ public final class ClaudeCliMcpRegistrar {
             return OperationResult.ok(name, true, CONFIG_LABEL);
         }
 
+        List<String> args = addArgs(name, serverConfig);
+
+        try {
+            List<String> fullCommand = new ArrayList<>();
+            fullCommand.add(cli());
+            fullCommand.addAll(args);
+            int exit = run(fullCommand);
+            if (exit != 0) {
+                return OperationResult.failed(name, CONFIG_LABEL, "claude mcp add exited with status " + exit);
+            }
+            return OperationResult.ok(name, false, CONFIG_LABEL);
+        } catch (IOException | InterruptedException e) {
+            return OperationResult.failed(name, CONFIG_LABEL, e.getMessage());
+        }
+    }
+
+    /**
+     * Builds the {@code claude mcp add} argv (minus the executable). A config
+     * with {@code type: "http"} becomes a remote registration
+     * ({@code --transport http [--header "K: V"]... <name> <url>}); anything
+     * else is a stdio registration. {@code -e}/{@code --header} are variadic
+     * in the claude CLI, so they must precede {@code --transport} -- placed
+     * last they would swallow the positional name/url.
+     */
+    static List<String> addArgs(String name, Map<String, Object> serverConfig) {
         List<String> args = new ArrayList<>(List.of("mcp", "add", "--scope", "user"));
+
+        if ("http".equals(serverConfig.get("type"))) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> headers = (Map<String, Object>) serverConfig.getOrDefault("headers", Map.of());
+            for (Map.Entry<String, Object> entry : headers.entrySet()) {
+                args.add("--header");
+                args.add(entry.getKey() + ": " + entry.getValue());
+            }
+            args.add("--transport");
+            args.add("http");
+            args.add(name);
+            args.add(String.valueOf(serverConfig.get("url")));
+            return args;
+        }
+
         @SuppressWarnings("unchecked")
         Map<String, Object> env = (Map<String, Object>) serverConfig.getOrDefault("env", Map.of());
         for (Map.Entry<String, Object> entry : env.entrySet()) {
@@ -55,19 +95,7 @@ public final class ClaudeCliMcpRegistrar {
         for (Object a : cmdArgs) {
             args.add(String.valueOf(a));
         }
-
-        try {
-            List<String> fullCommand = new ArrayList<>();
-            fullCommand.add(cli());
-            fullCommand.addAll(args);
-            int exit = run(fullCommand);
-            if (exit != 0) {
-                return OperationResult.failed(name, CONFIG_LABEL, "claude mcp add exited with status " + exit);
-            }
-            return OperationResult.ok(name, false, CONFIG_LABEL);
-        } catch (IOException | InterruptedException e) {
-            return OperationResult.failed(name, CONFIG_LABEL, e.getMessage());
-        }
+        return args;
     }
 
     public static OperationResult uninstall(String name) {
