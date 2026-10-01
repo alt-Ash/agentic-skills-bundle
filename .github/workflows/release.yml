@@ -1,0 +1,94 @@
+# Release agentic-skills on a version tag.
+#
+# Pushing a `v*` tag builds and tests the whole reactor, then runs a JReleaser
+# full release (see jreleaser.yml): a GitHub release on this repo with
+# agentic-skills-<version>.jar + checksums, a Homebrew formula pushed to
+# alt-Ash/homebrew-tap and a JBang catalog entry pushed to alt-Ash/jbang-catalog.
+#
+# Version: the root pom's ${revision} is the single source of truth. It is read
+# with help:evaluate, must match the pushed tag (v<version>), and is handed to
+# JReleaser as JRELEASER_PROJECT_VERSION.
+#
+# Requires the JRELEASER_GITHUB_TOKEN secret: a PAT that can write contents to
+# this repo AND to alt-Ash/homebrew-tap and alt-Ash/jbang-catalog. The default
+# GITHUB_TOKEN is scoped to this repository only, so it cannot push the tap or
+# catalog.
+#
+# Billed LLM evals are excluded from `verify` by default (opt-in -Pbilled-evals,
+# never used here) and need a logged-in `claude` CLI the runner does not have.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: "21"
+  # Keep in step with .github/workflows/ci.yml (bundle job dry run).
+  JRELEASER_VERSION: "1.26.0"
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # JReleaser builds the changelog from the full history and tags.
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Resolve and check project version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(./mvnw -B -q -N help:evaluate -Dexpression=project.version -DforceStdout)"
+          echo "Project version: $version, tag: $TAG"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match the root pom version v$version. Bump <revision> in pom.xml (and the mcp/* revisions) or re-tag."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Release with JReleaser
+        uses: jreleaser/release-action@v2
+        with:
+          version: ${{ env.JRELEASER_VERSION }}
+          arguments: full-release
+          setup-java: false
+        env:
+          JRELEASER_PROJECT_VERSION: ${{ steps.version.outputs.version }}
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
+
+      - name: Upload JReleaser output
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jreleaser-release
+          path: |
+            out/jreleaser/trace.log
+            out/jreleaser/output.properties
+            out/jreleaser/package/
+          retention-days: 14
+          if-no-files-found: ignore

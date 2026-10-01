@@ -37,6 +37,11 @@ public final class App {
     }
 
     public static void main(String[] args) {
+        if (containsFlag(args, "--version")) {
+            // Before PackageRoot init: must not extract the bundle (Homebrew's formula test runs this).
+            System.out.println(BundleExtractor.runningVersion());
+            return;
+        }
         PackageRoot.initFromArgs(args);
 
         boolean uninstallRequested = containsFlag(args, "--uninstall");

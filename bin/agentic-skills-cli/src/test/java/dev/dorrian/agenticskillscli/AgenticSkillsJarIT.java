@@ -94,6 +94,16 @@ class AgenticSkillsJarIT {
     }
 
     @Test
+    void versionFlagPrintsTheVersionWithoutExtracting(@TempDir Path home) throws Exception {
+        // Homebrew's generated formula test runs `agentic-skills --version` and expects the version.
+        Run run = runJar(home, "--version");
+
+        assertEquals(0, run.exitCode(), run.output());
+        assertEquals(VERSION, run.output().strip());
+        assertTrue(Files.notExists(home.resolve(".agentic-skills")), "--version must not extract the bundle");
+    }
+
+    @Test
     void uninstallFlagSkipsTheMenu(@TempDir Path home) throws Exception {
         Run run = runJar(home, "--uninstall");
 

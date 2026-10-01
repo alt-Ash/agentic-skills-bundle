@@ -168,7 +168,7 @@ public final class BundleExtractor {
     }
 
     /** {@code Implementation-Version} from the jar manifest (set by the shade plugin). */
-    static String runningVersion() {
+    public static String runningVersion() {
         String version = BundleExtractor.class.getPackage().getImplementationVersion();
         return (version == null || version.isBlank()) ? UNKNOWN_VERSION : version;
     }

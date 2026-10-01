@@ -1,0 +1,97 @@
+# JReleaser configuration for agentic-skills.
+#
+# Ships the self-contained installer jar built by bin/agentic-skills-cli
+# (target/agentic-skills.jar, which carries the skills/agents/commands/templates
+# plus the hooks and both MCP server jars) as a SINGLE_JAR distribution:
+#   - a GitHub release on alt-Ash/agentic-skills-bundle (tag v<version>),
+#   - a Homebrew formula pushed to alt-Ash/homebrew-tap (depends on openjdk@21),
+#   - a JBang catalog entry pushed to alt-Ash/jbang-catalog (alias agentic-skills).
+#
+# Version: deliberately NOT set here. The root pom's ${revision} is the single
+# source of truth; the release/CI workflows read it with
+# `./mvnw help:evaluate -Dexpression=project.version` and export it as
+# JRELEASER_PROJECT_VERSION (a documented JReleaser env override for
+# project.version). To run locally:
+#   ./mvnw -B -q -DskipTests package
+#   JRELEASER_PROJECT_VERSION=2.0.0 JRELEASER_GITHUB_TOKEN=dummy \
+#     jreleaser full-release --dry-run
+#
+# Token: JRELEASER_GITHUB_TOKEN must be a PAT that can write to this repo AND to
+# the tap and catalog repos; packager repositories reuse the release token.
+
+project:
+  name: agentic-skills
+  description: Interactive installer for AI agent skills, agents, commands, hooks and MCP servers
+  longDescription: |
+    agentic-skills installs a curated bundle of AI agent skills, agents, slash
+    commands, usage-analytics hooks and local MCP servers into the
+    configuration of Claude Code, OpenCode, Cursor and other AI coding tools.
+    It ships as a single self-contained jar and needs only a Java 21 runtime.
+  links:
+    homepage: https://github.com/alt-Ash/agentic-skills-bundle
+    bugTracker: https://github.com/alt-Ash/agentic-skills-bundle/issues
+  authors:
+    - Ashleigh Dorrian
+  license: MIT
+  inceptionYear: '2026'
+  stereotype: CLI
+  languages:
+    java:
+      groupId: dev.dorrian
+      artifactId: agentic-skills-cli
+      version: '21'
+      mainClass: dev.dorrian.agenticskillscli.App
+
+release:
+  github:
+    owner: alt-Ash
+    name: agentic-skills-bundle
+    tagName: 'v{{projectVersion}}'
+    releaseName: 'agentic-skills {{tagName}}'
+    changelog:
+      formatted: ALWAYS
+      skipMergeCommits: true
+      format: '- {{commitShortHash}} {{commitTitle}}'
+      contributors:
+        enabled: false
+
+checksum:
+  individual: true
+  artifacts: true
+
+distributions:
+  agentic-skills:
+    type: SINGLE_JAR
+    executable:
+      name: agentic-skills
+    artifacts:
+      # The Maven build emits an unversioned file name (finalName agentic-skills);
+      # transform gives the release asset a versioned name.
+      - path: bin/agentic-skills-cli/target/agentic-skills.jar
+        transform: 'agentic-skills-{{projectEffectiveVersion}}.jar'
+
+packagers:
+  brew:
+    active: RELEASE
+    # SINGLE_JAR formulas get an automatic OpenJDK dependency; with
+    # useVersionedJava it is pinned to java.version, i.e. depends_on "openjdk@21".
+    extraProperties:
+      useVersionedJava: true
+    repository:
+      owner: alt-Ash
+      name: homebrew-tap
+  jbang:
+    active: RELEASE
+    alias: agentic-skills
+    # JReleaser's stock SINGLE_JAR JBang template emits a launcher script with
+    # `//DEPS dev.dorrian:agentic-skills-cli:<version>`, which only works for
+    # artifacts published to Maven Central (this one is not). Instead, the
+    # catalog template in src/jreleaser/distributions/agentic-skills/jbang/
+    # (JReleaser's default template directory for this distribution) points
+    # the alias straight at the GitHub release jar, and the launcher script
+    # template is skipped.
+    skipTemplates:
+      - jbang.java.tpl
+    repository:
+      owner: alt-Ash
+      name: jbang-catalog
