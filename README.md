@@ -45,7 +45,7 @@ Running `agentic-skills` opens a menu with four modes:
 | Claude Code | `~/.claude/skills` | `.claude/skills` |
 | Cursor | `~/.cursor/rules` | `.cursor/rules` |
 | Gemini CLI | `~/.gemini/skills` | `.gemini/skills` |
-| OpenAI Codex CLI | `~/.codex/skills` | `.codex/skills` |
+| OpenAI Codex CLI | `~/.agents/skills` | `.agents/skills` |
 | VS Code (GitHub Copilot) | `~/.vscode/skills` | `.vscode/skills` |
 | Devin Desktop (Windsurf) | `~/.codeium/windsurf/skills` | `.windsurf/skills` |
 | Zed AI | `~/.config/zed/skills` | `.zed/skills` |
@@ -58,11 +58,11 @@ Agents install into a parallel set of paths and support the same global/project 
 | Claude Code | `~/.claude/agents` | `.claude/agents` |
 | Cursor | `~/.cursor/agents` | `.cursor/agents` |
 | Gemini CLI | `~/.gemini/agents` | `.gemini/agents` |
-| OpenAI Codex CLI | `~/.codex/agents` | `.codex/agents` |
+| OpenAI Codex CLI | `~/.codex/agents` (`.toml`) | `.codex/agents` (`.toml`) |
 | VS Code (GitHub Copilot) | `~/.copilot/agents` | — (global only) |
 
 > [!NOTE]
-> For Claude Code, choosing a project target for both skills and agents places everything under the same scope (`.claude/skills` and `.claude/agents`). For Codex CLI, install reusable agent files into `.codex/agents` and keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope.
+> For Claude Code, choosing a project target for both skills and agents places everything under the same scope (`.claude/skills` and `.claude/agents`). For Codex CLI, agents are written as standalone custom-agent TOML files (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`) into `.codex/agents`; keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope. Gemini CLI agents get Gemini subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes what older versions wrote to `~/.codex/skills` and `~/.codex/agents/*.md`.
 
 Some skills and agents also ship a companion slash command (see each skill's **Companion command** line below). Commands are only installed for tools that support them:
 
@@ -227,9 +227,9 @@ If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `
 
 ## Global MCP tools
 
-The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill.
+The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill. Gemini CLI (`~/.gemini/settings.json` → `mcpServers`) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
 
-MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf) and Zed**. Gemini CLI and Codex CLI receive skills and agents but no MCP configuration yet — add servers to their configs manually if you need them.
+MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Gemini CLI and Codex CLI**.
 
 For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), because Devin's docs give both locations. Uninstall removes them from both files.
 
@@ -237,8 +237,8 @@ For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/wi
 
 MCP server for Figma — gives your AI agent access to Figma files, components, and design tokens. No token or local install needed:
 
-- **Claude Code, Cursor, VS Code** — configured against Figma's hosted server (`https://mcp.figma.com/mcp`); you sign in with Figma (OAuth) on first use.
-- **OpenCode, Devin Desktop (Windsurf), Zed** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
+- **Claude Code, Cursor, VS Code, Codex** — configured against Figma's hosted server (`https://mcp.figma.com/mcp`); you sign in with Figma (OAuth) on first use (Codex: `codex mcp login figma-mcp`).
+- **OpenCode, Devin Desktop (Windsurf), Zed, Gemini CLI** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
 
 ### `engram`
 
@@ -252,7 +252,7 @@ Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to 
 
 ## Local MCP servers
 
-The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar` — no build step or Maven needed.
+The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar` — no build step or Maven needed. For Gemini CLI and Codex CLI the `issue-tickets` credentials are never written into the tool's config: Gemini's entry references `$AZURE_DEVOPS_ACCOUNTS_B64`/`$GITHUB_ACCOUNTS_B64` and Codex's forwards them via `env_vars`, both read from the environment your shell profile sets.
 
 ### `issue-tickets`
 

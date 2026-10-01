@@ -3,6 +3,7 @@ package dev.dorrian.agenticskillscli.detect;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.dorrian.agenticskillscli.config.ClaudeCliMcpRegistrar;
+import dev.dorrian.agenticskillscli.config.TomlMcpConfigStore;
 import dev.dorrian.agenticskillscli.registry.McpConfigDef;
 import dev.dorrian.agenticskillscli.registry.McpConfigRegistry;
 
@@ -20,7 +21,8 @@ import java.util.Set;
  * Java port of {@code bin/install.js}'s {@code detectInstalledMcpServers()}
  * — for Claude Code, shells out to {@code claude mcp get} per server name
  * (matching how Claude registration itself is special-cased); for every
- * other tool, reads the tool's JSON MCP config file directly.
+ * other tool, reads the tool's MCP config file directly (JSON, or Codex's TOML via
+ * {@link TomlMcpConfigStore}).
  */
 public final class InstalledMcpServerDetector {
 
@@ -50,6 +52,14 @@ public final class InstalledMcpServerDetector {
         Set<String> installed = new LinkedHashSet<>();
         for (Path file : cfg.allFiles()) {
             if (!Files.exists(file)) continue;
+
+            if (TomlMcpConfigStore.handles(cfg)) {
+                Set<String> present = TomlMcpConfigStore.serverNames(cfg.mcpKey(), file);
+                for (String name : serverNames) {
+                    if (present.contains(name)) installed.add(name);
+                }
+                continue;
+            }
 
             Map<String, Object> existing;
             try {

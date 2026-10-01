@@ -11,8 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class McpConfigRegistryTest {
 
     @Test
-    void hasExactlySixTools() {
-        assertEquals(6, McpConfigRegistry.ALL.size());
+    void hasExactlyEightTools() {
+        assertEquals(8, McpConfigRegistry.ALL.size());
+        assertTrue(McpConfigRegistry.ALL.containsKey("gemini"));
+        assertTrue(McpConfigRegistry.ALL.containsKey("codex"));
         assertTrue(McpConfigRegistry.ALL.containsKey("opencode"));
         assertTrue(McpConfigRegistry.ALL.containsKey("claude"));
         assertTrue(McpConfigRegistry.ALL.containsKey("cursor"));
@@ -22,9 +24,18 @@ class McpConfigRegistryTest {
     }
 
     @Test
-    void geminiAndCodexAreDeliberatelyAbsent() {
-        assertTrue(McpConfigRegistry.get("gemini").isEmpty());
-        assertTrue(McpConfigRegistry.get("codex").isEmpty());
+    void geminiUsesSettingsJsonMcpServers() {
+        McpConfigDef gemini = McpConfigRegistry.get("gemini").orElseThrow();
+        assertTrue(gemini.globalFile().endsWith(java.nio.file.Path.of(".gemini", "settings.json")));
+        assertEquals("mcpServers", gemini.mcpKey());
+    }
+
+    @Test
+    void codexUsesConfigTomlMcpServersTables() {
+        McpConfigDef codex = McpConfigRegistry.get("codex").orElseThrow();
+        assertTrue(codex.globalFile().endsWith(java.nio.file.Path.of(".codex", "config.toml")));
+        assertEquals("mcp_servers", codex.mcpKey());
+        assertEquals("toml", codex.serverFormat());
     }
 
     @Test

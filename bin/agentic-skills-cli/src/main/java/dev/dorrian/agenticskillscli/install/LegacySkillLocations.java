@@ -12,6 +12,8 @@ import java.util.List;
  * <ul>
  *   <li>Devin Desktop (formerly Windsurf) project skills: {@code .windsurf/rules}
  *       (a rules folder, never read as skills) → {@code .windsurf/skills}.</li>
+ *   <li>Codex skills: {@code <base>/.codex/skills} (never read by Codex) →
+ *       {@code <base>/.agents/skills}, its documented user and repo location.</li>
  * </ul>
  */
 public final class LegacySkillLocations {
@@ -23,6 +25,9 @@ public final class LegacySkillLocations {
     public static List<Path> forTarget(Path targetPath) {
         if (endsWith(targetPath, ".windsurf", "skills")) {
             return List.of(targetPath.resolveSibling("rules"));
+        }
+        if (endsWith(targetPath, ".agents", "skills")) {
+            return List.of(targetPath.getParent().resolveSibling(".codex").resolve("skills"));
         }
         return List.of();
     }

@@ -10,14 +10,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Java port of {@code bin/install.js}'s {@code MCP_CONFIG} object — 6 tools
- * (gemini and codex are deliberately absent, matching the original; they
- * have no documented MCP config file format).
- *
- * <p>{@code windsurf} (Devin Desktop) is the only entry with {@link
- * McpConfigDef#extraFiles()}: {@code ~/.codeium/windsurf/mcp_config.json} is
- * always written, {@code ~/.config/devin/mcp_config.json} (see {@link
- * AgentToolRegistry#devinConfigDir()}) only when that directory exists.
+ * Per-tool MCP config file locations — originally a port of {@code bin/install.js}'s
+ * {@code MCP_CONFIG} object, now covering all 8 tools:
+ * <ul>
+ *   <li>gemini: {@code ~/.gemini/settings.json} → {@code mcpServers} (stdio {@code
+ *       {command,args,env}} with {@code $VAR} expansion in {@code env}, remote {@code
+ *       {httpUrl,headers}}) — github.com/google-gemini/gemini-cli docs/tools/mcp-server.md</li>
+ *   <li>codex: {@code ~/.codex/config.toml} → {@code [mcp_servers.<name>]} tables, edited
+ *       text-level by {@link dev.dorrian.agenticskillscli.config.TomlMcpConfigStore}
+ *       (serverFormat {@code "toml"}) — learn.chatgpt.com/docs/extend/mcp</li>
+ *   <li>windsurf (Devin Desktop) is the only entry with {@link McpConfigDef#extraFiles()}:
+ *       {@code ~/.codeium/windsurf/mcp_config.json} is always written, {@code
+ *       ~/.config/devin/mcp_config.json} (see {@link AgentToolRegistry#devinConfigDir()})
+ *       only when that directory exists.</li>
+ * </ul>
  */
 public final class McpConfigRegistry {
 
@@ -49,6 +55,12 @@ public final class McpConfigRegistry {
         ));
         m.put("cursor", new McpConfigDef(
             "cursor", home(".cursor", "mcp.json"), "mcpServers", "stdio"
+        ));
+        m.put("gemini", new McpConfigDef(
+            "gemini", home(".gemini", "settings.json"), "mcpServers", "stdio"
+        ));
+        m.put("codex", new McpConfigDef(
+            "codex", home(".codex", "config.toml"), "mcp_servers", "toml"
         ));
         m.put("vscode", new McpConfigDef(
             "vscode", AgentToolRegistry.vsCodeUserDir().resolve("mcp.json"), "servers", "stdio"

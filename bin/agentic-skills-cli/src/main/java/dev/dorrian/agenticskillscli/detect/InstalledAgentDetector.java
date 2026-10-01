@@ -29,7 +29,10 @@ public final class InstalledAgentDetector {
                 Path agentsPath = tool.agentsGlobalPath();
                 if (agentsPath == null) continue;
                 String destFile = AgentFileNaming.fileName(agent.name(), toolKey);
-                if (Files.exists(agentsPath.resolve(destFile))) {
+                boolean found = Files.exists(agentsPath.resolve(destFile))
+                    || AgentFileNaming.legacyFileNames(agent.name(), toolKey).stream()
+                        .anyMatch(f -> Files.exists(agentsPath.resolve(f)));
+                if (found) {
                     installed.add(agent.name());
                     break;
                 }

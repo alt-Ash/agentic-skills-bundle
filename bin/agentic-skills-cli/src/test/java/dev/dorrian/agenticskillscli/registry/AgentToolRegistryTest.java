@@ -55,6 +55,15 @@ class AgentToolRegistryTest {
     }
 
     @Test
+    void codexSkillsUseTheCrossToolAgentsDirectory() {
+        AgentToolDef codex = AgentToolRegistry.get("codex");
+        assertTrue(codex.globalPath().endsWith(java.nio.file.Path.of(".agents", "skills")), codex.globalPath().toString());
+        assertEquals(".agents/skills", codex.projectFolder());
+        assertTrue(codex.agentsGlobalPath().endsWith(java.nio.file.Path.of(".codex", "agents")));
+        assertEquals(".codex/agents", codex.agentsProjectFolder());
+    }
+
+    @Test
     void unknownToolKeyThrows() {
         assertThrows(IllegalArgumentException.class, () -> AgentToolRegistry.get("not-a-tool"));
     }
