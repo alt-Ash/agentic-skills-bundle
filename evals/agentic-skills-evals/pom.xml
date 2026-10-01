@@ -32,7 +32,7 @@
     <snakeyaml.version>2.2</snakeyaml.version>
     <junit.version>5.10.3</junit.version>
     <junit-platform.version>1.10.3</junit-platform.version>
-    <jline.version>3.26.3</jline.version>
+    <jline.version>4.4.6</jline.version>
     <!-- Cleared by the billed-evals profile; see the surefire config below. -->
     <billed.evals.exclude.1>**/*EvalTest.java</billed.evals.exclude.1>
     <billed.evals.exclude.2>**/*RealSubprocessTest.java</billed.evals.exclude.2>
