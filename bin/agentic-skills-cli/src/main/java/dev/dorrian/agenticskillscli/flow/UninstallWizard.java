@@ -111,7 +111,7 @@ public final class UninstallWizard {
         if (!selectedSkills.isEmpty()) {
             skillsInstallTarget = promptRemoveTarget(prompter);
             if ("project".equals(skillsInstallTarget)) {
-                projectPath = promptProjectPath(prompter);
+                projectPath = ProjectPathInput.prompt(prompter);
             }
         }
 
@@ -444,22 +444,6 @@ public final class UninstallWizard {
         );
         String chosen = prompter.list("Remove from:", choices);
         return chosen.startsWith(Ansi.cyan("Global")) ? "global" : "project";
-    }
-
-    private static Path promptProjectPath(Prompter prompter) {
-        while (true) {
-            String input = prompter.input("Project path:", System.getProperty("user.dir"));
-            Path resolved = java.nio.file.Paths.get(input).toAbsolutePath().normalize();
-            if (!Files.exists(resolved)) {
-                System.out.println("  " + Ansi.red("Path does not exist: " + resolved));
-                continue;
-            }
-            if (!Files.isDirectory(resolved)) {
-                System.out.println("  " + Ansi.red("Path must be a directory."));
-                continue;
-            }
-            return resolved;
-        }
     }
 
     private interface McpServersForTool {
