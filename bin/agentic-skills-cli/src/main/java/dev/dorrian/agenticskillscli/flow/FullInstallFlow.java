@@ -1,7 +1,6 @@
 package dev.dorrian.agenticskillscli.flow;
 
 import dev.dorrian.agenticskillscli.config.AgentRegistrationResult;
-import dev.dorrian.agenticskillscli.config.HookRegistrar;
 import dev.dorrian.agenticskillscli.config.JsonConfigStore;
 import dev.dorrian.agenticskillscli.config.OperationResult;
 import dev.dorrian.agenticskillscli.discovery.AgentDescriptor;
@@ -9,6 +8,7 @@ import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
 import dev.dorrian.agenticskillscli.install.AgentInstaller;
 import dev.dorrian.agenticskillscli.install.CommandDescriptor;
 import dev.dorrian.agenticskillscli.install.CommandInstaller;
+import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.install.TemplateInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
@@ -17,7 +17,6 @@ import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
 import dev.dorrian.agenticskillscli.registry.CommandRegistry;
 import dev.dorrian.agenticskillscli.registry.GlobalMcpConfigRegistry;
-import dev.dorrian.agenticskillscli.registry.HooksJarLocation;
 import dev.dorrian.agenticskillscli.registry.McpConfigRegistry;
 import dev.dorrian.agenticskillscli.shellprofile.AzureOrg;
 import dev.dorrian.agenticskillscli.shellprofile.GithubAccount;
@@ -320,8 +319,13 @@ public final class FullInstallFlow {
         }
 
         if ("claude".equals(toolKey)) {
-            McpConfigRegistry.get("claude").ifPresent(cfg ->
-                HookRegistrar.registerAll(cfg.globalFile(), HooksJarLocation.jarPath()));
+            McpConfigRegistry.get("claude").ifPresent(cfg -> {
+                try {
+                    HooksInstaller.installAndRegister(cfg.globalFile());
+                } catch (RuntimeException e) {
+                    System.out.println("  " + Ansi.yellow("Analytics hooks not registered: " + e.getMessage()));
+                }
+            });
         }
 
         return new ToolResults(tool.name(), skillResults, commandResults, agentResults, configRegs, templateResults,
@@ -451,7 +455,7 @@ public final class FullInstallFlow {
     }
 
     private static boolean promptJavaMcpOptIn(Prompter prompter, boolean alreadyInstalled, String question, String freshDescription) {
-        String suffix = alreadyInstalled ? " (already installed — will rebuild)" : " " + freshDescription;
+        String suffix = alreadyInstalled ? " (already installed — will reinstall)" : " " + freshDescription;
         return prompter.confirm(question + Ansi.dim(suffix), false);
     }
 
@@ -513,10 +517,10 @@ public final class FullInstallFlow {
             System.out.println("  " + Ansi.dim("MCPs     :") + " " + Ansi.dim("[global]"));
         }
         if (installObTickets) {
-            System.out.println("  " + Ansi.dim("Tickets  :") + " " + Ansi.cyan("issue-tickets") + " " + Ansi.dim("[build + install to ~/.config/opencode/mcp/]"));
+            System.out.println("  " + Ansi.dim("Tickets  :") + " " + Ansi.cyan("issue-tickets") + " " + Ansi.dim("[install to ~/.config/opencode/mcp/]"));
         }
         if (installSecurityScanner) {
-            System.out.println("  " + Ansi.dim("Scanner  :") + " " + Ansi.cyan("security-scanner") + " " + Ansi.dim("[build + install to ~/.config/opencode/mcp/]"));
+            System.out.println("  " + Ansi.dim("Scanner  :") + " " + Ansi.cyan("security-scanner") + " " + Ansi.dim("[install to ~/.config/opencode/mcp/]"));
         }
         if (!selectedGlobalTools.isEmpty()) {
             System.out.println("  " + Ansi.dim("Tools    :") + " " + Ansi.cyan(String.join(", ", selectedGlobalTools)) + " " + Ansi.dim("[global MCP]"));

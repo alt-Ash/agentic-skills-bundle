@@ -1,19 +1,18 @@
 package dev.dorrian.agenticskillscli.flow;
 
-import dev.dorrian.agenticskillscli.config.HookRegistrar;
 import dev.dorrian.agenticskillscli.config.JsonConfigStore;
 import dev.dorrian.agenticskillscli.discovery.AgentDescriptor;
 import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
 import dev.dorrian.agenticskillscli.install.AgentInstaller;
 import dev.dorrian.agenticskillscli.install.CommandDescriptor;
 import dev.dorrian.agenticskillscli.install.CommandInstaller;
+import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
 import dev.dorrian.agenticskillscli.registry.GlobalMcpConfigRegistry;
-import dev.dorrian.agenticskillscli.registry.HooksJarLocation;
 import dev.dorrian.agenticskillscli.registry.McpConfigRegistry;
 import dev.dorrian.agenticskillscli.shellprofile.AzureOrg;
 import dev.dorrian.agenticskillscli.shellprofile.GithubAccount;
@@ -34,7 +33,7 @@ import java.util.Set;
  * directly, lines ~2388-2659, on 2026-09-30): a single tool checkbox,
  * optional Azure/GitHub/Figma credential collection, then an unconditional
  * install of skills/commands/agents/global MCPs for every selected tool,
- * followed by an unconditional build+install of BOTH the issue-tickets and
+ * followed by an unconditional install (copy of the bundled prebuilt jars) of BOTH the issue-tickets and
  * security-scanner Java MCPs for every selected tool — no per-tool opt-in.
  * This is the documented asymmetry vs. {@link FullInstallFlow}, which gates
  * the two Java MCPs behind an explicit confirm and restricts registration
@@ -124,14 +123,20 @@ public final class QuickInstallFlow {
             }
 
             if ("claude".equals(toolKey)) {
-                McpConfigRegistry.get("claude").ifPresent(cfg ->
-                    HookRegistrar.registerAll(cfg.globalFile(), HooksJarLocation.jarPath()));
+                McpConfigRegistry.get("claude").ifPresent(cfg -> {
+                    try {
+                        HooksInstaller.installAndRegister(cfg.globalFile());
+                        System.out.println(Ansi.dim("  Analytics hooks installed and registered."));
+                    } catch (RuntimeException e) {
+                        System.out.println(Ansi.yellow("  Analytics hooks not registered: " + e.getMessage()));
+                    }
+                });
             }
         }
 
         try {
             IssueTicketsMcpInstaller.install();
-            System.out.println(Ansi.dim("  issue-tickets built and installed."));
+            System.out.println(Ansi.dim("  issue-tickets installed."));
             String azureB64 = ShellProfileEnvWriter.encodeAzureAccountsB64(azureOrgs).orElse(null);
             String githubB64 = ShellProfileEnvWriter.encodeGithubAccountsB64(githubAccounts).orElse(null);
             for (String toolKey : quickTools) {
@@ -143,18 +148,18 @@ public final class QuickInstallFlow {
                 System.out.println(Ansi.dim("  Azure/GitHub credentials written to " + result.profileFile()));
             }
         } catch (RuntimeException e) {
-            System.out.println(Ansi.red("  issue-tickets build failed: " + e.getMessage()));
+            System.out.println(Ansi.red("  issue-tickets install failed: " + e.getMessage()));
         }
 
         try {
             SecurityScannerMcpInstaller.install();
-            System.out.println(Ansi.dim("  security-scanner built and installed."));
+            System.out.println(Ansi.dim("  security-scanner installed."));
             for (String toolKey : quickTools) {
                 Map<String, Object> cfg = SecurityScannerMcpInstaller.config(toolKey);
                 JsonConfigStore.installMcpServers(Map.of("security-scanner", cfg), toolKey);
             }
         } catch (RuntimeException e) {
-            System.out.println(Ansi.red("  security-scanner build failed: " + e.getMessage()));
+            System.out.println(Ansi.red("  security-scanner install failed: " + e.getMessage()));
         }
 
         if (figmaAccessToken != null) {

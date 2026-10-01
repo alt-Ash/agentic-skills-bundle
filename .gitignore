@@ -46,3 +46,5 @@ skills-lock.json
 .env
 .env.*
 .mcp.json
+# flatten-maven-plugin output (CI-friendly ${revision} resolution)
+.flattened-pom.xml

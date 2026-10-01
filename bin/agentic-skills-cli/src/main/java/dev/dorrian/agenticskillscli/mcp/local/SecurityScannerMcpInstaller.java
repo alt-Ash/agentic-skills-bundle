@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
 
@@ -31,24 +30,23 @@ public final class SecurityScannerMcpInstaller {
     }
 
     public static McpInstallResult install() {
-        return install(PackageRoot.securityScannerMcpSrc(), DEFAULT_INSTALL_DIR);
+        return install(PackageRoot.securityScannerMcpJar(), DEFAULT_INSTALL_DIR);
     }
 
-    public static McpInstallResult install(Path sourceDir, Path installDir) {
-        MavenRunner.checkAvailable();
-        MavenRunner.packageProject(sourceDir);
-
+    /**
+     * Copies the prebuilt fat jar shipped in the bundle into {@code installDir}, overwriting
+     * any older copy. No build step and no child process: end users need only a JRE.
+     */
+    public static McpInstallResult install(Path bundledJar, Path installDir) {
+        if (!Files.isRegularFile(bundledJar)) {
+            throw new IllegalStateException("Bundled security-scanner MCP jar not found: " + bundledJar);
+        }
         try {
             Files.createDirectories(installDir);
-            Files.copy(
-                sourceDir.resolve("target").resolve(JAR_NAME),
-                installDir.resolve(JAR_NAME),
-                StandardCopyOption.REPLACE_EXISTING
-            );
+            Files.copy(bundledJar, installDir.resolve(JAR_NAME), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-
         return new McpInstallResult(true, installDir);
     }
 

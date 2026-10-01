@@ -4,16 +4,24 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Resolves every on-disk location the installer reads from or writes to,
- * relative to the root of the installed npm package (the directory
- * containing {@code bin/}, {@code skills/}, {@code agents/}, {@code mcp/},
- * {@code .opencode/}, {@code templates/}).
+ * Resolves every on-disk location the installer reads content from, relative
+ * to a "package root" laid out like the jar's classpath {@code bundle/}:
+ * {@code skills/}, {@code agents/}, {@code .opencode/commands/},
+ * {@code templates/}, plus the prebuilt {@code agentic-skills-hooks.jar},
+ * {@code issue-tickets.jar} and {@code security-scanner.jar}.
  *
- * <p>Unlike {@code bin/install.js}, which could derive this from its own
- * {@code __dirname} (it lives inside the package it manipulates), a shaded
- * jar has no reliable way to introspect where the npm package that bundled
- * it lives on disk. The Node launcher shim is responsible for computing this
- * path and passing it explicitly via {@code --package-root <abs-path>}.
+ * <p>Resolution order ({@link #initFromArgs}):
+ * <ol>
+ *   <li>{@code --package-root <path>} if given (tests, dev runs against a
+ *       hand-assembled tree);</li>
+ *   <li>the bundle shipped in the running code — extracted once from
+ *       {@code agentic-skills.jar} to {@code ~/.agentic-skills/dist/<version>/},
+ *       or {@code target/classes/bundle} used in place (see
+ *       {@link BundleExtractor});</li>
+ *   <li>the JVM working directory, as a last-resort dev fallback (a repo
+ *       checkout has {@code skills/}/{@code agents/} at its root, though not
+ *       the prebuilt jars).</li>
+ * </ol>
  */
 public final class PackageRoot {
 
@@ -32,10 +40,8 @@ public final class PackageRoot {
     }
 
     /**
-     * Convenience overload for CLI wiring: parses {@code --package-root <path>}
-     * out of the raw argv if present, otherwise falls back to the JVM's
-     * current working directory (useful for local dev/test runs where no
-     * Node shim is involved yet).
+     * CLI wiring: {@code --package-root <path>} from argv if present, else the
+     * bundled content (see class doc), else the JVM working directory.
      */
     public static void initFromArgs(String[] args) {
         for (int i = 0; i < args.length - 1; i++) {
@@ -44,7 +50,8 @@ public final class PackageRoot {
                 return;
             }
         }
-        init(Paths.get(System.getProperty("user.dir")));
+        init(BundleExtractor.locateOrExtract(HomeDir.resolve())
+            .orElseGet(() -> Paths.get(System.getProperty("user.dir"))));
     }
 
     private static Path root() {
@@ -79,11 +86,18 @@ public final class PackageRoot {
         return root("templates", "project");
     }
 
-    public static Path obTicketsMcpSrc() {
-        return root("mcp", "issue-tickets");
+    /** Prebuilt analytics-hooks jar; copied to {@code HooksJarLocation} at install time. */
+    public static Path hooksJar() {
+        return root("agentic-skills-hooks.jar");
     }
 
-    public static Path securityScannerMcpSrc() {
-        return root("mcp", "security-scanner");
+    /** Prebuilt (Spring Boot fat jar) issue-tickets MCP server. */
+    public static Path issueTicketsMcpJar() {
+        return root("issue-tickets.jar");
+    }
+
+    /** Prebuilt (Spring Boot fat jar) security-scanner MCP server. */
+    public static Path securityScannerMcpJar() {
+        return root("security-scanner.jar");
     }
 }

@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PackageRootTest {
 
@@ -21,8 +22,9 @@ class PackageRootTest {
         assertEquals(fakePackage.resolve("agents"), PackageRoot.agentsDir());
         assertEquals(fakePackage.resolve(".opencode").resolve("commands"), PackageRoot.commandsDir());
         assertEquals(fakePackage.resolve("templates").resolve("project"), PackageRoot.templatesDir());
-        assertEquals(fakePackage.resolve("mcp").resolve("issue-tickets"), PackageRoot.obTicketsMcpSrc());
-        assertEquals(fakePackage.resolve("mcp").resolve("security-scanner"), PackageRoot.securityScannerMcpSrc());
+        assertEquals(fakePackage.resolve("agentic-skills-hooks.jar"), PackageRoot.hooksJar());
+        assertEquals(fakePackage.resolve("issue-tickets.jar"), PackageRoot.issueTicketsMcpJar());
+        assertEquals(fakePackage.resolve("security-scanner.jar"), PackageRoot.securityScannerMcpJar());
     }
 
     @Test
@@ -31,9 +33,16 @@ class PackageRootTest {
         assertEquals(tempDir.toAbsolutePath().normalize().resolve("skills"), PackageRoot.skillsDir());
     }
 
+    /**
+     * Without --package-root, the bundle on the classpath is used. Under Maven the test
+     * classpath holds target/classes/bundle as a plain directory (copied at process-resources),
+     * which is used in place; the jar case (extract to ~/.agentic-skills/dist/<version>) is
+     * covered by BundleExtractorTest and AgenticSkillsJarIT.
+     */
     @Test
-    void initFromArgsFallsBackToCurrentWorkingDirectoryWhenFlagAbsent() {
+    void initFromArgsWithoutFlagUsesTheClasspathBundle() {
         PackageRoot.initFromArgs(new String[] {"quick-install"});
-        assertEquals(Path.of(System.getProperty("user.dir")).resolve("skills"), PackageRoot.skillsDir());
+        assertTrue(Files.isDirectory(PackageRoot.skillsDir()), "skills dir missing under " + PackageRoot.skillsDir());
+        assertTrue(Files.isDirectory(PackageRoot.agentsDir()));
     }
 }

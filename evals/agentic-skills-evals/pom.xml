@@ -4,9 +4,16 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
+  <parent>
+    <groupId>dev.dorrian</groupId>
+    <artifactId>agentic-skills-parent</artifactId>
+    <version>${revision}</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
   <groupId>dev.dorrian.agenticskillsevals</groupId>
   <artifactId>agentic-skills-evals</artifactId>
-  <version>1.0.0</version>
+  <version>${revision}</version>
   <packaging>jar</packaging>
 
   <name>agentic-skills-evals</name>
@@ -26,7 +33,20 @@
     <junit.version>5.10.3</junit.version>
     <junit-platform.version>1.10.3</junit-platform.version>
     <jline.version>3.26.3</jline.version>
+    <!-- Cleared by the billed-evals profile; see the surefire config below. -->
+    <billed.evals.exclude.1>**/*EvalTest.java</billed.evals.exclude.1>
+    <billed.evals.exclude.2>**/*RealSubprocessTest.java</billed.evals.exclude.2>
   </properties>
+
+  <profiles>
+    <profile>
+      <id>billed-evals</id>
+      <properties>
+        <billed.evals.exclude.1>__none__</billed.evals.exclude.1>
+        <billed.evals.exclude.2>__none__</billed.evals.exclude.2>
+      </properties>
+    </profile>
+  </profiles>
 
   <dependencies>
     <dependency>
@@ -78,10 +98,24 @@
         </configuration>
       </plugin>
 
+      <!--
+        Billed-call guard: *EvalTest and *RealSubprocessTest spawn the real `claude` CLI and make
+        real, billed model calls, so a plain `./mvnw verify` (root or this module) must never run
+        them. They are excluded here by default; `-Pbilled-evals` clears the excludes (combine
+        with -Dtest=... to pick one, e.g. `./mvnw -pl evals/agentic-skills-evals -Pbilled-evals
+        test -Dtest=TddEngineerEvalTest`). EvalCli `check` drives the JUnit Launcher directly and
+        is unaffected by this surefire config.
+      -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
+        <configuration>
+          <excludes>
+            <exclude>${billed.evals.exclude.1}</exclude>
+            <exclude>${billed.evals.exclude.2}</exclude>
+          </excludes>
+        </configuration>
       </plugin>
 
       <plugin>

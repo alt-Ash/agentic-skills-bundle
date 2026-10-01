@@ -12,14 +12,13 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Covers the config-builder and uninstall logic only — {@link
- * IssueTicketsMcpInstaller#install} shells out to a real {@code mvn package}
- * build of the sibling {@code mcp/issue-tickets} Maven project, which is out
- * of scope for a fast unit test suite (that project has its own {@code mvn
- * test} suite, run separately via the root {@code test:issue-tickets} script).
+ * {@link IssueTicketsMcpInstaller#install} copies the prebuilt jar out of the extracted bundle; it never builds
+ * from source or spawns a process (no Maven/`mvn` on PATH needed), which these tests exercise
+ * with a fake jar in a temp dir.
  */
 class IssueTicketsMcpInstallerTest {
 
@@ -79,5 +78,39 @@ class IssueTicketsMcpInstallerTest {
         McpUninstallResult result = IssueTicketsMcpInstaller.uninstall(tempDir.resolve("does-not-exist"));
         assertTrue(result.success());
         assertTrue(result.skipped());
+    }
+
+    @Test
+    void installCopiesTheBundledPrebuiltJarIntoTheInstallDir(@TempDir Path tempDir) throws IOException {
+        Path bundledJar = tempDir.resolve("dist").resolve("issue-tickets.jar");
+        Files.createDirectories(bundledJar.getParent());
+        Files.writeString(bundledJar, "prebuilt fat jar");
+        Path installDir = tempDir.resolve("install");
+
+        McpInstallResult result = IssueTicketsMcpInstaller.install(bundledJar, installDir);
+
+        assertTrue(result.success());
+        assertEquals(installDir, result.installDir());
+        assertEquals("prebuilt fat jar", Files.readString(installDir.resolve("issue-tickets.jar")));
+    }
+
+    @Test
+    void reinstallOverwritesAnOlderJar(@TempDir Path tempDir) throws IOException {
+        Path bundledJar = tempDir.resolve("issue-tickets.jar");
+        Path installDir = tempDir.resolve("install");
+        Files.createDirectories(installDir);
+        Files.writeString(installDir.resolve("issue-tickets.jar"), "old");
+        Files.writeString(bundledJar, "new");
+
+        IssueTicketsMcpInstaller.install(bundledJar, installDir);
+
+        assertEquals("new", Files.readString(installDir.resolve("issue-tickets.jar")));
+    }
+
+    @Test
+    void installFailsClearlyWhenTheBundledJarIsMissing(@TempDir Path tempDir) {
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+            () -> IssueTicketsMcpInstaller.install(tempDir.resolve("missing.jar"), tempDir.resolve("install")));
+        assertTrue(e.getMessage().contains("missing.jar"), e.getMessage());
     }
 }

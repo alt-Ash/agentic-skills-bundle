@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,15 +15,11 @@ import java.util.Map;
 import static dev.dorrian.agenticskillscli.registry.McpServerConfig.list;
 
 /**
- * Java port of {@code bin/install.js}'s {@code installObTicketsMcp} / {@code
- * obTicketsMcpConfig} / {@code uninstallObTicketsMcp}. Builds the
- * issue-tickets MCP server (Java/Spring, Maven — {@code mcp/issue-tickets},
- * untouched by this migration) from source and copies the resulting
- * self-contained fat jar to {@code ~/.config/opencode/mcp/issue-tickets/}.
- * This on-demand build-at-end-user-install-time behavior is preserved
- * identically to the original — only the caller (Java {@code
- * ProcessBuilder} via {@link MavenRunner} instead of Node's {@code
- * execFileAsync}) changed.
+ * Installs the issue-tickets MCP server (Java/Spring Boot, {@code mcp/issue-tickets}) by copying
+ * the prebuilt, self-contained fat jar shipped in the installer's bundle to
+ * {@code ~/.config/opencode/mcp/issue-tickets/}, and builds each tool's config entry for it.
+ * (Earlier versions built it from source with {@code mvn} at install time; the jar is now built
+ * once, by the reactor, and bundled into {@code agentic-skills.jar}.)
  */
 public final class IssueTicketsMcpInstaller {
 
@@ -36,24 +31,23 @@ public final class IssueTicketsMcpInstaller {
     }
 
     public static McpInstallResult install() {
-        return install(PackageRoot.obTicketsMcpSrc(), DEFAULT_INSTALL_DIR);
+        return install(PackageRoot.issueTicketsMcpJar(), DEFAULT_INSTALL_DIR);
     }
 
-    public static McpInstallResult install(Path sourceDir, Path installDir) {
-        MavenRunner.checkAvailable();
-        MavenRunner.packageProject(sourceDir);
-
+    /**
+     * Copies the prebuilt fat jar shipped in the bundle into {@code installDir}, overwriting
+     * any older copy. No build step and no child process: end users need only a JRE.
+     */
+    public static McpInstallResult install(Path bundledJar, Path installDir) {
+        if (!Files.isRegularFile(bundledJar)) {
+            throw new IllegalStateException("Bundled issue-tickets MCP jar not found: " + bundledJar);
+        }
         try {
             Files.createDirectories(installDir);
-            Files.copy(
-                sourceDir.resolve("target").resolve(JAR_NAME),
-                installDir.resolve(JAR_NAME),
-                StandardCopyOption.REPLACE_EXISTING
-            );
+            Files.copy(bundledJar, installDir.resolve(JAR_NAME), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-
         return new McpInstallResult(true, installDir);
     }
 
