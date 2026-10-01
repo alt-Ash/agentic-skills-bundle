@@ -25,6 +25,10 @@ import java.util.Set;
  * uninstallMcpServers}, {@code isMcpServerRegistered}, {@code
  * overwriteMcpServerEntry}, and the {@code isMalformedAgentEntry} guard.
  *
+ * <p>Tools whose {@link McpConfigDef#serverFormat()} is {@code "toml"} (Codex's
+ * {@code config.toml}) are delegated to {@link TomlMcpConfigStore} at the per-file level, so
+ * every public MCP method here works unchanged for them.
+ *
  * <p>Claude Code is special-cased throughout (matching the original) to
  * shell out to the {@code claude mcp} CLI via {@link ClaudeCliMcpRegistrar}
  * instead of merging JSON directly — Claude Code never reads MCP servers
@@ -141,6 +145,9 @@ public final class JsonConfigStore {
 
     /** Writes servers not already present into a single config file. Returns the names actually written. */
     public static Set<String> installMcpServersToFile(Map<String, Object> servers, McpConfigDef cfg, Path configFile) {
+        if (TomlMcpConfigStore.handles(cfg)) {
+            return TomlMcpConfigStore.installIfAbsent(cfg.mcpKey(), servers, configFile);
+        }
         Map<String, Object> existing = readJsonObject(configFile);
         @SuppressWarnings("unchecked")
         Map<String, Object> existingServers = (Map<String, Object>) existing.computeIfAbsent(
@@ -169,6 +176,9 @@ public final class JsonConfigStore {
     public static Set<String> migrateLegacyNpxServersInFile(Map<String, Object> servers, McpConfigDef cfg, Path configFile) {
         if (!Files.exists(configFile)) {
             return Set.of();
+        }
+        if (TomlMcpConfigStore.handles(cfg)) {
+            return TomlMcpConfigStore.migrateLegacyNpx(cfg.mcpKey(), servers, configFile);
         }
         Map<String, Object> existing = readJsonObject(configFile);
         if (!(existing.get(cfg.mcpKey()) instanceof Map<?, ?> rawSection)) {
@@ -224,6 +234,9 @@ public final class JsonConfigStore {
     public static Set<String> uninstallMcpServersFromFile(List<String> serverNames, McpConfigDef cfg, Path configFile) {
         if (!Files.exists(configFile)) {
             return Set.of();
+        }
+        if (TomlMcpConfigStore.handles(cfg)) {
+            return TomlMcpConfigStore.uninstall(cfg.mcpKey(), serverNames, configFile);
         }
         Map<String, Object> existing;
         try {
@@ -332,6 +345,12 @@ public final class JsonConfigStore {
             if (!Files.exists(file)) {
                 continue;
             }
+            if (TomlMcpConfigStore.handles(cfg)) {
+                if (TomlMcpConfigStore.isRegistered(cfg.mcpKey(), name, file)) {
+                    return true;
+                }
+                continue;
+            }
             try {
                 Map<String, Object> existing = MAPPER.readValue(
                     file.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {}
@@ -362,6 +381,11 @@ public final class JsonConfigStore {
     public static OperationResult overwriteMcpServerEntry(String name, Map<String, Object> serverConfig, McpConfigDef cfg) {
         List<String> written = new ArrayList<>();
         for (Path file : cfg.writableFiles()) {
+            if (TomlMcpConfigStore.handles(cfg)) {
+                TomlMcpConfigStore.overwrite(cfg.mcpKey(), name, serverConfig, file);
+                written.add(file.toString());
+                continue;
+            }
             Map<String, Object> existing = readJsonObject(file);
             @SuppressWarnings("unchecked")
             Map<String, Object> section = (Map<String, Object>) existing.computeIfAbsent(

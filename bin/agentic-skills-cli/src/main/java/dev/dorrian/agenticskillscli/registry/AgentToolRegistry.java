@@ -151,7 +151,10 @@ public final class AgentToolRegistry {
 
         m.put("codex", new AgentToolDef(
             "codex", "OpenAI Codex CLI",
-            home(".codex", "skills"), ".codex/skills",
+            // Codex reads skills from $HOME/.agents/skills (user) and .agents/skills (repo), not
+            // ~/.codex/skills — learn.chatgpt.com Codex skills docs. SkillInstaller.remove also
+            // cleans the old .codex/skills location written by earlier versions.
+            home(".agents", "skills"), ".agents/skills",
             null, null,
             home(".codex", "agents"), ".codex/agents",
             null, null,

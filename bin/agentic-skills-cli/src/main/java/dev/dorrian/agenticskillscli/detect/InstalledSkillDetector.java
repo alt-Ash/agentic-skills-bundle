@@ -1,6 +1,8 @@
 package dev.dorrian.agenticskillscli.detect;
 
+import dev.dorrian.agenticskillscli.install.LegacySkillLocations;
 import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
+import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
 
@@ -25,7 +27,11 @@ public final class InstalledSkillDetector {
             for (String toolKey : toolKeys) {
                 AgentToolDef tool = AgentToolRegistry.get(toolKey);
                 Path skillsPath = tool.globalPath();
-                if (skillsPath != null && Files.exists(skillsPath.resolve(skill.name()))) {
+                if (skillsPath == null) continue;
+                boolean found = Files.exists(skillsPath.resolve(skill.name()))
+                    || LegacySkillLocations.forTarget(skillsPath).stream()
+                        .anyMatch(d -> Files.isRegularFile(d.resolve(skill.name()).resolve("SKILL.md")));
+                if (found) {
                     installed.add(skill.name());
                     break;
                 }

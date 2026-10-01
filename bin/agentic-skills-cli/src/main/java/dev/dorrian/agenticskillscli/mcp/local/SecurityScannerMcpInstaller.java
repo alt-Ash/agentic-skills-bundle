@@ -62,6 +62,9 @@ public final class SecurityScannerMcpInstaller {
         if ("zed".equals(toolKey)) {
             return McpServerConfig.of("source", "custom", "command", "java", "args", list("-jar", jar));
         }
+        if ("gemini".equals(toolKey) || "codex".equals(toolKey)) {
+            return McpServerConfig.of("command", "java", "args", list("-jar", jar));
+        }
         return McpServerConfig.of("type", "stdio", "command", "java", "args", list("-jar", jar));
     }
 

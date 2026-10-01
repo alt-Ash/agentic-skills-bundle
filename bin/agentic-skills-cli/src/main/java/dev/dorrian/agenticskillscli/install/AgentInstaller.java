@@ -48,6 +48,10 @@ public final class AgentInstaller {
                 String sourceContent = Files.readString(agentDef.srcFile());
                 String transformed = AgentContentTransformer.transform(sourceContent, toolKey, agentDef.name());
                 Files.writeString(dest, transformed);
+                // Upgrade cleanup: drop files an older version wrote under a different name (Codex .md).
+                for (String legacy : AgentFileNaming.legacyFileNames(agentDef.name(), toolKey)) {
+                    Files.deleteIfExists(targetPath.resolve(legacy));
+                }
                 results.add(OperationResult.ok(agentDef.name(), false, null));
             } catch (IOException e) {
                 results.add(OperationResult.failed(agentDef.name(), null, e.getMessage()));
@@ -80,12 +84,12 @@ public final class AgentInstaller {
         Path dest = targetPath.resolve(destFile);
         OperationResult result;
         try {
-            if (!Files.exists(dest)) {
-                result = OperationResult.ok(agentDef.name(), true, null);
-            } else {
-                Files.delete(dest);
-                result = OperationResult.ok(agentDef.name(), false, null);
+            boolean removed = Files.deleteIfExists(dest);
+            // Also clean files older installer versions wrote (e.g. Codex agents as .md).
+            for (String legacy : AgentFileNaming.legacyFileNames(agentDef.name(), toolKey)) {
+                removed |= Files.deleteIfExists(targetPath.resolve(legacy));
             }
+            result = OperationResult.ok(agentDef.name(), !removed, null);
         } catch (IOException e) {
             result = OperationResult.failed(agentDef.name(), null, e.getMessage());
         }

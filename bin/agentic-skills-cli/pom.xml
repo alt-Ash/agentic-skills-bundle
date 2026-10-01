@@ -47,6 +47,13 @@
       <version>5.12.2</version>
       <scope>test</scope>
     </dependency>
+    <!-- Test-only: parses every TOML file the installer emits (Codex config.toml, Codex agent files) to prove validity. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-toml</artifactId>
+      <version>2.18.4</version>
+      <scope>test</scope>
+    </dependency>
 
     <!--
       Bundled payload, not code dependencies. Declared (provided, no transitives) only so the

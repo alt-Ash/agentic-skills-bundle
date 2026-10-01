@@ -13,9 +13,9 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.of;
  * registries.
  *
  * <p>Context7 and Figma point at the vendors' hosted HTTP endpoints, so users
- * need no Node/npx. Only the 6 tools in {@link McpConfigRegistry} (plus
- * {@code claude}, which goes through {@code ClaudeCliMcpRegistrar}) ever
- * receive these configs; gemini/codex have no MCP config writer.
+ * need no Node/npx. Every tool in {@link McpConfigRegistry} receives these
+ * configs ({@code claude} via {@code ClaudeCliMcpRegistrar}, {@code codex} via
+ * {@code TomlMcpConfigStore}, the rest as JSON).
  *
  * <p>Per-tool remote shapes (verified 2026-10-01):
  * <ul>
@@ -29,14 +29,18 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.of;
  *       {@code ~/.config/devin/mcp_config.json} (see {@link McpConfigRegistry})</li>
  *   <li>zed: {@code {url, headers?}} under {@code context_servers} — zed.dev/docs/ai/mcp
  *       (Zed starts the MCP OAuth flow when no Authorization header is set)</li>
+ *   <li>gemini: {@code {httpUrl, headers?}} (streamable HTTP), stdio {@code {command, args}};
+ *       no {@code type} key — context7 /google-gemini/gemini-cli docs/tools/mcp-server.md</li>
+ *   <li>codex: {@code url} + {@code http_headers} inline table, stdio {@code command}/{@code args}
+ *       — context7 /llmstxt/learn_chatgpt_llms-full_txt (learn.chatgpt.com/docs/extend/mcp)</li>
  * </ul>
  */
 public final class GlobalMcpConfigRegistry {
 
     /** Shown by the install flows: figma needs no token any more, but setup differs per tool. */
     public static final String FIGMA_SETUP_NOTE =
-        "sign in via OAuth on first use (Claude Code, Cursor, VS Code); "
-            + "OpenCode/Devin Desktop/Zed use the Figma desktop app's Dev Mode server";
+        "sign in via OAuth on first use (Claude Code, Cursor, VS Code; Codex: run `codex mcp login figma-mcp`); "
+            + "OpenCode/Devin Desktop/Zed/Gemini CLI use the Figma desktop app's Dev Mode server";
 
     /** Context7 hosted endpoint — github.com/upstash/context7 docs/resources/all-clients.mdx. */
     static final String CONTEXT7_URL = "https://mcp.context7.com/mcp";
@@ -44,7 +48,8 @@ public final class GlobalMcpConfigRegistry {
     /**
      * Figma's hosted server — OAuth only (no PAT), and only clients listed in
      * the Figma MCP Catalog (figma.com/mcp-catalog) may connect. Of our tools
-     * that is claude, cursor and vscode
+     * that is claude, cursor, vscode and codex ("Codex by OpenAI", remote and
+     * local; catalog checked 2026-10-01)
      * (developers.figma.com/docs/figma-mcp-server/remote-server-installation).
      */
     static final String FIGMA_REMOTE_URL = "https://mcp.figma.com/mcp";
@@ -52,8 +57,8 @@ public final class GlobalMcpConfigRegistry {
     /**
      * Figma desktop app's local server (Dev Mode) — no auth, not client-gated
      * (developers.figma.com/docs/figma-mcp-server/local-server-installation).
-     * Used for opencode/windsurf/zed: Zed is catalogued as local-server-only,
-     * and opencode/windsurf are absent from the catalog entirely, so the
+     * Used for opencode/windsurf/zed/gemini: Zed is catalogued as local-server-only,
+     * and opencode/windsurf/Gemini CLI are absent from the catalog entirely, so the
      * hosted server's OAuth would reject them. The previous npx fallback
      * ({@code @figma/mcp}) is not an option: that package 404s on npm.
      */
@@ -69,6 +74,9 @@ public final class GlobalMcpConfigRegistry {
         }
         if ("zed".equals(toolKey)) {
             return of("source", "custom", "command", "engram", "args", list("mcp"));
+        }
+        if ("gemini".equals(toolKey) || "codex".equals(toolKey)) {
+            return of("command", "engram", "args", list("mcp"));
         }
         return of("type", "stdio", "command", "engram", "args", list("mcp"));
     }
@@ -89,7 +97,8 @@ public final class GlobalMcpConfigRegistry {
 
     /** OAuth-only: no token is written anywhere; each client runs Figma's sign-in flow on first use. */
     public static Map<String, Object> figma(String toolKey) {
-        boolean inFigmaCatalog = "claude".equals(toolKey) || "cursor".equals(toolKey) || "vscode".equals(toolKey);
+        boolean inFigmaCatalog = "claude".equals(toolKey) || "cursor".equals(toolKey)
+            || "vscode".equals(toolKey) || "codex".equals(toolKey);
         return remote(toolKey, inFigmaCatalog ? FIGMA_REMOTE_URL : FIGMA_DESKTOP_URL, null);
     }
 
@@ -106,11 +115,12 @@ public final class GlobalMcpConfigRegistry {
                 cfg.put("url", url);
             }
             case "windsurf" -> cfg.put("serverUrl", url);
-            // cursor, zed, and any future JSON tool: plain {url}
+            case "gemini" -> cfg.put("httpUrl", url);
+            // cursor, zed, codex, and any future tool: plain {url}
             default -> cfg.put("url", url);
         }
         if (headers != null) {
-            cfg.put("headers", headers);
+            cfg.put("codex".equals(toolKey) ? "http_headers" : "headers", headers);
         }
         return cfg;
     }
