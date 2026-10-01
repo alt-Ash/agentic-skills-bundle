@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    Root aggregator + shared parent. `./mvnw verify` here builds and tests every module; the
+    installer module (bin/agentic-skills-cli) comes last in reactor order because it depends on
+    the hooks and both MCP jars, which it bundles into the single distributable
+    `agentic-skills.jar`.
+
+    Versioning: CI-friendly `${revision}` (one place to bump). The installer, hooks and evals
+    modules inherit it from here. The two MCP servers (mcp/*) must keep
+    spring-boot-starter-parent as their parent, so they are aggregated (listed as modules) but do
+    NOT inherit from this POM; they declare their own `revision` property, which must be kept in
+    step with the one below (the CLI's AgenticSkillsJarIT and the bundle layout do not depend on
+    the MCP versions, only on the jars existing). flatten-maven-plugin rewrites `${revision}` in
+    installed/deployed POMs so they resolve outside the reactor.
+
+    Billed LLM evals (evals/agentic-skills-evals *EvalTest / *RealSubprocessTest) are excluded by
+    default; opt in with `-Pbilled-evals` (see that module's POM).
+  -->
+  <groupId>dev.dorrian</groupId>
+  <artifactId>agentic-skills-parent</artifactId>
+  <version>${revision}</version>
+  <packaging>pom</packaging>
+
+  <name>agentic-skills-parent</name>
+
+  <properties>
+    <revision>2.0.0</revision>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
+  </properties>
+
+  <modules>
+    <module>hooks/agentic-skills-hooks</module>
+    <module>mcp/security-scanner</module>
+    <module>mcp/issue-tickets</module>
+    <module>evals/agentic-skills-evals</module>
+    <module>bin/agentic-skills-cli</module>
+  </modules>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>flatten-maven-plugin</artifactId>
+        <version>${flatten-maven-plugin.version}</version>
+        <configuration>
+          <updatePomFile>true</updatePomFile>
+          <flattenMode>resolveCiFriendliesOnly</flattenMode>
+        </configuration>
+        <executions>
+          <execution>
+            <id>flatten</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>flatten</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>flatten-clean</id>
+            <phase>clean</phase>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,24 @@
+required:
+  - pattern: 'HANDOFF BLOCK'
+    label: hasHandoffBlock
+  - pattern: 'cannot find symbol'
+    label: hasRedConfirmation
+  - pattern: 'MockMvc'
+    label: hasMockMvcUsage
+  - pattern: 'UserControllerTest'
+    label: hasTestFile
+  - pattern: 'isOk()'
+    label: has200Response
+  - pattern: 'completed'
+    label: hasCompletedStatus
+
+forbidden:
+  - "I cannot"
+  - "I don't have access"
+  - "I will skip"
+
+tools:
+  forbidden:
+    - Bash
+    - Edit
+    - Write

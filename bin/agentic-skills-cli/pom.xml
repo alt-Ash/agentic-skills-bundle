@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dev.dorrian</groupId>
+    <artifactId>agentic-skills-parent</artifactId>
+    <version>${revision}</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <groupId>dev.dorrian.agenticskillscli</groupId>
+  <artifactId>agentic-skills-cli</artifactId>
+  <version>${revision}</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <!-- Repo root: the content dirs bundled into the jar live there. -->
+    <repo.root>${project.basedir}/../..</repo.root>
+    <bundle.dir>${project.build.outputDirectory}/bundle</bundle.dir>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.18.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>2.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline</artifactId>
+      <version>3.26.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.12.2</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      Bundled payload, not code dependencies. Declared (provided, no transitives) only so the
+      reactor builds these modules first; maven-dependency-plugin then copies their packaged jars
+      into bundle/ (see below). provided keeps them out of the shaded jar's classes, and they are
+      removed from the test classpaths via classpathDependencyExcludes (the hooks jar is itself
+      shaded with its own Jackson copy).
+    -->
+    <dependency>
+      <groupId>dev.dorrian.agenticskillshooks</groupId>
+      <artifactId>agentic-skills-hooks</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>dev.dorrian.issuetickets</groupId>
+      <artifactId>issue-tickets</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>dev.dorrian.securityscanner</groupId>
+      <artifactId>security-scanner</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>agentic-skills</finalName>
+    <plugins>
+      <!--
+        Everything under target/classes/bundle/ ships inside agentic-skills.jar and is extracted
+        on first run to ~/.agentic-skills/dist/<version>/ (BundleExtractor). Content dirs are
+        copied at process-resources (so unit tests can see them); the three prebuilt jars at
+        prepare-package, because reactor modules only have a packaged jar to copy once they've
+        run `package` (so a root `./mvnw test` still works).
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>bundle-skills</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${bundle.dir}/skills</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${repo.root}/skills</directory>
+                  <filtering>false</filtering>
+                  <excludes>
+                    <exclude>**/.DS_Store</exclude>
+                    <exclude>**/node_modules/**</exclude>
+                  </excludes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>bundle-agents</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${bundle.dir}/agents</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${repo.root}/agents</directory>
+                  <filtering>false</filtering>
+                  <excludes>
+                    <exclude>**/.DS_Store</exclude>
+                    <exclude>**/node_modules/**</exclude>
+                  </excludes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>bundle-commands</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${bundle.dir}/.opencode/commands</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${repo.root}/.opencode/commands</directory>
+                  <filtering>false</filtering>
+                  <excludes>
+                    <exclude>**/.DS_Store</exclude>
+                    <exclude>**/node_modules/**</exclude>
+                  </excludes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>bundle-templates</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${bundle.dir}/templates</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${repo.root}/templates</directory>
+                  <filtering>false</filtering>
+                  <excludes>
+                    <exclude>**/.DS_Store</exclude>
+                    <exclude>**/node_modules/**</exclude>
+                  </excludes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>bundle-jars</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${bundle.dir}</outputDirectory>
+              <stripVersion>true</stripVersion>
+              <overWriteReleases>true</overWriteReleases>
+              <overWriteSnapshots>true</overWriteSnapshots>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>dev.dorrian.agenticskillshooks</groupId>
+                  <artifactId>agentic-skills-hooks</artifactId>
+                  <version>${project.version}</version>
+                  <destFileName>agentic-skills-hooks.jar</destFileName>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>dev.dorrian.issuetickets</groupId>
+                  <artifactId>issue-tickets</artifactId>
+                  <version>${project.version}</version>
+                  <destFileName>issue-tickets.jar</destFileName>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>dev.dorrian.securityscanner</groupId>
+                  <artifactId>security-scanner</artifactId>
+                  <version>${project.version}</version>
+                  <destFileName>security-scanner.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.2</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>dev.dorrian.agenticskillscli.App</mainClass>
+                  <manifestEntries>
+                    <!-- BundleExtractor keys ~/.agentic-skills/dist/<version>/ off this. -->
+                    <Implementation-Title>agentic-skills</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                  </manifestEntries>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <!--
+            Redirect every path AgentToolRegistry/McpConfigRegistry/the MCP
+            installers/ShellProfileEnvWriter resolve at test-JVM class-load
+            time (via HomeDir.resolve()) at a scratch directory under
+            target/, so the whole suite never reads or writes the real
+            developer's $HOME. This is what makes positive-path detector
+            tests (see detect/InstalledSkillAgentCommandDetectorTest)
+            possible without touching real machine state.
+          -->
+          <!--
+            The HOME override can't reach the real `claude` CLI, which keeps
+            its own config (~/.claude.json). Point ClaudeCliMcpRegistrar at a
+            binary that doesn't exist so no test can `claude mcp add` into the
+            developer's real user-scope config.
+          -->
+          <environmentVariables>
+            <AGENTIC_SKILLS_HOME_OVERRIDE>${project.build.directory}/test-home</AGENTIC_SKILLS_HOME_OVERRIDE>
+            <AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE>${project.build.directory}/no-such-claude</AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE>
+          </environmentVariables>
+          <classpathDependencyExcludes>
+            <classpathDependencyExclude>dev.dorrian.agenticskillshooks:agentic-skills-hooks</classpathDependencyExclude>
+            <classpathDependencyExclude>dev.dorrian.issuetickets:issue-tickets</classpathDependencyExclude>
+            <classpathDependencyExclude>dev.dorrian.securityscanner:security-scanner</classpathDependencyExclude>
+          </classpathDependencyExcludes>
+        </configuration>
+      </plugin>
+
+      <!--
+        *IT classes run after `package` against the shaded agentic-skills.jar itself, spawned as
+        a child process without the package-root flag, so bundling/extraction/manifest mistakes fail
+        the build (mirrors hooks/agentic-skills-hooks' HookInvocationIT). Each IT points
+        AGENTIC_SKILLS_HOME_OVERRIDE at its own temp dir for the child.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <systemPropertyVariables>
+            <agentic.skills.jar>${project.build.directory}/${project.build.finalName}.jar</agentic.skills.jar>
+            <agentic.skills.version>${project.version}</agentic.skills.version>
+          </systemPropertyVariables>
+          <environmentVariables>
+            <AGENTIC_SKILLS_HOME_OVERRIDE>${project.build.directory}/it-home</AGENTIC_SKILLS_HOME_OVERRIDE>
+            <AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE>${project.build.directory}/no-such-claude</AGENTIC_SKILLS_CLAUDE_CLI_OVERRIDE>
+          </environmentVariables>
+          <classpathDependencyExcludes>
+            <classpathDependencyExclude>dev.dorrian.agenticskillshooks:agentic-skills-hooks</classpathDependencyExclude>
+            <classpathDependencyExclude>dev.dorrian.issuetickets:issue-tickets</classpathDependencyExclude>
+            <classpathDependencyExclude>dev.dorrian.securityscanner:security-scanner</classpathDependencyExclude>
+          </classpathDependencyExcludes>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,18 @@
+<configuration>
+    <!--
+      MCP's stdio transport uses stdout exclusively for JSON-RPC framing — any stray log line
+      written to stdout corrupts every message after it. This intentionally defines ONLY a file
+      appender (no console appender at all), unlike Spring Boot's default logback-base.xml, which
+      always attaches both when logging.file.name is set.
+    -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>security-scanner.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="WARN">
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

@@ -1,0 +1,19 @@
+required:
+  - pattern: '?'
+    label: asksQuestion
+
+forbidden:
+  - 'agent_contract:'
+  - '## Acceptance criteria'
+  - "I cannot"
+  - "I don't have access"
+  - "I don't have information"
+  - "I will skip"
+  - "files don't exist"
+  - "files do not exist"
+
+tools:
+  forbidden:
+    - Write
+    - Edit
+    - Bash

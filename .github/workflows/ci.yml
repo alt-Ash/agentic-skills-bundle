@@ -1,0 +1,248 @@
+# CI for agentic-skills-bundle.
+#
+# Every job here is zero-cost and offline apart from Maven Central / GitHub
+# release downloads: no job calls a model, a ticketing API, or any other live
+# external service. Provider/scanner tests talk only to in-process localhost
+# HttpServers. No Node anywhere: every leg goes through the Maven wrapper and the
+# root reactor (pom.xml).
+#
+# Action pins: floating major tags, verified against each repo's latest release
+# (`gh api repos/<owner>/<repo>/releases/latest`) — see
+# skills/devops/cicd-pipelines/platforms/github-actions.md for the repo's own
+# pinning guidance (SHA-pin if/when this repo moves to stricter hardening).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  # Pinned so a JReleaser release cannot change dry-run behaviour under us;
+  # keep in step with .github/workflows/release.yml.
+  JRELEASER_VERSION: "1.26.0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # All test suites are pure Maven. One matrix leg per module/test scope, each
+  # run through the root reactor with `-pl <module>`; `-am` also builds the
+  # modules it needs (the root parent POM, and for the installer the hooks and
+  # both MCP jars it bundles at prepare-package).
+  # ---------------------------------------------------------------------------
+  maven:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Agent/skill/command file validation only. -am compiles the
+          # upstream modules, whose tests the -Dtest filter skips.
+          - name: structural
+            artifact: structural
+            module: bin/agentic-skills-cli
+            command: >-
+              ./mvnw -B -pl bin/agentic-skills-cli -am test
+              -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest
+              -Dsurefire.failIfNoSpecifiedTests=false
+
+          # Full JUnit suite for the installer, then (failsafe, after
+          # `package`) AgenticSkillsJarIT against the shaded agentic-skills.jar.
+          # `verify` is needed so prepare-package copies the hooks/MCP jars into
+          # the bundle. The package-scoped filters keep -am from re-running the
+          # hooks/MCP suites (they have their own legs); every installer test
+          # lives under dev.dorrian.agenticskillscli and ends in Test / IT.
+          - name: cli
+            artifact: cli
+            module: bin/agentic-skills-cli
+            command: >-
+              ./mvnw -B -pl bin/agentic-skills-cli -am verify
+              -Dtest='dev/dorrian/agenticskillscli/**/*Test'
+              -Dit.test='dev/dorrian/agenticskillscli/**/*IT'
+              -Dsurefire.failIfNoSpecifiedTests=false
+              -Dfailsafe.failIfNoSpecifiedTests=false
+
+          # Unit tests, then (failsafe, after `package`) HookInvocationIT, which
+          # spawns the shaded jar as a child process per hook type.
+          - name: hooks
+            artifact: hooks
+            module: hooks/agentic-skills-hooks
+            command: ./mvnw -B -pl hooks/agentic-skills-hooks -am verify
+
+          - name: security-scanner
+            artifact: security-scanner
+            module: mcp/security-scanner
+            command: ./mvnw -B -pl mcp/security-scanner test
+
+          - name: issue-tickets
+            artifact: issue-tickets
+            module: mcp/issue-tickets
+            command: ./mvnw -B -pl mcp/issue-tickets test
+
+          # ===================================================================
+          # !!! EVALS: ZERO-COST UNIT TESTS ONLY !!!
+          # The billed behavioral evals — every *EvalTest class
+          # (IssueArchitectEvalTest, SecurityAuditorEvalTest,
+          # SecurityImplementorEvalTest, TddEngineerEvalTest) and the
+          # *RealSubprocessTest classes — spawn a real
+          # `claude` CLI and make real, BILLED model calls. They must NEVER
+          # run in CI. Only the explicit -Dtest allowlist below may run here;
+          # never drop the -Dtest filter or widen it to a wildcard.
+          # ===================================================================
+          - name: evals (zero-cost only)
+            artifact: evals
+            module: evals/agentic-skills-evals
+            command: >-
+              ./mvnw -B -pl evals/agentic-skills-evals -am test
+              -Dtest=GoldenCheckerTest,InProcessMcpBridgeTest,JudgeTest,EvalReportTest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Test
+        run: ${{ matrix.command }}
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.artifact }}
+          path: |
+            ${{ matrix.module }}/target/surefire-reports/
+            ${{ matrix.module }}/target/failsafe-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Bundle: the distributable is the self-contained agentic-skills.jar. Build
+  # it, prove the bundled payload is inside, then dry-run JReleaser against it
+  # so PRs validate jreleaser.yml (and the brew/jbang output it would publish)
+  # without any secret. Nothing here talks to GitHub's API.
+  # ---------------------------------------------------------------------------
+  bundle:
+    name: bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JAR: bin/agentic-skills-cli/target/agentic-skills.jar
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # JReleaser builds the changelog from git history and tags.
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Build agentic-skills.jar
+        run: ./mvnw -B -pl bin/agentic-skills-cli -am -DskipTests package
+
+      - name: Assert bundled payload
+        run: |
+          if [ ! -f "$JAR" ]; then
+            echo "::error::$JAR was not built"
+            exit 1
+          fi
+          ls -l "$JAR"
+          listing="$RUNNER_TEMP/jar-listing.txt"
+          unzip -l "$JAR" > "$listing"
+          missing=0
+          for entry in \
+            bundle/skills/ \
+            bundle/agents/ \
+            bundle/agentic-skills-hooks.jar \
+            bundle/issue-tickets.jar \
+            bundle/security-scanner.jar
+          do
+            # Directories may have no explicit zip entry, so match any path
+            # under them; files must match exactly.
+            case "$entry" in
+              */) pattern="[[:space:]]${entry}" ;;
+              *)  pattern="[[:space:]]${entry}\$" ;;
+            esac
+            if grep -Eq "$pattern" "$listing"; then
+              echo "OK      $entry"
+            else
+              echo "MISSING $entry"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::agentic-skills.jar is missing bundled payload (see above)"
+            exit 1
+          fi
+
+      - name: Resolve project version
+        id: version
+        run: |
+          version="$(./mvnw -B -q -N help:evaluate -Dexpression=project.version -DforceStdout)"
+          echo "Project version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # `package --dry-run` loads and validates jreleaser.yml, checksums the jar
+      # and renders the brew formula + JBang catalog without any remote call.
+      - name: JReleaser dry run (package)
+        uses: jreleaser/release-action@v2
+        with:
+          version: ${{ env.JRELEASER_VERSION }}
+          arguments: package --dry-run
+          setup-java: false
+        env:
+          JRELEASER_PROJECT_VERSION: ${{ steps.version.outputs.version }}
+          # Validation requires a non-blank token; it is never used remotely here.
+          JRELEASER_GITHUB_TOKEN: dry-run-placeholder
+
+      - name: JReleaser dry run (changelog)
+        uses: jreleaser/release-action@v2
+        with:
+          version: ${{ env.JRELEASER_VERSION }}
+          arguments: changelog
+          setup-java: false
+        env:
+          JRELEASER_PROJECT_VERSION: ${{ steps.version.outputs.version }}
+          JRELEASER_GITHUB_TOKEN: dry-run-placeholder
+
+      - name: Check generated packager files
+        run: |
+          formula=out/jreleaser/package/agentic-skills/brew/Formula/agentic-skills.rb
+          catalog=out/jreleaser/package/agentic-skills/jbang/jbang-catalog.json
+          cat "$formula" "$catalog"
+          grep -q 'depends_on "openjdk@21"' "$formula" \
+            || { echo "::error::brew formula does not depend on openjdk@21"; exit 1; }
+          grep -Eq '"script-ref": "https://github.com/.+/agentic-skills-[^"]+\.jar"' "$catalog" \
+            || { echo "::error::JBang catalog alias does not point at the release jar"; exit 1; }
+
+      - name: Upload JReleaser output
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jreleaser-dry-run
+          path: |
+            out/jreleaser/trace.log
+            out/jreleaser/output.properties
+            out/jreleaser/package/
+          retention-days: 7
+          if-no-files-found: ignore
