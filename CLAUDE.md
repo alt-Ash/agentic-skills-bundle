@@ -4,52 +4,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers — it does not consume them. The CLI (`agentic-skills` / `bin/install.js`) copies files from this repo into users' own AI tool configurations.
+This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers — it does not consume them. The CLI (`agentic-skills`, a self-contained jar built by `bin/agentic-skills-cli`) copies files from this repo into users' own AI tool configurations.
 
 **Critical:** Global paths like `~/.claude/`, `~/.config/opencode/`, `~/.cursor/` are install **targets** written to only when a user runs the CLI in their own environment. Never read, inspect, or validate against these paths during development.
 
 ## Commands
 
+Everything is Maven, driven from the root aggregator `pom.xml` via the wrapper (no Node/npm/pnpm anywhere):
+
 ```bash
-pnpm start              # run the interactive CLI installer
-pnpm test               # structural tests (agent/skill/command file validation, Java)
-pnpm run eval           # behavioral LLM evaluations (Java) — invoke actual models, run sparingly
-pnpm run test:hooks     # hook unit tests + HookInvocationIT (spawns the packaged jar per hook type)
-pnpm run test:cli       # JUnit suite for bin/agentic-skills-cli (the Java installer)
+./mvnw verify                                   # all modules: unit tests + ITs; billed evals excluded by default
+./mvnw -pl bin/agentic-skills-cli -am package -DskipTests   # build the self-contained installer jar
+java -jar bin/agentic-skills-cli/target/agentic-skills.jar  # run the interactive installer from the built jar
+java -jar bin/agentic-skills-cli/target/agentic-skills.jar --package-root .   # ...against this checkout's content instead of the bundled copy
+./mvnw -pl bin/agentic-skills-cli test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest   # structural content checks
+./mvnw -pl evals/agentic-skills-evals -Pbilled-evals test -Dtest=TddEngineerEvalTest   # behavioral eval — REAL BILLED model calls, run sparingly
 ```
 
 Run a single test file:
 
 ```bash
 # structural (one of the three content-validation classes)
-mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest
+./mvnw -pl bin/agentic-skills-cli test -Dtest=AgentFileStructureTest
 
 # hooks: black-box IT against the packaged jar (failsafe runs after `package`)
-mvn verify -f hooks/agentic-skills-hooks/pom.xml -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=HookInvocationIT
-```
-
-Syntax-check the installer without running it:
-
-```bash
-node --check bin/install.js bin/uninstall.js
+./mvnw -pl hooks/agentic-skills-hooks verify -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=HookInvocationIT
 ```
 
 ## Architecture
 
 ### Installer (`bin/`)
 
-`bin/install.js`/`bin/uninstall.js` are thin Node shims (~20 lines each) —
-they resolve the installed npm package's root directory and `execFileSync`
-into a bundled Java fat jar (`bin/agentic-skills-cli/target/agentic-skills-cli.jar`,
-passed `--package-root <path>` and, for the uninstall shim, `--uninstall`),
-with `stdio: 'inherit'` so the JVM's interactive prompts work normally. All
-actual install/uninstall logic now lives in `bin/agentic-skills-cli/`, a
-plain-Java-21 Maven project (no Spring Boot — see that module's `pom.xml`
-for the rationale: it's a one-shot-per-invocation wizard, not a long-lived
-process, so a DI-container bootstrap cost buys nothing here). Build it with
-`mvn -f bin/agentic-skills-cli/pom.xml package` (or `pnpm test:cli` to run
-its JUnit suite); `npm pack`/`npm publish` build it automatically via the
-root `package.json`'s `prepack` script.
+`bin/agentic-skills-cli/` is a plain-Java-21 Maven project (no Spring Boot —
+see that module's `pom.xml` for the rationale: it's a one-shot-per-invocation
+wizard, not a long-lived process, so a DI-container bootstrap cost buys
+nothing here). It builds **one self-contained jar**, `target/agentic-skills.jar`,
+which carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the
+hooks jar and both prebuilt MCP jars under `bundle/` (copied in by
+`maven-resources-plugin`/`maven-dependency-plugin`; the hooks/MCP modules are
+`provided` deps purely for reactor ordering). On first run without
+`--package-root`, `BundleExtractor` unpacks `bundle/` once per version to
+`~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`; pass
+`--package-root <repo>` to run against a checkout's content during development.
+`--uninstall` jumps straight to the uninstall wizard. Users install it via
+Homebrew/JBang/GitHub Releases, published by JReleaser (`jreleaser.yml`,
+`.github/workflows/release.yml`) on a `v*` tag — there is no npm package.
 
 Install behaviour is driven by registries under
 `bin/agentic-skills-cli/src/main/java/dev/dorrian/agenticskillscli/registry/`:
@@ -89,9 +88,9 @@ below). It builds to one fat jar, argv-dispatched:
 `post-tool-use` / `post-tool-use-failure` / `session` / `user-prompt-submit` /
 `stop`. Each reads all of stdin as JSON, writes its side effects, and always
 exits 0 (an internal failure must never block the host CLI). Build/test via
-`pnpm test:hooks` (`mvn verify`: the unit tests, then failsafe's
+`./mvnw -pl hooks/agentic-skills-hooks verify` (the unit tests, then failsafe's
 `HookInvocationIT`, which spawns the packaged shaded jar per hook type) or
-`mvn -f hooks/agentic-skills-hooks/pom.xml test` for the unit tests alone.
+`./mvnw -pl hooks/agentic-skills-hooks test` for the unit tests alone.
 
 Shared infrastructure lives in `EventLog.java`: the `UsageEvent` type,
 `recordEvent` (read-modify-write to `ai-usage-events.json` in the JVM's
@@ -154,24 +153,23 @@ A `/eval-agent` slash command (`.opencode/commands/eval-agent.md`) runs `EvalCli
 for on-demand regression checks after editing an agent — deliberately **not** wired
 into `CommandRegistry`/any installer registry, since it needs a locally-built jar and a
 local `claude login` session; it's a repo-contributor tool, never installed for end
-users of this npm package. This module itself is never bundled in the npm package
-either (`package.json`'s `files`/`prepack` don't reference it) — dev-only tooling.
+users. This module is never bundled into `agentic-skills.jar` either — dev-only tooling.
 
 ### Extension patterns
 
 - **New skill:** add a directory to `skills/<category>/` — auto-discovered, no installer changes needed.
 - **New agent:** add `agents/<name>.md` — auto-discovered.
 - **New command:** add `.opencode/commands/<name>.md` (the single source of truth, installed to every tool with `supportsCommands: true` in `AgentToolRegistry` — currently OpenCode and Claude Code) and map it to its backing skill/agent via `CommandRegistry` in `bin/agentic-skills-cli`. Keep the frontmatter to `description` (+ optional `subtask`) — quote the `description` value if it contains a colon, since unquoted colons break strict YAML frontmatter parsers.
-- **New local MCP:** there is currently no descriptor/registry pattern for this. Write bespoke build/install/config/uninstall logic directly in `bin/agentic-skills-cli`'s `mcp/local/` package, following `SecurityScannerMcpInstaller` as a reference implementation. Both `issue-tickets` and `security-scanner` are Java/Spring Boot Maven projects (not Node/TS) — the installer shells out to `mvn -q -DskipTests package` and copies the resulting self-contained fat jar (`target/<name>.jar`); the config-builder method launches it via `java -jar <path>` instead of `node <entryPoint>`. A brand-new local MCP could still be Node/TS if that's a better fit for it — this repo now has precedent for both toolchains side by side.
+- **New local MCP:** there is currently no descriptor/registry pattern for this. Write bespoke build/install/config/uninstall logic directly in `bin/agentic-skills-cli`'s `mcp/local/` package, following `SecurityScannerMcpInstaller` as a reference implementation. Both `issue-tickets` and `security-scanner` are Java/Spring Boot Maven modules in the root reactor; their fat jars are bundled into `agentic-skills.jar` (add a new one to the cli module's `provided` deps + `maven-dependency-plugin` copy list), and the installer copies the bundled jar into place and configures `java -jar <path>`. Keep new MCPs on the JVM so users never need Node.
 - **New hook provider / new hook type:** add the Java class under `hooks/agentic-skills-hooks/src/main/java/.../hooks/`, register the new `hookType` in `HookDispatcher`, and add a matching `HookDescriptor` entry to `bin/agentic-skills-cli`'s `HooksRegistry`. Registration is currently Claude-Code-only — extending it to another tool means adding that tool's hook-config schema to `HookRegistrar` first (none of the other 7 tools have one documented yet).
 
 ### Test suites
 
 | Suite | Config | What it covers |
 |---|---|---|
-| `bin/agentic-skills-cli`'s `content/` package | `mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest` (aliased as `pnpm test`) | Validates agent/skill/command frontmatter fields and file structure — no model calls, no real API cost. Resolves the repo root independently of the shared `PackageRoot` singleton (which `PackageRootTest` repeatedly re-points at fake dirs in the same Surefire fork) so results don't depend on cross-class execution order. |
-| `evals/agentic-skills-evals/` | `mvn -f evals/agentic-skills-evals/pom.xml test` | LLM-invoked scenario evals (Java, expensive — real billed model calls) |
-| `hooks/agentic-skills-hooks/` | `mvn -f hooks/agentic-skills-hooks/pom.xml verify` (aliased as `pnpm test:hooks`) | Unit tests, then `HookInvocationIT` (failsafe, after `package`): spawns the shaded jar (`java -jar ... <hookType>`) as a child process and asserts the files it writes and the events it POSTs to a localhost capture server — catches manifest/main-class/bundling mistakes an in-classpath test can't |
+| `bin/agentic-skills-cli`'s `content/` package | `./mvnw -pl bin/agentic-skills-cli test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest` | Validates agent/skill/command frontmatter fields and file structure — no model calls, no real API cost. Resolves the repo root independently of the shared `PackageRoot` singleton (which `PackageRootTest` repeatedly re-points at fake dirs in the same Surefire fork) so results don't depend on cross-class execution order. |
+| `evals/agentic-skills-evals/` | `./mvnw -pl evals/agentic-skills-evals test` runs only the zero-cost classes; `-Pbilled-evals` (or an explicit `-Dtest=…EvalTest`) opts into the billed ones | LLM-invoked scenario evals (Java, expensive — real billed model calls) |
+| `hooks/agentic-skills-hooks/` | `./mvnw -pl hooks/agentic-skills-hooks verify` | Unit tests, then `HookInvocationIT` (failsafe, after `package`): spawns the shaded jar (`java -jar ... <hookType>`) as a child process and asserts the files it writes and the events it POSTs to a localhost capture server — catches manifest/main-class/bundling mistakes an in-classpath test can't |
 
 Agent files must pass `AgentFileStructureTest`: required frontmatter includes `description` (≥ 20 chars), `mode` (`subagent` or `primary`), `temperature` (0–1), `color` (hex), and a `permission` object. Body must have ≥ 2 `##` sections and document its output format. Skill files must pass `SkillFileStructureTest` (required `name`/`description`, `***CONTEXT BLOCK***`/`***HANDOFF BLOCK***` templates). Command files must pass `CommandFileStructureTest` (frontmatter limited to `description`/`subtask`).
 

@@ -7,23 +7,24 @@ This repo **produces** skills and agents; it does not consume them. `agentic-ski
 ## Quick start
 
 ```bash
-# Run without installing
-npx agentic-skills-bundle
-
-# Or install globally
-npm install -g agentic-skills-bundle
+# Homebrew (macOS / Linux) — pulls in OpenJDK 21 if needed
+brew install alt-ash/tap/agentic-skills
 agentic-skills
 
-# pnpm
-pnpm add -g agentic-skills-bundle
-agentic-skills
+# JBang (any OS with JBang installed)
+jbang agentic-skills@alt-Ash
+
+# Or download agentic-skills.jar from GitHub Releases and run it directly
+java -jar agentic-skills.jar
 ```
 
 To remove everything the CLI installed:
 
 ```bash
-agentic-skills-uninstall
+agentic-skills --uninstall
 ```
+
+The jar is self-contained: on first run it unpacks its skills, agents, commands, templates and MCP server jars to `~/.agentic-skills/dist/<version>/`.
 
 ## What it does
 
@@ -229,13 +230,10 @@ The CLI can also configure global MCP tools during Install/Quick install. These 
 
 ### `figma-mcp`
 
-MCP server for Figma — gives your AI agent access to Figma files, components, and design tokens. Uses the official `@figma/mcp` package (installed on demand via `npx`).
+MCP server for Figma — gives your AI agent access to Figma files, components, and design tokens. No token or local install needed:
 
-| Variable | Required | Description |
-|---|---|---|
-| `FIGMA_ACCESS_TOKEN` | yes | Personal access token from figma.com → Settings → Security → Personal access tokens |
-
-The CLI prompts for the token and writes it to your shell profile (`~/.zshrc` or `~/.bashrc`) automatically.
+- **Claude Code, Cursor, VS Code** — configured against Figma's hosted server (`https://mcp.figma.com/mcp`); you sign in with Figma (OAuth) on first use.
+- **OpenCode, Windsurf, Zed** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
 
 ### `engram`
 
@@ -243,11 +241,13 @@ Persistent memory MCP for AI agents — must be installed locally first (`brew i
 
 ### `context7`
 
-Up-to-date library documentation MCP. Works on the free tier with no key; an optional API key (from `context7.com/dashboard`) can be supplied during install for higher rate limits.
+Up-to-date library documentation MCP, configured against Context7's hosted endpoint (`https://mcp.context7.com/mcp`) — nothing runs locally. Works on the free tier with no key; an optional API key (from `context7.com/dashboard`) can be supplied during install for higher rate limits.
+
+Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to the hosted endpoints automatically; entries you've customised are left alone.
 
 ## Local MCP servers
 
-The CLI also builds and installs these from source (`mcp/<name>`) into your AI agent configuration. Both are Java/Spring Boot projects built via Maven at install time (see [Requirements](#requirements)).
+The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar` — no build step or Maven needed.
 
 ### `issue-tickets`
 
@@ -281,6 +281,6 @@ A shared circuit breaker aborts the rest of a scan the moment the target's error
 
 ## Requirements
 
-- Node.js ≥ 18 — runs the `agentic-skills`/`agentic-skills-uninstall` CLI entrypoints (thin shims that launch the installer)
-- **Java 21+ JRE — required to run the installer itself.** The interactive wizard is a Java application (`bin/agentic-skills-cli`), bundled as a prebuilt jar and launched by the Node shim; a JRE alone is enough (e.g. [Adoptium](https://adoptium.net)), you don't need a full JDK or Maven just to run `agentic-skills`.
-- Maven — only needed if you *install* the `issue-tickets` or `security-scanner` MCP servers (both are Java/Spring, built from source via Maven at install time, same as before)
+- **Java 21+ JRE** — that's all. The Homebrew formula installs one for you; otherwise any JRE works (e.g. [Adoptium](https://adoptium.net)). No Node.js, npm, or Maven needed.
+
+Upgrading from the 1.x npm package: `npm uninstall -g agentic-skills-bundle`, then install via one of the options in [Quick start](#quick-start).

@@ -50,9 +50,10 @@ When working in this repository, these terms always refer to the **source files 
 
 ```
 agentic-skills-bundle/
+├── pom.xml + mvnw            # root Maven aggregator (all modules; ./mvnw verify)
+├── jreleaser.yml             # release config: GitHub Releases + Homebrew + JBang
 ├── bin/
-│   ├── install.js              # thin Node shim — launches the Java installer below
-│   └── agentic-skills-cli/     # the actual installer logic (Maven project, plain Java 21)
+│   └── agentic-skills-cli/     # the installer (plain Java 21) → self-contained agentic-skills.jar
 ├── skills/
 │   ├── backend/                 # Backend skill directories (each is an installable skill)
 │   │   ├── java-version-migrator/
@@ -68,7 +69,7 @@ agentic-skills-bundle/
 ├── .opencode/
 │   └── commands/           # Slash command markdown files for OpenCode
 │       └── *.md
-├── package.json            # npm package: agentic-skills-bundle
+├── hooks/ mcp/ evals/      # analytics hooks, the two Spring Boot MCP servers, behavioral evals
 └── README.md
 ```
 
@@ -112,21 +113,22 @@ If a skill has a companion slash command, add the command markdown file to `.ope
 When checking for errors or validating changes:
 
 - **Skill content errors** → check the `SKILL.md` file inside the relevant `skills/` subdirectory
-- **CLI installer errors** → check `bin/agentic-skills-cli` (the Java installer); `bin/install.js` is just a thin launcher shim
+- **CLI installer errors** → check `bin/agentic-skills-cli` (the Java installer)
 - **Missing command file** → check `.opencode/commands/` and the `SKILL_COMMANDS`/`AGENT_COMMANDS` maps in `CommandRegistry.java`
 - **Missing agent file** → check `agents/`
-- **Package errors** → check `package.json` and `pnpm-lock.yaml`
+- **Build/package errors** → check the root `pom.xml` and the module's own `pom.xml` (`./mvnw verify` reproduces CI)
 
 Never diagnose a problem as "the skill is not in the correct folder" by checking global config paths. The only correct location for skills, agents, and commands during development is inside this repository's own directories listed above.
 
 ---
 
-## The installer (bin/install.js → bin/agentic-skills-cli)
+## The installer (bin/agentic-skills-cli)
 
-`bin/install.js` is a ~20-line Node shim that resolves the installed package's
-root and execs a bundled Java jar (`bin/agentic-skills-cli`, a plain-Java-21
-Maven project — requires a JRE at runtime, not just Node). All wizard logic
-lives there, not in the shim.
+`bin/agentic-skills-cli` (plain Java 21) builds one self-contained
+`agentic-skills.jar` that bundles this repo's skills, agents, commands,
+templates and the hooks/MCP jars, unpacking them to
+`~/.agentic-skills/dist/<version>/` on first run. Users need only a Java 21
+JRE; it's distributed via Homebrew, JBang and GitHub Releases (no npm).
 
 The CLI prompts the user to choose:
 

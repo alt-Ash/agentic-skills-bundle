@@ -39,9 +39,9 @@ import java.util.stream.Collectors;
  * inquirer checkbox usage in the original (accepting detected defaults).
  *
  * <p>Must be constructed with an inherited (real) stdin/stdout — i.e. the
- * eventual Node launcher shim must invoke this JVM with {@code
- * stdio:'inherit'}, not piped streams, for JLine to correctly detect an
- * interactive TTY and support line editing.
+ * launcher (Homebrew/JBang wrapper, or a direct {@code java -jar}) must not
+ * pipe the JVM's streams, for JLine to correctly detect an interactive TTY
+ * and support line editing.
  */
 public final class Prompter implements AutoCloseable {
 
