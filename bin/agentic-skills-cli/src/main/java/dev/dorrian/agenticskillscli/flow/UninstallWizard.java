@@ -12,12 +12,15 @@ import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
 import dev.dorrian.agenticskillscli.install.AgentInstaller;
 import dev.dorrian.agenticskillscli.install.CommandDescriptor;
 import dev.dorrian.agenticskillscli.install.CommandInstaller;
+import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
 import dev.dorrian.agenticskillscli.registry.CommandRegistry;
+import dev.dorrian.agenticskillscli.registry.McpConfigDef;
+import dev.dorrian.agenticskillscli.registry.McpConfigRegistry;
 import dev.dorrian.agenticskillscli.ui.Ansi;
 import dev.dorrian.agenticskillscli.ui.Prompter;
 import dev.dorrian.agenticskillscli.ui.SummaryPrinter;
@@ -217,8 +220,17 @@ public final class UninstallWizard {
             }
         }
 
+        // Analytics hooks — registered in Claude Code's settings.json by every Claude install,
+        // so they're offered here whenever Claude Code is selected and they're present.
+        Path claudeSettings = selectedTools.contains("claude")
+            ? McpConfigRegistry.get("claude").map(McpConfigDef::globalFile).orElse(null)
+            : null;
+        boolean removeHooks = claudeSettings != null && HooksInstaller.isInstalled(claudeSettings)
+            && prompter.confirm("Remove the analytics hooks from Claude Code? "
+                + Ansi.dim("(event files already written in your projects are kept)"), true);
+
         if (selectedSkills.isEmpty() && selectedAgentFiles.isEmpty() && !removeCommands
-            && !removeSkillMcps && !removeAgentMcps && globalMcpsToRemove.isEmpty()) {
+            && !removeSkillMcps && !removeAgentMcps && globalMcpsToRemove.isEmpty() && !removeHooks) {
             System.out.println();
             System.out.println("  " + Ansi.dim("Nothing selected. Uninstall cancelled."));
             System.out.println();
@@ -227,7 +239,7 @@ public final class UninstallWizard {
 
         // 8. Confirm
         printReadyToRemove(selectedTools, selectedSkills, skillsInstallTarget, projectPath, removeCommands,
-            commandsToRemove, selectedAgentFiles, removeSkillMcps, removeAgentMcps, globalMcpsToRemove);
+            commandsToRemove, selectedAgentFiles, removeSkillMcps, removeAgentMcps, globalMcpsToRemove, removeHooks);
 
         if (!prompter.confirm(Ansi.boldRed("Proceed with uninstall?"), false)) {
             System.out.println();
@@ -257,6 +269,18 @@ public final class UninstallWizard {
         }
 
         SummaryPrinter.printUninstallSummary(resultsByTool);
+
+        if (removeHooks) {
+            try {
+                int removed = HooksInstaller.uninstall(claudeSettings);
+                System.out.println("  " + Ansi.green("Analytics hooks removed")
+                    + Ansi.dim(" (" + removed + " hook entries from " + claudeSettings + ")"));
+            } catch (RuntimeException e) {
+                System.out.println("  " + Ansi.yellow("Analytics hooks: could not remove — " + e.getMessage()));
+                System.out.println("  " + Ansi.dim("Remove the agentic-skills-hooks.jar entries from " + claudeSettings + " manually."));
+            }
+            System.out.println();
+        }
     }
 
     // ─── Per-tool execution ─────────────────────────────────────────────────
@@ -476,7 +500,7 @@ public final class UninstallWizard {
     private static void printReadyToRemove(
         List<String> selectedTools, List<SkillDescriptor> selectedSkills, String skillsInstallTarget, Path projectPath,
         boolean removeCommands, List<CommandDescriptor> commandsToRemove, List<AgentDescriptor> selectedAgentFiles,
-        boolean removeSkillMcps, boolean removeAgentMcps, List<String> globalMcpsToRemove
+        boolean removeSkillMcps, boolean removeAgentMcps, List<String> globalMcpsToRemove, boolean removeHooks
     ) {
         System.out.println();
         System.out.println("  " + Ansi.bold("Ready to remove"));
@@ -504,6 +528,9 @@ public final class UninstallWizard {
         }
         if (removeSkillMcps || removeAgentMcps || !globalMcpsToRemove.isEmpty()) {
             System.out.println("  " + Ansi.dim("MCPs     :") + " " + Ansi.dim("[global config]"));
+        }
+        if (removeHooks) {
+            System.out.println("  " + Ansi.dim("Hooks    :") + " " + Ansi.cyan("Claude Code analytics hooks") + " " + Ansi.dim("[global]"));
         }
         System.out.println();
     }
