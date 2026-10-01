@@ -2,7 +2,9 @@ package dev.dorrian.agenticskillscli.registry;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -55,5 +57,78 @@ class AgentToolRegistryTest {
     @Test
     void unknownToolKeyThrows() {
         assertThrows(IllegalArgumentException.class, () -> AgentToolRegistry.get("not-a-tool"));
+    }
+
+    // ─── Devin Desktop (formerly Windsurf) ──────────────────────────────────
+
+    @Test
+    void windsurfIsPresentedAsDevinDesktopButKeepsItsKey() {
+        AgentToolDef windsurf = AgentToolRegistry.get("windsurf");
+        assertEquals("windsurf", windsurf.key());
+        assertEquals("Devin Desktop (Windsurf)", windsurf.name());
+    }
+
+    @Test
+    void windsurfProjectSkillsGoToTheSkillsFolderNotRules() {
+        AgentToolDef windsurf = AgentToolRegistry.get("windsurf");
+        assertEquals(".windsurf/skills", windsurf.projectFolder());
+        assertTrue(windsurf.globalPath().endsWith(Path.of(".codeium", "windsurf", "skills")));
+    }
+
+    @Test
+    void devinConfigDirDefaultsToDotConfigUnderHome() {
+        Path home = Path.of("/fake/home");
+        assertEquals(home.resolve(".config").resolve("devin"),
+            AgentToolRegistry.devinConfigDir(Map.<String, String>of()::get, home, "Mac OS X"));
+    }
+
+    @Test
+    void devinConfigDirHonoursXdgConfigHome() {
+        Path home = Path.of("/fake/home");
+        assertEquals(Path.of("/xdg/cfg", "devin"),
+            AgentToolRegistry.devinConfigDir(Map.of("XDG_CONFIG_HOME", "/xdg/cfg")::get, home, "Linux"));
+    }
+
+    @Test
+    void devinConfigDirIgnoresBlankXdgConfigHome() {
+        Path home = Path.of("/fake/home");
+        assertEquals(home.resolve(".config").resolve("devin"),
+            AgentToolRegistry.devinConfigDir(Map.of("XDG_CONFIG_HOME", " ")::get, home, "Linux"));
+    }
+
+    @Test
+    void devinConfigDirUsesAppDataOnWindows() {
+        Path home = Path.of("/fake/home");
+        assertEquals(Path.of("/win/AppData/Roaming", "devin"),
+            AgentToolRegistry.devinConfigDir(Map.of("APPDATA", "/win/AppData/Roaming")::get, home, "Windows 11"));
+    }
+
+    @Test
+    void devinConfigDirFallsBackToRoamingUnderHomeOnWindowsWithoutAppData() {
+        Path home = Path.of("/fake/home");
+        assertEquals(home.resolve("AppData").resolve("Roaming").resolve("devin"),
+            AgentToolRegistry.devinConfigDir(Map.<String, String>of()::get, home, "Windows 11"));
+    }
+
+    @Test
+    void devinConfigDirIgnoresXdgAndAppDataUnderTheHomeOverride() {
+        // The test/smoke-test sandbox must never be redirected back to the real config dirs.
+        Path home = Path.of("/sandbox");
+        Map<String, String> env = Map.of(
+            "AGENTIC_SKILLS_HOME_OVERRIDE", "/sandbox", "XDG_CONFIG_HOME", "/real/cfg", "APPDATA", "/real/appdata");
+        assertEquals(home.resolve(".config").resolve("devin"), AgentToolRegistry.devinConfigDir(env::get, home, "Linux"));
+        assertEquals(home.resolve(".config").resolve("devin"), AgentToolRegistry.devinConfigDir(env::get, home, "Windows 11"));
+    }
+
+    @Test
+    void windsurfInstallDetectionAlsoRecognisesTheDevinConfigDir() {
+        List<Path> paths = AgentToolRegistry.detectPaths("windsurf");
+        assertEquals(AgentToolRegistry.get("windsurf").detectPath(), paths.get(0));
+        assertTrue(paths.contains(AgentToolRegistry.devinConfigDir()));
+    }
+
+    @Test
+    void otherToolsDetectOnlyByTheirOwnDetectPath() {
+        assertEquals(List.of(AgentToolRegistry.get("cursor").detectPath()), AgentToolRegistry.detectPaths("cursor"));
     }
 }

@@ -5,6 +5,7 @@ import dev.dorrian.agenticskillscli.HomeDir;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -12,6 +13,11 @@ import java.util.Optional;
  * Java port of {@code bin/install.js}'s {@code MCP_CONFIG} object — 6 tools
  * (gemini and codex are deliberately absent, matching the original; they
  * have no documented MCP config file format).
+ *
+ * <p>{@code windsurf} (Devin Desktop) is the only entry with {@link
+ * McpConfigDef#extraFiles()}: {@code ~/.codeium/windsurf/mcp_config.json} is
+ * always written, {@code ~/.config/devin/mcp_config.json} (see {@link
+ * AgentToolRegistry#devinConfigDir()}) only when that directory exists.
  */
 public final class McpConfigRegistry {
 
@@ -47,8 +53,12 @@ public final class McpConfigRegistry {
         m.put("vscode", new McpConfigDef(
             "vscode", AgentToolRegistry.vsCodeUserDir().resolve("mcp.json"), "servers", "stdio"
         ));
+        // Devin Desktop (formerly Windsurf): its FAQ and CLI docs keep the per-user MCP config at
+        // ~/.codeium/windsurf/mcp_config.json, while its MCP page says ~/.config/devin/mcp_config.json
+        // — so always write the former, and mirror into the latter when that dir already exists.
         m.put("windsurf", new McpConfigDef(
-            "windsurf", home(".codeium", "windsurf", "mcp_config.json"), "mcpServers", "stdio"
+            "windsurf", home(".codeium", "windsurf", "mcp_config.json"), "mcpServers", "stdio",
+            List.of(AgentToolRegistry.devinConfigDir().resolve("mcp_config.json"))
         ));
         m.put("zed", new McpConfigDef(
             "zed", home(".config", "zed", "settings.json"), "context_servers", "zed"

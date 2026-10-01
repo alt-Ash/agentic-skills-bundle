@@ -202,13 +202,16 @@ public final class JsonConfigStore {
             }
             return results;
         }
-        Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
-        if (cfgOpt.isEmpty()) {
-            return results;
-        }
-        McpConfigDef cfg = cfgOpt.get();
-        for (String name : migrateLegacyNpxServersInFile(servers, cfg, cfg.globalFile())) {
-            results.add(OperationResult.ok(name, false, cfg.globalFile().toString()));
+        return McpConfigRegistry.get(toolKey).map(cfg -> migrateLegacyNpxServers(servers, cfg)).orElse(results);
+    }
+
+    /** {@link #migrateLegacyNpxServersInFile} for every existing file of {@code cfg} — one result per file and name. */
+    public static List<OperationResult> migrateLegacyNpxServers(Map<String, Object> servers, McpConfigDef cfg) {
+        List<OperationResult> results = new ArrayList<>();
+        for (Path file : cfg.allFiles()) { // only ever rewrites files that already exist
+            for (String name : migrateLegacyNpxServersInFile(servers, cfg, file)) {
+                results.add(OperationResult.ok(name, false, file.toString()));
+            }
         }
         return results;
     }
@@ -260,18 +263,22 @@ public final class JsonConfigStore {
             return results;
         }
 
-        Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
-        if (cfgOpt.isEmpty()) {
-            return List.of();
-        }
-        McpConfigDef cfg = cfgOpt.get();
-        Set<String> installed = installMcpServersToFile(servers, cfg, cfg.globalFile());
+        return McpConfigRegistry.get(toolKey).map(cfg -> installMcpServers(servers, cfg)).orElse(List.of());
+    }
 
-        List<OperationResult> results = new ArrayList<>();
-        for (String name : servers.keySet()) {
-            results.add(OperationResult.ok(name, !installed.contains(name), cfg.globalFile().toString()));
+    /**
+     * Merges MCP server entries into every {@link McpConfigDef#writableFiles() writable file} of
+     * {@code cfg}. A name is skipped only if no file needed it; {@code configFile} lists the files
+     * it was newly written to (comma-separated), or the global file when skipped.
+     */
+    public static List<OperationResult> installMcpServers(Map<String, Object> servers, McpConfigDef cfg) {
+        Map<String, List<String>> writtenTo = new LinkedHashMap<>();
+        for (Path file : cfg.writableFiles()) {
+            for (String name : installMcpServersToFile(servers, cfg, file)) {
+                writtenTo.computeIfAbsent(name, k -> new ArrayList<>()).add(file.toString());
+            }
         }
-        return results;
+        return results(servers.keySet(), writtenTo, cfg);
     }
 
     /** Removes a set of MCP server entries from the global config file(s) for the given tool. */
@@ -284,16 +291,29 @@ public final class JsonConfigStore {
             return results;
         }
 
-        Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
-        if (cfgOpt.isEmpty()) {
-            return List.of();
-        }
-        McpConfigDef cfg = cfgOpt.get();
-        Set<String> removed = uninstallMcpServersFromFile(serverNames, cfg, cfg.globalFile());
+        return McpConfigRegistry.get(toolKey).map(cfg -> uninstallMcpServers(serverNames, cfg)).orElse(List.of());
+    }
 
+    /** Removes server entries from every file of {@code cfg} (global and extra files alike). */
+    public static List<OperationResult> uninstallMcpServers(List<String> serverNames, McpConfigDef cfg) {
+        Map<String, List<String>> removedFrom = new LinkedHashMap<>();
+        for (Path file : cfg.allFiles()) {
+            for (String name : uninstallMcpServersFromFile(serverNames, cfg, file)) {
+                removedFrom.computeIfAbsent(name, k -> new ArrayList<>()).add(file.toString());
+            }
+        }
+        return results(serverNames, removedFrom, cfg);
+    }
+
+    private static List<OperationResult> results(
+        Iterable<String> names, Map<String, List<String>> touchedFiles, McpConfigDef cfg
+    ) {
         List<OperationResult> results = new ArrayList<>();
-        for (String name : serverNames) {
-            results.add(OperationResult.ok(name, !removed.contains(name), cfg.globalFile().toString()));
+        for (String name : names) {
+            List<String> files = touchedFiles.get(name);
+            results.add(files == null
+                ? OperationResult.ok(name, true, cfg.globalFile().toString())
+                : OperationResult.ok(name, false, String.join(", ", files)));
         }
         return results;
     }
@@ -303,23 +323,27 @@ public final class JsonConfigStore {
         if ("claude".equals(toolKey)) {
             return ClaudeCliMcpRegistrar.exists(name);
         }
-        Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
-        if (cfgOpt.isEmpty()) {
-            return false;
+        return McpConfigRegistry.get(toolKey).map(cfg -> isMcpServerRegistered(name, cfg)).orElse(false);
+    }
+
+    /** True if any file of {@code cfg} (global or extra) has an entry named {@code name}. */
+    public static boolean isMcpServerRegistered(String name, McpConfigDef cfg) {
+        for (Path file : cfg.allFiles()) {
+            if (!Files.exists(file)) {
+                continue;
+            }
+            try {
+                Map<String, Object> existing = MAPPER.readValue(
+                    file.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {}
+                );
+                if (existing.get(cfg.mcpKey()) instanceof Map<?, ?> m && m.containsKey(name)) {
+                    return true;
+                }
+            } catch (IOException e) {
+                // unreadable file: treat as not registered there
+            }
         }
-        McpConfigDef cfg = cfgOpt.get();
-        if (!Files.exists(cfg.globalFile())) {
-            return false;
-        }
-        try {
-            Map<String, Object> existing = MAPPER.readValue(
-                cfg.globalFile().toFile(), new TypeReference<LinkedHashMap<String, Object>>() {}
-            );
-            Object section = existing.get(cfg.mcpKey());
-            return section instanceof Map<?, ?> m && m.containsKey(name);
-        } catch (IOException e) {
-            return false;
-        }
+        return false;
     }
 
     /** Unconditionally replaces a single server entry — never skips an entry already present. */
@@ -329,19 +353,25 @@ public final class JsonConfigStore {
             return ClaudeCliMcpRegistrar.install(name, serverConfig, true);
         }
 
-        Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
-        if (cfgOpt.isEmpty()) {
-            return OperationResult.ok(name, true, null);
+        return McpConfigRegistry.get(toolKey)
+            .map(cfg -> overwriteMcpServerEntry(name, serverConfig, cfg))
+            .orElse(OperationResult.ok(name, true, null));
+    }
+
+    /** Unconditionally replaces a single server entry in every {@link McpConfigDef#writableFiles() writable file}. */
+    public static OperationResult overwriteMcpServerEntry(String name, Map<String, Object> serverConfig, McpConfigDef cfg) {
+        List<String> written = new ArrayList<>();
+        for (Path file : cfg.writableFiles()) {
+            Map<String, Object> existing = readJsonObject(file);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> section = (Map<String, Object>) existing.computeIfAbsent(
+                cfg.mcpKey(), k -> new LinkedHashMap<String, Object>()
+            );
+            section.put(name, serverConfig);
+            writeJsonObject(file, existing);
+            written.add(file.toString());
         }
-        McpConfigDef cfg = cfgOpt.get();
-        Map<String, Object> existing = readJsonObject(cfg.globalFile());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> section = (Map<String, Object>) existing.computeIfAbsent(
-            cfg.mcpKey(), k -> new LinkedHashMap<String, Object>()
-        );
-        section.put(name, serverConfig);
-        writeJsonObject(cfg.globalFile(), existing);
-        return OperationResult.ok(name, false, cfg.globalFile().toString());
+        return OperationResult.ok(name, false, String.join(", ", written));
     }
 
     // ─── Shared JSON I/O helpers ─────────────────────────────────────────────

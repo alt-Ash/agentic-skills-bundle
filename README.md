@@ -47,7 +47,7 @@ Running `agentic-skills` opens a menu with four modes:
 | Gemini CLI | `~/.gemini/skills` | `.gemini/skills` |
 | OpenAI Codex CLI | `~/.codex/skills` | `.codex/skills` |
 | VS Code (GitHub Copilot) | `~/.vscode/skills` | `.vscode/skills` |
-| Windsurf | `~/.codeium/windsurf/skills` | `.windsurf/rules` |
+| Devin Desktop (Windsurf) | `~/.codeium/windsurf/skills` | `.windsurf/skills` |
 | Zed AI | `~/.config/zed/skills` | `.zed/skills` |
 
 Agents install into a parallel set of paths and support the same global/project split for tools that support sub-agents:
@@ -228,12 +228,14 @@ If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `
 
 The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill.
 
+For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), because Devin's docs give both locations. Uninstall removes them from both files.
+
 ### `figma-mcp`
 
 MCP server for Figma — gives your AI agent access to Figma files, components, and design tokens. No token or local install needed:
 
 - **Claude Code, Cursor, VS Code** — configured against Figma's hosted server (`https://mcp.figma.com/mcp`); you sign in with Figma (OAuth) on first use.
-- **OpenCode, Windsurf, Zed** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
+- **OpenCode, Devin Desktop (Windsurf), Zed** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
 
 ### `engram`
 

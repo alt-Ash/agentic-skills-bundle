@@ -40,15 +40,28 @@ public final class SkillInstaller {
         return results;
     }
 
-    /** Removes an installed skill directory if present; skipped=true if it was already absent. */
+    /**
+     * Removes an installed skill directory if present, plus any copy an older
+     * version left at a {@link LegacySkillLocations legacy location} (only if
+     * that copy has a {@code SKILL.md}, so a user's own folder of the same name
+     * is never touched); skipped=true if neither existed.
+     */
     public static OperationResult remove(String skillName, Path targetPath) {
         Path dest = targetPath.resolve(skillName);
         try {
-            if (!Files.exists(dest)) {
-                return OperationResult.ok(skillName, true, null);
+            boolean removed = false;
+            if (Files.exists(dest)) {
+                deleteRecursive(dest);
+                removed = true;
             }
-            deleteRecursive(dest);
-            return OperationResult.ok(skillName, false, null);
+            for (Path legacyDir : LegacySkillLocations.forTarget(targetPath)) {
+                Path legacy = legacyDir.resolve(skillName);
+                if (Files.isRegularFile(legacy.resolve("SKILL.md"))) {
+                    deleteRecursive(legacy);
+                    removed = true;
+                }
+            }
+            return OperationResult.ok(skillName, !removed, null);
         } catch (IOException e) {
             return OperationResult.failed(skillName, null, e.getMessage());
         }

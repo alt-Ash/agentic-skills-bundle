@@ -8,6 +8,7 @@ import dev.dorrian.agenticskillscli.registry.McpConfigRegistry;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,21 +42,26 @@ public final class InstalledMcpServerDetector {
         }
 
         Optional<McpConfigDef> cfgOpt = McpConfigRegistry.get(toolKey);
-        if (cfgOpt.isEmpty()) return installed;
-        McpConfigDef cfg = cfgOpt.get();
-        if (!Files.exists(cfg.globalFile())) return installed;
+        return cfgOpt.isEmpty() ? installed : detect(serverNames, cfgOpt.get());
+    }
 
-        Map<String, Object> existing;
-        try {
-            existing = MAPPER.readValue(cfg.globalFile().toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
-        } catch (IOException e) {
-            return installed;
-        }
+    /** Names present in any file of {@code cfg} — the global file or any extra file. */
+    public static Set<String> detect(List<String> serverNames, McpConfigDef cfg) {
+        Set<String> installed = new LinkedHashSet<>();
+        for (Path file : cfg.allFiles()) {
+            if (!Files.exists(file)) continue;
 
-        Object sectionObj = existing.get(cfg.mcpKey());
-        if (!(sectionObj instanceof Map<?, ?> section)) return installed;
-        for (String name : serverNames) {
-            if (section.containsKey(name)) installed.add(name);
+            Map<String, Object> existing;
+            try {
+                existing = MAPPER.readValue(file.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+            } catch (IOException e) {
+                continue;
+            }
+
+            if (!(existing.get(cfg.mcpKey()) instanceof Map<?, ?> section)) continue;
+            for (String name : serverNames) {
+                if (section.containsKey(name)) installed.add(name);
+            }
         }
         return installed;
     }

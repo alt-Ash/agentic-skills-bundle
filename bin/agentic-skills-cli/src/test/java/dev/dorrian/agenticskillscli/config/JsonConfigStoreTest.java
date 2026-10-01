@@ -229,4 +229,160 @@ class JsonConfigStoreTest {
         Map<String, Object> section = (Map<String, Object>) written.get("agent");
         assertFalse(section.containsKey("my-agent"));
     }
+
+    // ─── Extra config files (Devin Desktop writes to two locations) ─────────
+
+    private static McpConfigDef dualPathCfg(Path tempDir) {
+        return new McpConfigDef(
+            "windsurf",
+            tempDir.resolve(".codeium").resolve("windsurf").resolve("mcp_config.json"),
+            "mcpServers", "stdio",
+            List.of(tempDir.resolve(".config").resolve("devin").resolve("mcp_config.json"))
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> serversIn(Path file) throws IOException {
+        Map<String, Object> written = MAPPER.readValue(file.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+        return (Map<String, Object>) written.get("mcpServers");
+    }
+
+    private static void writeServers(Path file, String serversJson) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "{ \"mcpServers\": " + serversJson + " }");
+    }
+
+    @Test
+    void installWritesToBothFilesWhenTheExtraFilesDirectoryExists(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+        Files.createDirectories(devin.getParent());
+
+        List<OperationResult> results = JsonConfigStore.installMcpServers(
+            Map.of("engram", Map.of("type", "stdio", "command", "engram")), cfg);
+
+        assertEquals(1, results.size());
+        assertFalse(results.get(0).skipped());
+        assertTrue(results.get(0).configFile().contains(cfg.globalFile().toString()));
+        assertTrue(results.get(0).configFile().contains(devin.toString()));
+        assertEquals(Map.of("type", "stdio", "command", "engram"), serversIn(cfg.globalFile()).get("engram"));
+        assertEquals(Map.of("type", "stdio", "command", "engram"), serversIn(devin).get("engram"));
+    }
+
+    @Test
+    void installWritesOnlyTheGlobalFileAndNeverCreatesTheExtraDirectory(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+
+        List<OperationResult> results = JsonConfigStore.installMcpServers(Map.of("engram", Map.of("command", "engram")), cfg);
+
+        assertEquals(cfg.globalFile().toString(), results.get(0).configFile());
+        assertTrue(serversIn(cfg.globalFile()).containsKey("engram"));
+        assertFalse(Files.exists(devin.getParent()));
+    }
+
+    @Test
+    void installIsSkippedOnlyWhenEveryTargetFileAlreadyHasTheServer(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+        Files.createDirectories(devin.getParent());
+        writeServers(cfg.globalFile(), "{ \"engram\": { \"command\": \"mine\" } }");
+
+        OperationResult first = JsonConfigStore.installMcpServers(Map.of("engram", Map.of("command", "engram")), cfg).get(0);
+        assertFalse(first.skipped()); // still missing from the Devin file
+        assertEquals(devin.toString(), first.configFile());
+        assertEquals(Map.of("command", "mine"), serversIn(cfg.globalFile()).get("engram")); // not overwritten
+
+        OperationResult second = JsonConfigStore.installMcpServers(Map.of("engram", Map.of("command", "engram")), cfg).get(0);
+        assertTrue(second.skipped());
+    }
+
+    @Test
+    void uninstallRemovesTheServerFromEveryFile(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+        writeServers(cfg.globalFile(), "{ \"engram\": {}, \"keep\": {} }");
+        writeServers(devin, "{ \"engram\": {}, \"keep\": {} }");
+
+        List<OperationResult> results = JsonConfigStore.uninstallMcpServers(List.of("engram"), cfg);
+
+        assertFalse(results.get(0).skipped());
+        assertEquals(Set.of("keep"), serversIn(cfg.globalFile()).keySet());
+        assertEquals(Set.of("keep"), serversIn(devin).keySet());
+    }
+
+    @Test
+    void uninstallFindsAServerPresentOnlyInTheExtraFile(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+        writeServers(devin, "{ \"engram\": {} }");
+
+        OperationResult result = JsonConfigStore.uninstallMcpServers(List.of("engram"), cfg).get(0);
+
+        assertFalse(result.skipped());
+        assertEquals(devin.toString(), result.configFile());
+        assertTrue(serversIn(devin).isEmpty());
+        assertFalse(Files.exists(cfg.globalFile()));
+    }
+
+    @Test
+    void uninstallIsSkippedWhenNoFileHasTheServer(@TempDir Path tempDir) {
+        assertTrue(JsonConfigStore.uninstallMcpServers(List.of("engram"), dualPathCfg(tempDir)).get(0).skipped());
+    }
+
+    @Test
+    void isMcpServerRegisteredChecksEveryFile(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        assertFalse(JsonConfigStore.isMcpServerRegistered("engram", cfg));
+
+        writeServers(cfg.extraFiles().get(0), "{ \"engram\": {} }");
+
+        assertTrue(JsonConfigStore.isMcpServerRegistered("engram", cfg));
+    }
+
+    @Test
+    void overwriteReplacesTheEntryInEveryWritableFile(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+        writeServers(devin, "{ \"engram\": { \"command\": \"old\" } }");
+
+        OperationResult result = JsonConfigStore.overwriteMcpServerEntry("engram", Map.of("command", "new"), cfg);
+
+        assertFalse(result.skipped());
+        assertEquals(Map.of("command", "new"), serversIn(cfg.globalFile()).get("engram"));
+        assertEquals(Map.of("command", "new"), serversIn(devin).get("engram"));
+    }
+
+    @Test
+    void overwriteNeverCreatesTheExtraDirectory(@TempDir Path tempDir) {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        JsonConfigStore.overwriteMcpServerEntry("engram", Map.of("command", "new"), cfg);
+        assertTrue(Files.exists(cfg.globalFile()));
+        assertFalse(Files.exists(cfg.extraFiles().get(0).getParent()));
+    }
+
+    @Test
+    void migrateLegacyNpxServersMigratesEveryFile(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        Path devin = cfg.extraFiles().get(0);
+        writeServers(cfg.globalFile(), "{ \"context7\": { \"command\": \"npx\" } }");
+        writeServers(devin, "{ \"context7\": { \"command\": \"npx\" } }");
+
+        List<OperationResult> results = JsonConfigStore.migrateLegacyNpxServers(
+            Map.of("context7", Map.of("serverUrl", "https://mcp.context7.com/mcp")), cfg);
+
+        assertEquals(2, results.size());
+        assertEquals(Map.of("serverUrl", "https://mcp.context7.com/mcp"), serversIn(cfg.globalFile()).get("context7"));
+        assertEquals(Map.of("serverUrl", "https://mcp.context7.com/mcp"), serversIn(devin).get("context7"));
+    }
+
+    @Test
+    void writableFilesAreTheGlobalFilePlusExtrasWhoseDirectoryExists(@TempDir Path tempDir) throws IOException {
+        McpConfigDef cfg = dualPathCfg(tempDir);
+        assertEquals(List.of(cfg.globalFile()), cfg.writableFiles());
+        assertEquals(List.of(cfg.globalFile(), cfg.extraFiles().get(0)), cfg.allFiles());
+
+        Files.createDirectories(cfg.extraFiles().get(0).getParent());
+        assertEquals(List.of(cfg.globalFile(), cfg.extraFiles().get(0)), cfg.writableFiles());
+    }
 }

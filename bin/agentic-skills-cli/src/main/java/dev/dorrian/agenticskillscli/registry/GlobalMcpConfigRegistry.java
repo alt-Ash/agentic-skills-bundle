@@ -24,8 +24,9 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.of;
  *       {@code claude mcp add --transport http [--header ...]} (see {@code claude mcp add --help})</li>
  *   <li>cursor: {@code {url, headers?}} — cursor.com/docs/context/mcp</li>
  *   <li>vscode: {@code {type:"http", url, headers?}} — Context7/Figma VS Code docs</li>
- *   <li>windsurf: {@code {serverUrl, headers?}} — docs.windsurf.com/windsurf/cascade/mcp
- *       (now docs.devin.ai/desktop/cascade/mcp)</li>
+ *   <li>windsurf (Devin Desktop): {@code {serverUrl, headers?}} — docs.devin.ai/desktop/cascade/mcp;
+ *       written to {@code ~/.codeium/windsurf/mcp_config.json} and, when that dir exists,
+ *       {@code ~/.config/devin/mcp_config.json} (see {@link McpConfigRegistry})</li>
  *   <li>zed: {@code {url, headers?}} under {@code context_servers} — zed.dev/docs/ai/mcp
  *       (Zed starts the MCP OAuth flow when no Authorization header is set)</li>
  * </ul>
@@ -35,7 +36,7 @@ public final class GlobalMcpConfigRegistry {
     /** Shown by the install flows: figma needs no token any more, but setup differs per tool. */
     public static final String FIGMA_SETUP_NOTE =
         "sign in via OAuth on first use (Claude Code, Cursor, VS Code); "
-            + "OpenCode/Windsurf/Zed use the Figma desktop app's Dev Mode server";
+            + "OpenCode/Devin Desktop/Zed use the Figma desktop app's Dev Mode server";
 
     /** Context7 hosted endpoint — github.com/upstash/context7 docs/resources/all-clients.mdx. */
     static final String CONTEXT7_URL = "https://mcp.context7.com/mcp";
