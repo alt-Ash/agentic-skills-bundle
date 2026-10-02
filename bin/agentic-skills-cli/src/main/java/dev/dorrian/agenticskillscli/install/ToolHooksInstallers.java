@@ -10,7 +10,9 @@ import java.util.Optional;
  */
 public final class ToolHooksInstallers {
 
-    private static final Map<String, ToolHooksInstaller> INSTALLERS = Map.of();
+    private static final Map<String, ToolHooksInstaller> INSTALLERS = Map.of(
+        "gemini", new GeminiHooksInstaller(),
+        "opencode", new OpenCodeHooksInstaller());
 
     private ToolHooksInstallers() {
     }
