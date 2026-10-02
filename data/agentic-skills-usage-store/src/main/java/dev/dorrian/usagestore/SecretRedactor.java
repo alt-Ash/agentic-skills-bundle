@@ -1,4 +1,4 @@
-package dev.dorrian.agenticskillshooks;
+package dev.dorrian.usagestore;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,6 +34,18 @@ public final class SecretRedactor {
             Pattern.compile("-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----");
 
     private SecretRedactor() {
+    }
+
+    private static final int MAX_ERROR_LENGTH = 300;
+
+    /**
+     * Tool-failure text is arbitrary tool output (it can quote file contents), so unlike a command
+     * it is both redacted and cut short: enough to recognise the failure, not to reconstruct a file.
+     */
+    public static String redactError(String error) {
+        if (error == null) return null;
+        String result = redact(error).replaceAll("\\s+", " ").trim();
+        return result.length() > MAX_ERROR_LENGTH ? result.substring(0, MAX_ERROR_LENGTH) + "...[truncated]" : result;
     }
 
     public static String redact(String command) {

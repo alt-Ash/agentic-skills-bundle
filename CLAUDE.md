@@ -1,12 +1,12 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) in this repo.
+Guidance for Claude Code in this repo.
 
 ## What this project is
 
 This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers — it does not consume them. The CLI (`agentic-skills`, a self-contained jar built by `bin/agentic-skills-cli`) copies files from this repo into users' own AI tool configurations.
 
-**Critical:** `~/.claude/`, `~/.config/opencode/`, `~/.cursor/` etc. are install **targets**, written only when a user runs the CLI in their own environment. Never read, inspect, or validate against them during development.
+**Critical:** `~/.claude/`, `~/.config/opencode/`, `~/.cursor/` etc. are install **targets**, written only when a user runs the CLI in their own environment. Never read or validate against them during development.
 
 ## Commands
 
@@ -19,17 +19,17 @@ java -jar bin/agentic-skills-cli/target/agentic-skills.jar  # run the interactiv
 java -jar bin/agentic-skills-cli/target/agentic-skills.jar --package-root .   # ...against this checkout's content
 ./mvnw -pl bin/agentic-skills-cli -am test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest,TokenBudgetTest -Dsurefire.failIfNoSpecifiedTests=false   # structural + token-budget checks
 ./mvnw -pl evals/agentic-skills-evals -Pbilled-evals test -Dtest=TddEngineerEvalTest   # behavioral eval — REAL BILLED model calls, run sparingly
-# hooks: black-box IT against the packaged jar (failsafe runs after `package`)
+# hooks: black-box IT against the packaged jar
 ./mvnw -pl hooks/agentic-skills-hooks verify -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=HookInvocationIT
 ```
 
-Run one test class with `-Dtest=<Class> -Dsurefire.failIfNoSpecifiedTests=false`.
+Run one test class: `-Dtest=<Class> -Dsurefire.failIfNoSpecifiedTests=false`.
 
 ## Architecture
 
 ### Installer (`bin/agentic-skills-cli`)
 
-Plain Java 21 (no Spring Boot: a one-shot wizard, so a DI bootstrap buys nothing). One jar, `target/agentic-skills.jar`, carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the hooks jar and both MCP jars under `bundle/`. Without `--package-root`, `BundleExtractor` unpacks `bundle/` once per version to `~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`. `--uninstall` jumps to the uninstall wizard. Released via JReleaser on a `v*` tag (Homebrew/JBang/GitHub Releases); no npm package.
+Plain Java 21 (no Spring Boot: a one-shot wizard needs no DI). One jar, `target/agentic-skills.jar`, carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the hooks jar and both MCP jars under `bundle/`. Without `--package-root`, `BundleExtractor` unpacks `bundle/` once per version to `~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`. `--uninstall` jumps to the uninstall wizard; `data <path|import|prune>` and `dashboard` (read-only, localhost) skip the bundle. Released via JReleaser on a `v*` tag (Homebrew/JBang/GitHub).
 
 Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 
@@ -40,11 +40,11 @@ Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 | `CommandRegistry` | Maps skill/agent names to companion slash command files |
 | `HooksRegistry` | Maps each hook type to its Claude Code hook-event name(s) |
 
-Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode-format agent → target tool's format), `install/{Agent,Skill,Command}Installer`, and the wizards in `flow/` (`QuickInstallFlow`, `FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) dispatched from `App.main`. `config/HookRegistrar` merges the 5 hooks into a project's Claude Code `settings.json` (existing `hooks` preserved); **Claude Code only** — the other 7 tools have no documented hook schema.
+Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode-format agent → target tool's format), `install/{Agent,Skill,Command}Installer`, and the wizards in `flow/` (`QuickInstallFlow`, `FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`. `config/HookRegistrar` merges the hooks (5 analytics + opt-in `guard`) into Claude Code's `settings.json`, preserving existing `hooks`; **Claude Code only** (Gemini CLI has a schema, no registrar yet).
 
 ### Hooks (`hooks/agentic-skills-hooks`)
 
-Plain Java 21, one fat jar, argv-dispatched: `java -jar agentic-skills-hooks.jar <hookType>`. Each hook is a fresh JVM per firing, so no framework. It reads stdin JSON, writes its side effects, and **always exits 0** (a hook failure must never block the host CLI). Shared code is `EventLog.java` (`UsageEvent`, `recordEvent` to `ai-usage-events.json` in the cwd, optional POST to `ANALYTICS_SERVICE_URL`).
+Plain Java 21 fat jar, argv-dispatched: `java -jar agentic-skills-hooks.jar <hookType>`. Fresh JVM per firing, no framework. Reads stdin JSON, and **always exits 0** — except `guard` (exit 2 blocks; fails open). `EventLog.recordEvent` → `UsageDb` (`data/agentic-skills-usage-store`: SQLite `~/.agentic-skills/data/usage.db`, override `AGENTIC_SKILLS_DB`), then optional POST to `ANALYTICS_SERVICE_URL`.
 
 | Hook type | Event kind | Fires |
 |---|---|---|
@@ -53,20 +53,21 @@ Plain Java 21, one fat jar, argv-dispatched: `java -jar agentic-skills-hooks.jar
 | `session` | `session_start` / `session_end` | session lifecycle (`source` / `reason`) |
 | `user-prompt-submit` | `user_prompt` | each prompt submit |
 | `stop` | `turn_stop` | end of each turn; records output length only, never content |
+| `guard` (opt-in) | none | `PreToolUse`; exit 2 to block |
 
-`ProviderDetector` guesses the provider from payload shape (Gemini `hook_event_name == "AfterTool"`; Cursor `model` + `user_email`/`conversation_id`; Codex `model` alone; else Claude).
+`ProviderDetector` guesses the provider from the payload (Gemini `hook_event_name == "AfterTool"`; Cursor `model` + `user_email`/`conversation_id`; Codex `model` alone; else Claude).
 
 ### Evals (`evals/agentic-skills-evals`)
 
-Behavioral evals: **real, billed model calls — run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases (re-validate after an upgrade). `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; it needs a local jar and `claude login`, so it is deliberately **not** in `CommandRegistry` and never installed for users. The module is never bundled into `agentic-skills.jar`.
+Behavioral evals: **real, billed model calls; run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases (re-validate after upgrades). `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; it needs a local jar and `claude login`, so it's **not** in `CommandRegistry` and never installed. The module is never bundled into `agentic-skills.jar`.
 
 ### Extension patterns
 
 - **New skill:** add `skills/<category>/<name>/` — auto-discovered.
 - **New agent:** add `agents/<name>.md` — auto-discovered.
 - **New command:** add `.opencode/commands/<name>.md` (installed to every tool with `supportsCommands`: OpenCode, Claude Code) and map it in `CommandRegistry`. Frontmatter is `description` (+ optional `subtask`) only; quote a `description` containing a colon.
-- **New local MCP:** no registry pattern exists. Write bespoke build/install/config/uninstall code in `mcp/local/`, modelled on `SecurityScannerMcpInstaller`. MCPs are Java/Spring Boot modules in the root reactor; add the new fat jar to the cli module's `provided` deps and the `maven-dependency-plugin` copy list. Keep MCPs on the JVM (no Node).
-- **New hook type:** add the class under `hooks/.../hooks/`, register it in `HookDispatcher`, add a `HookDescriptor` to `HooksRegistry`. Extending registration to another tool means adding that tool's hook schema to `HookRegistrar` first.
+- **New local MCP:** no registry pattern exists. Write bespoke build/install/config/uninstall code in `mcp/local/`, modelled on `SecurityScannerMcpInstaller`. MCPs are Java/Spring Boot modules in the root reactor; add the new fat jar to the cli module's `provided` deps and the `maven-dependency-plugin` copy list. Keep MCPs on the JVM.
+- **New hook type:** add the class under `hooks/.../hooks/`, register it in `HookDispatcher`, add a `HookDescriptor` to `HooksRegistry` (`ALL`, or an opt-in constant like `GUARD`). Another tool needs its hook schema added to `HookRegistrar` first.
 
 ### Test suites
 
@@ -74,7 +75,7 @@ Behavioral evals: **real, billed model calls — run sparingly.** Plain Java 21.
 |---|---|
 | cli `content/` (`AgentFileStructureTest`, `SkillFileStructureTest`, `CommandFileStructureTest`, `TokenBudgetTest`) | Frontmatter/structure of agents, skills, commands, plus per-file token ceilings in `token-budgets.properties`. No model calls. Repo root is resolved independently of the shared `PackageRoot` singleton. |
 | `evals/agentic-skills-evals/` | `./mvnw -pl evals/agentic-skills-evals test` runs only zero-cost classes; `-Pbilled-evals` (or an explicit `-Dtest=…EvalTest`) opts into billed ones |
-| `hooks/agentic-skills-hooks/` | Unit tests, then `HookInvocationIT` (failsafe) spawns the shaded jar per hook type and asserts written files and POSTed events |
+| `hooks/agentic-skills-hooks/` | Unit tests, then `HookInvocationIT` (failsafe) spawns the shaded jar per hook type and asserts DB rows and POSTed events |
 
 Agent files need `description` (≥ 20 chars), `mode` (`subagent`/`primary`), `temperature` (0–1), `color` (hex), a `permission` object, ≥ 2 `##` sections, and a documented output format. Skills need `name`/`description` and `***CONTEXT BLOCK***`/`***HANDOFF BLOCK***` templates. Commands: frontmatter `description`/`subtask` only.
 

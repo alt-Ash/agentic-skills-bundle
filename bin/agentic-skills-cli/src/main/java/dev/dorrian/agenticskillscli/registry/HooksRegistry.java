@@ -28,6 +28,13 @@ public final class HooksRegistry {
         new HookDescriptor("session", List.of("SessionStart", "SessionEnd"))
     );
 
+    /**
+     * Opt-in guardrail: the only hook that can block (exit 2). Kept out of {@link #ALL} so a
+     * plain install stays observation-only; registered only when the user asks for it.
+     */
+    public static final HookDescriptor GUARD = new HookDescriptor(
+        "guard", List.of("PreToolUse"), "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+
     private HooksRegistry() {
     }
 }

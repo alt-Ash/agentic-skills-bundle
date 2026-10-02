@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillshooks;
 
+import dev.dorrian.usagestore.SecretRedactor;
+
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
@@ -101,6 +103,14 @@ public final class HookInput {
     public String sessionId() {
         String sid = textOrNull("session_id");
         return sid != null ? sid : conversationId();
+    }
+
+    /** A string field of {@code tool_input} (e.g. {@code file_path}, {@code command}), or null. */
+    public String toolInputText(String key) {
+        JsonNode toolInput = raw.get("tool_input");
+        if (toolInput == null || !toolInput.isObject()) return null;
+        JsonNode value = toolInput.get(key);
+        return (value != null && value.isTextual()) ? value.asText() : null;
     }
 
     private String toolInputCommand() {

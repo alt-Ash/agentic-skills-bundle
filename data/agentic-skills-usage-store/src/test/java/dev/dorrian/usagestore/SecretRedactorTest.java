@@ -1,6 +1,7 @@
-package dev.dorrian.agenticskillshooks;
+package dev.dorrian.usagestore;
 
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -120,5 +121,19 @@ class SecretRedactorTest {
         long start = System.currentTimeMillis();
         SecretRedactor.redact(input);
         assertTrue(System.currentTimeMillis() - start < 500);
+    }
+
+    @Test
+    void redactErrorRedactsSecretsCollapsesWhitespaceAndCapsLength() {
+        assertNull(SecretRedactor.redactError(null));
+        assertEquals("command not found", SecretRedactor.redactError("command   not\nfound\n"));
+
+        String redacted = SecretRedactor.redactError("failed: curl -H 'Authorization: Bearer abc.def.ghi' https://x");
+        assertTrue(redacted.contains("[REDACTED]"));
+        assertFalse(redacted.contains("abc.def.ghi"));
+
+        String capped = SecretRedactor.redactError("line of a quoted file\n".repeat(200));
+        assertTrue(capped.length() <= 300 + "...[truncated]".length());
+        assertTrue(capped.endsWith("...[truncated]"));
     }
 }

@@ -4,7 +4,7 @@ import dev.dorrian.agenticskillshooks.EventLog;
 import dev.dorrian.agenticskillshooks.HookInput;
 import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
-import dev.dorrian.agenticskillshooks.UsageEvent;
+import dev.dorrian.usagestore.UsageEvent;
 import dev.dorrian.agenticskillshooks.transcript.ClaudeTranscriptParser;
 import dev.dorrian.agenticskillshooks.transcript.CodexTranscriptParser;
 import dev.dorrian.agenticskillshooks.transcript.GeminiTranscriptParser;
@@ -79,8 +79,11 @@ public final class PostToolUseHook {
         event.model = !"unavailable".equals(record.model) ? record.model : null;
         event.inputTokens = record.inputTokens;
         event.cachedTokens = record.cachedTokens;
+        event.toolName = input.toolName();
+        event.toolUseId = input.toolUseId();
+        event.durationMs = input.durationMs();
         event.command = input.extractBashCommand();
 
-        EventLog.recordEvent("post-tool-use", event);
+        EventLog.recordEvent(event);
     }
 }

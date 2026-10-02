@@ -1,4 +1,4 @@
-package dev.dorrian.agenticskillshooks;
+package dev.dorrian.usagestore;
 
 public final class GitCommitInfo {
     public String hash;

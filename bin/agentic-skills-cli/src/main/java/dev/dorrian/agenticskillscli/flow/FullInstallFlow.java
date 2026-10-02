@@ -164,6 +164,13 @@ public final class FullInstallFlow {
                 "Install required MCP servers for selected agents? (" + String.join(", ", agentMcpPreview) + ")", true);
         }
 
+        boolean installGuard = false;
+        if (selectedTools.contains("claude")) {
+            installGuard = prompter.confirm(
+                "Also enable the guardrail hook for Claude Code? It BLOCKS rm -rf on /, ~ or *, force-push to"
+                    + " main/master, and reading .env/private-key files", false);
+        }
+
         printReadySummary(selectedTools, selectedSkills, skillsInstallTarget, projectPath, installCommands, availableCommands,
             selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, installObTickets, installSecurityScanner,
             globalTools.selectedGlobalTools());
@@ -183,7 +190,7 @@ public final class FullInstallFlow {
             resultsByTool.put(toolKey, executeInstallForTool(
                 tool, toolKey, selectedSkills, skillsInstallTarget, finalProjectPath, installCommands, availableCommands,
                 selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, globalTools,
-                installObTickets, azureOrgs, githubAccounts, installSecurityScanner
+                installObTickets, azureOrgs, githubAccounts, installSecurityScanner, installGuard
             ));
         }
 
@@ -201,7 +208,8 @@ public final class FullInstallFlow {
         AgentToolDef tool, String toolKey, List<SkillDescriptor> selectedSkills, String skillsInstallTarget, Path projectPath,
         boolean installCommands, List<CommandDescriptor> availableCommands, List<AgentDescriptor> selectedAgentFiles,
         String agentInstallTarget, boolean installSkillMcps, boolean installAgentMcps, GlobalToolsSelection globalTools,
-        boolean installObTickets, List<AzureOrg> azureOrgs, List<GithubAccount> githubAccounts, boolean installSecurityScanner
+        boolean installObTickets, List<AzureOrg> azureOrgs, List<GithubAccount> githubAccounts, boolean installSecurityScanner,
+        boolean installGuard
     ) {
         List<OperationResult> skillResults = List.of();
         String skillsPathStr = null;
@@ -309,7 +317,7 @@ public final class FullInstallFlow {
         if ("claude".equals(toolKey)) {
             McpConfigRegistry.get("claude").ifPresent(cfg -> {
                 try {
-                    HooksInstaller.installAndRegister(cfg.globalFile());
+                    HooksInstaller.installAndRegister(cfg.globalFile(), installGuard);
                 } catch (RuntimeException e) {
                     System.out.println("  " + Ansi.yellow("Analytics hooks not registered: " + e.getMessage()));
                 }

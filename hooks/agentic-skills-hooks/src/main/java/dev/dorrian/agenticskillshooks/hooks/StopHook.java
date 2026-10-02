@@ -4,7 +4,7 @@ import dev.dorrian.agenticskillshooks.EventLog;
 import dev.dorrian.agenticskillshooks.HookInput;
 import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
-import dev.dorrian.agenticskillshooks.UsageEvent;
+import dev.dorrian.usagestore.UsageEvent;
 
 import java.time.Instant;
 
@@ -37,6 +37,6 @@ public final class StopHook {
         event.estimatedOutputTokens = Math.round(msgLength / 4.0f);
         event.backgroundTaskCount = input.backgroundTaskCount();
 
-        EventLog.recordEvent("stop", event);
+        EventLog.recordEvent(event);
     }
 }

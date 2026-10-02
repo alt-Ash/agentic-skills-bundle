@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillshooks;
 
+import dev.dorrian.usagestore.UsageEvent;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,12 +28,14 @@ class IdentityResolverTest {
     private String originalUserDir;
 
     @BeforeEach
-    void saveUserDir() {
+    void saveUserDirAndUseAFreshDatabase(@TempDir Path dbDir) {
         originalUserDir = System.getProperty("user.dir");
+        EventLog.useDatabaseForTesting(dbDir.resolve("usage.db"));
     }
 
     @AfterEach
     void restoreUserDir() {
+        EventLog.resetForTesting();
         System.setProperty("user.dir", originalUserDir);
     }
 
@@ -198,12 +202,12 @@ class IdentityResolverTest {
     }
 
     @Test
-    void resolveIdentityReadsCachedValuesFromTheSessionBaselineInsteadOfReResolvingViaGit(@TempDir Path notARepo) {
+    void resolveIdentityReadsCachedValuesFromTheStoredSessionInsteadOfReResolvingViaGit(@TempDir Path notARepo) {
         System.setProperty("user.dir", notARepo.toString());
-        // recordEvent is what production code calls at session_start — it writes the baseline
-        // as one of its fan-out targets. No git repo here at all: a live resolution would return
+        // recordEvent is what production code calls at session_start — it upserts the session
+        // row that identity resolution reads back. No git repo here at all: a live resolution would return
         // the OS user / tmpdir basename, not these cached values.
-        EventLog.recordEvent("session", sessionStart("sess-cached", "Cached User", "cached-project", "cached-client"));
+        EventLog.recordEvent(sessionStart("sess-cached", "Cached User", "cached-project", "cached-client"));
 
         HookInput input = HookInput.parse("{\"session_id\":\"sess-cached\"}");
         IdentityResolver.ResolvedIdentity result = IdentityResolver.resolveIdentity(input, "claude");
@@ -215,7 +219,7 @@ class IdentityResolverTest {
     @Test
     void resolveIdentityTreatsACachedNullClientAsAValidCacheHitNotAMiss(@TempDir Path notARepo) {
         System.setProperty("user.dir", notARepo.toString());
-        EventLog.recordEvent("session", sessionStart("sess-null-client", "Cached User", "cached-project", null));
+        EventLog.recordEvent(sessionStart("sess-null-client", "Cached User", "cached-project", null));
 
         HookInput input = HookInput.parse("{\"session_id\":\"sess-null-client\"}");
         IdentityResolver.ResolvedIdentity result = IdentityResolver.resolveIdentity(input, "claude");
@@ -228,7 +232,7 @@ class IdentityResolverTest {
     void resolveIdentityIgnoresABaselineRecordMissingUserOrProject(@TempDir Path repo) throws Exception {
         initGitRepo(repo);
         System.setProperty("user.dir", repo.toString());
-        EventLog.recordEvent("session", sessionStart("sess-partial", "", "", null));
+        EventLog.recordEvent(sessionStart("sess-partial", "", "", null));
 
         HookInput input = HookInput.parse("{\"session_id\":\"sess-partial\"}");
         IdentityResolver.ResolvedIdentity result = IdentityResolver.resolveIdentity(input, "claude");
@@ -239,15 +243,14 @@ class IdentityResolverTest {
     @Test
     void resolveIdentityDoesNotGrowWithASessionsActivity(@TempDir Path notARepo) {
         System.setProperty("user.dir", notARepo.toString());
-        EventLog.recordEvent("session", sessionStart("sess-long", "Cached User", "cached-project", "cached-client"));
+        EventLog.recordEvent(sessionStart("sess-long", "Cached User", "cached-project", "cached-client"));
         for (int i = 0; i < 20; i++) {
             UsageEvent toolUse = sessionStart("sess-long", "Cached User", "cached-project", "cached-client");
             toolUse.event = "tool_use";
-            EventLog.recordEvent("post-tool-use", toolUse);
+            EventLog.recordEvent(toolUse);
         }
-        // One baseline record for this session, not one per event.
-        SessionBaselineStore.SessionBaseline baseline = SessionBaselineStore.read("sess-long");
-        assertEquals("sess-long", baseline.sessionId);
+        // One session row, not one per event.
+        assertEquals("sess-long", EventLog.session("sess-long").sessionId());
 
         HookInput input = HookInput.parse("{\"session_id\":\"sess-long\"}");
         IdentityResolver.ResolvedIdentity result = IdentityResolver.resolveIdentity(input, "claude");

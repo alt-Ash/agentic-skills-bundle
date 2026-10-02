@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agentic Skills Usage</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header>
+    <h1>Agentic Skills usage</h1>
+    <form id="filters" aria-label="Filters">
+      <label>From <input type="date" name="from"></label>
+      <label>To <input type="date" name="to"></label>
+      <label>Project <select name="project"><option value="">All</option></select></label>
+      <label>Model <select name="model"><option value="">All</option></select></label>
+      <button type="button" id="reset">Reset</button>
+    </form>
+  </header>
+  <nav id="tabs" role="tablist" aria-label="Views"></nav>
+  <main id="view" tabindex="-1"></main>
+  <footer id="foot"></footer>
+  <script src="/vendor/chart.umd.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

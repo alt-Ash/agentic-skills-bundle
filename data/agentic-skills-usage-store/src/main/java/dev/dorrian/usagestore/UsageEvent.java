@@ -1,13 +1,11 @@
-package dev.dorrian.agenticskillshooks;
+package dev.dorrian.usagestore;
 
 import java.util.List;
 
 /**
- * Unified, self-describing record — Java port of hooks/lib/event-log.ts's UsageEvent.
- * Unlike the TS version (which uses `undefined` to omit a key from JSON.stringify for
- * fields that don't apply to a given event kind), every field here is always emitted,
- * using null where TS would have omitted the key. Nothing outside this new Java stack
- * reads these files, so this is a deliberate simplification, not a compatibility gap.
+ * Unified, self-describing record of one hook firing. Every field is always present, null where
+ * it doesn't apply to the event kind. Persisted by {@link UsageDb}; also the JSON shape POSTed
+ * to ANALYTICS_SERVICE_URL, so don't rename fields.
  */
 public final class UsageEvent {
     public String eventId;
@@ -18,6 +16,7 @@ public final class UsageEvent {
     public String user;
     public String project;
     public String client;
+    public String cwd;
     public String source;
     public String reason;
     public String model;
@@ -44,4 +43,5 @@ public final class UsageEvent {
     public Integer gitLinesDeleted;
     public String command;
     public String slashCommand;
+    public String guardRule;
 }

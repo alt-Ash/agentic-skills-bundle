@@ -23,12 +23,20 @@ public final class HooksInstaller {
     }
 
     public static Path installAndRegister(Path settingsFile) {
-        return installAndRegister(PackageRoot.hooksJar(), HooksJarLocation.jarPath(), settingsFile);
+        return installAndRegister(settingsFile, false);
+    }
+
+    public static Path installAndRegister(Path settingsFile, boolean includeGuard) {
+        return installAndRegister(PackageRoot.hooksJar(), HooksJarLocation.jarPath(), settingsFile, includeGuard);
     }
 
     public static Path installAndRegister(Path bundledJar, Path targetJar, Path settingsFile) {
+        return installAndRegister(bundledJar, targetJar, settingsFile, false);
+    }
+
+    public static Path installAndRegister(Path bundledJar, Path targetJar, Path settingsFile, boolean includeGuard) {
         Path installed = HooksJarLocation.installFrom(bundledJar, targetJar);
-        HookRegistrar.registerAll(settingsFile, installed);
+        HookRegistrar.registerAll(settingsFile, installed, includeGuard);
         return installed;
     }
 

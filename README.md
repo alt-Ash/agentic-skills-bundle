@@ -53,7 +53,7 @@ Each path is `global` / `project`. A dash means the tool doesn't support that it
 | Zed AI | `~/.config/zed/skills` / `.zed/skills` | — | — |
 
 > [!NOTE]
-> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes what older versions wrote to `~/.codex/skills` and `~/.codex/agents/*.md`.
+> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes older versions' `~/.codex/skills` and `~/.codex/agents/*.md`.
 
 Some skills and agents ship a companion slash command (see each entry's **Companion command** line); commands install only for tools that support them.
 
@@ -239,7 +239,7 @@ Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to 
 
 ## Local MCP servers
 
-The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar` — no build step or Maven needed. For Gemini CLI and Codex CLI the `issue-tickets` credentials are never written into the tool's config: Gemini's entry references `$AZURE_DEVOPS_ACCOUNTS_B64`/`$GITHUB_ACCOUNTS_B64` and Codex's forwards them via `env_vars`, both read from the environment your shell profile sets.
+The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar`. For Gemini CLI and Codex CLI the `issue-tickets` credentials are never written into the tool's config: Gemini's entry references `$AZURE_DEVOPS_ACCOUNTS_B64`/`$GITHUB_ACCOUNTS_B64` and Codex's forwards them via `env_vars`, both read from the environment your shell profile sets.
 
 ### `issue-tickets`
 
@@ -247,7 +247,7 @@ MCP server for ticket/issue management — supports **Azure DevOps and GitHub** 
 
 Tools: `pull_ticket`, `create_issue`, `create_pull_request`
 
-**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>` `url`/`connection`/`developerConnection`, then `<issueManagement><url>`, then the project `<url>`). GitHub is recognised by `github.com` and Azure DevOps by `dev.azure.com` or `visualstudio.com`, in https, ssh, or `scm:git:` form. Gradle build files are not read. If none of these match and only one provider has credentials configured, that provider is used.
+**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>` `url`/`connection`/`developerConnection`, then `<issueManagement><url>`, then the project `<url>`). GitHub is recognised by `github.com` and Azure DevOps by `dev.azure.com` or `visualstudio.com`. If none of these match and only one provider has credentials configured, that provider is used.
 
 Credentials come from environment variables. The installer collects one or more accounts per provider and writes them to your shell profile (`~/.zshrc` or `~/.bashrc`) as base64-encoded JSON; for each provider the first variable set wins:
 
@@ -272,14 +272,15 @@ Tools:
 
 A shared circuit breaker aborts the rest of a scan the moment the target's error rate or latency degrades sharply. Reports are written to `security-scans/<host>-<timestamp>.json` and `.md` in the calling process's working directory. See `mcp/security-scanner/README.md` for full development docs.
 
-## Usage analytics hooks (Claude Code)
+## Hooks (Claude Code)
 
-When you install for **Claude Code**, the CLI also copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it in `~/.claude/settings.json` for `SessionStart`/`SessionEnd`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure` and `Stop`. Each hook records a usage event — tool name, model and token counts, prompt/response *lengths* (never the prompt or response text), the Bash command for Bash tool calls (with secrets redacted), and a per-session git change summary.
+Installing for **Claude Code** also copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it in `~/.claude/settings.json` for `SessionStart`/`SessionEnd`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure` and `Stop`. Each records tool name, model and token counts, prompt/response *lengths* (never the text), the Bash command (secrets redacted) and git change summary.
 
-- Events are written **locally, in the project directory Claude Code is running in**: `ai-usage-events.json`, `hooks-events.json` and `.hooks-data/`. Add them to that project's `.gitignore`.
-- Nothing leaves your machine unless you set `ANALYTICS_SERVICE_URL`, in which case events are also POSTed there.
-- A hook can never block Claude Code: it always exits 0, even on internal errors.
-- To stop collecting, run `agentic-skills --uninstall` and select Claude Code: it removes the hook entries from `~/.claude/settings.json` (leaving any hooks of your own) and deletes `~/.agentic-skills/hooks/`. Event files already written in your projects are kept.
+- Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects. Nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set. These hooks never block Claude Code: they always exit 0.
+- `agentic-skills dashboard` serves a read-only localhost dashboard. `data import [dir…]` loads old `ai-usage-events.json` files; `data prune --older-than 90d`.
+- `--uninstall` (select Claude Code) removes our hooks (not yours) and the jar; the database is kept.
+
+**Optional `guard` hook** (full install, default **no**). Unlike the above it **can block**: on `PreToolUse` it exits 2, with a reason, for recursive deletes of `/`, `~` or `*`, force-pushes to `main`/`master`, and reading or editing `.env` files (not `.env.example`), SSH keys or `*.pem`/`*.key`. A pattern check, not a sandbox: keep your `permissions` deny rules.
 
 ## Development
 
@@ -294,7 +295,7 @@ java -jar bin/agentic-skills-cli/target/agentic-skills.jar --package-root .   # 
 | Module | What it is |
 |---|---|
 | `bin/agentic-skills-cli` | The installer (plain Java 21); builds the self-contained `agentic-skills.jar` |
-| `hooks/agentic-skills-hooks` | The analytics hooks (plain Java 21) |
+| `hooks/agentic-skills-hooks`, `data/agentic-skills-usage-store` | The hooks and their SQLite store (plain Java 21) |
 | `mcp/issue-tickets`, `mcp/security-scanner` | The local MCP servers (Spring Boot + Spring AI) |
 | `evals/agentic-skills-evals` | Behavioral evals for the agents — real, billed model calls via the `claude` CLI, so they're excluded from `verify`; opt in with `-Pbilled-evals` |
 

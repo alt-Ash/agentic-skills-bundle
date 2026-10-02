@@ -7,8 +7,8 @@ import dev.dorrian.agenticskillshooks.GitSessionDiffResolver;
 import dev.dorrian.agenticskillshooks.HookInput;
 import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
-import dev.dorrian.agenticskillshooks.SessionBaselineStore;
-import dev.dorrian.agenticskillshooks.UsageEvent;
+import dev.dorrian.usagestore.UsageDb;
+import dev.dorrian.usagestore.UsageEvent;
 
 import java.time.Instant;
 import java.util.List;
@@ -53,9 +53,9 @@ public final class SessionHook {
         // Recover the commit sha recorded at session_start so we can diff "what changed
         // this session" against it.
         if ("session_end".equals(kind)) {
-            SessionBaselineStore.SessionBaseline baseline = SessionBaselineStore.read(input.sessionId());
+            UsageDb.SessionRow stored = EventLog.session(input.sessionId());
             GitSessionDiffResolver.GitChangeSummary summary =
-                    GitSessionDiffResolver.summarize(baseline != null ? baseline.gitStartCommit : null);
+                    GitSessionDiffResolver.summarize(stored != null ? stored.gitStartCommit() : null);
             event.gitCommits = summary.commits;
             event.gitFilesAdded = summary.filesAdded;
             event.gitFilesModified = summary.filesModified;
@@ -69,15 +69,15 @@ public final class SessionHook {
 
     public static void run(HookInput input) {
         UsageEvent event = buildEvent(input);
-        EventLog.recordEvent("session", event);
+        EventLog.recordEvent(event);
 
         if ("session_end".equals(event.event)) {
             String id = input.sessionId();
             if (id != null) {
-                List<UsageEvent> hooks = EventLog.readSessionGroup(id);
+                List<UsageEvent> hooks = EventLog.sessionEvents(id);
                 boolean hasSessionStart = hooks.stream().anyMatch(h -> "session_start".equals(h.event));
                 if (!hasSessionStart) {
-                    EventLog.appendHookTypeData("session-catchup-miss", event);
+                    EventLog.bump(EventLog.SESSION_END_WITHOUT_START);
                 } else {
                     AnalyticsServiceClient.pushSession(id, hooks);
                 }

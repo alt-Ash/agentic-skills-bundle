@@ -4,7 +4,8 @@ import dev.dorrian.agenticskillshooks.EventLog;
 import dev.dorrian.agenticskillshooks.HookInput;
 import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
-import dev.dorrian.agenticskillshooks.UsageEvent;
+import dev.dorrian.usagestore.SecretRedactor;
+import dev.dorrian.usagestore.UsageEvent;
 
 import java.time.Instant;
 
@@ -29,9 +30,9 @@ public final class PostToolUseFailureHook {
         event.toolName = input.toolName();
         event.toolUseId = input.toolUseId();
         event.durationMs = input.durationMs();
-        event.error = input.error();
+        event.error = SecretRedactor.redactError(input.error());
         event.command = input.extractBashCommand();
 
-        EventLog.recordEvent("post-tool-use-failure", event);
+        EventLog.recordEvent(event);
     }
 }

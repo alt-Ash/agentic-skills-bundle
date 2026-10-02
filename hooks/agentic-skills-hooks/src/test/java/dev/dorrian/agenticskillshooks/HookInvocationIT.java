@@ -3,8 +3,9 @@ package dev.dorrian.agenticskillshooks;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.MissingNode;
 import com.sun.net.httpserver.HttpServer;
+import dev.dorrian.usagestore.UsageDb;
+import dev.dorrian.usagestore.UsageEvent;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
@@ -32,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Black-box tests of the packaged hooks jar: each test spawns {@code java -jar
  * agentic-skills-hooks.jar <hookType>} as a real child process, pipes a JSON payload to stdin,
- * and asserts on the files it writes and the events it POSTs. Run by failsafe after
+ * and asserts on the usage database it writes and the events it POSTs. Run by failsafe after
  * {@code package}, so this exercises the actual shaded artifact (manifest, main class, bundled
  * dependencies) rather than classes on the test classpath — the point of an out-of-process test.
  */
@@ -76,7 +80,12 @@ class HookInvocationIT {
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
-    private record HookRun(int exitCode, JsonNode events, JsonNode hookTypeEvents, JsonNode consolidated) {
+    private record HookRun(int exitCode, JsonNode events) {
+    }
+
+    /** Each test gets its own database, next to (never inside) the hook's working directory. */
+    private static Path dbFor(Path cwd) {
+        return cwd.resolveSibling(cwd.getFileName() + "-usage.db");
     }
 
     private static HookRun runHook(Path cwd, String hookType, Object payload) throws Exception {
@@ -86,36 +95,64 @@ class HookInvocationIT {
     private static HookRun runHook(Path cwd, String hookType, Object payload, Map<String, String> extraEnv)
         throws Exception {
         int exit = spawnHook(cwd, hookType, payload, extraEnv);
-        return new HookRun(exit,
-            readJson(cwd.resolve("ai-usage-events.json")),
-            readJson(cwd.resolve(".hooks-data").resolve(hookType + ".json")),
-            readJson(cwd.resolve("hooks-events.json")));
+        return new HookRun(exit, storedEvents(cwd));
     }
 
     private static int spawnHook(Path cwd, String hookType, Object payload, Map<String, String> extraEnv)
+        throws Exception {
+        Process process = startHook(cwd, hookType, payload, extraEnv);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS), "hook process timed out: " + hookType);
+        return process.exitValue();
+    }
+
+    private static Process startHook(Path cwd, String hookType, Object payload, Map<String, String> extraEnv)
         throws Exception {
         ProcessBuilder pb = new ProcessBuilder("java", "-jar", HOOKS_JAR.toAbsolutePath().toString(), hookType)
             .directory(cwd.toFile())
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD);
-        // Hermetic: never inherit a developer's real analytics endpoint.
+        // Hermetic: never inherit a developer's real analytics endpoint or database.
         pb.environment().remove("ANALYTICS_SERVICE_URL");
+        pb.environment().put(UsageDb.ENV_DB_PATH, dbFor(cwd).toString());
         pb.environment().putAll(extraEnv);
         Process process = pb.start();
         try (OutputStream stdin = process.getOutputStream()) {
             JSON.writeValue(stdin, payload);
         }
-        assertTrue(process.waitFor(30, TimeUnit.SECONDS), "hook process timed out: " + hookType);
-        return process.exitValue();
+        return process;
     }
 
-    /** Missing or unparseable file → MissingNode (files are legitimately absent on error paths). */
-    private static JsonNode readJson(Path file) {
-        try {
-            return JSON.readTree(file.toFile());
-        } catch (IOException e) {
-            return MissingNode.getInstance();
+    /** Every stored event for this test's database, oldest first, as JSON (empty if there is no DB yet). */
+    private static JsonNode storedEvents(Path cwd) {
+        ArrayNode out = JSON.createArrayNode();
+        if (!Files.exists(dbFor(cwd))) return out;
+        try (UsageDb db = UsageDb.openReadOnly(dbFor(cwd));
+             var st = db.connection().createStatement();
+             var rs = st.executeQuery("SELECT session_id FROM events GROUP BY session_id ORDER BY MIN(ts), MIN(rowid)")) {
+            List<String> sessions = new ArrayList<>();
+            while (rs.next()) sessions.add(rs.getString(1));
+            List<UsageEvent> all = new ArrayList<>();
+            for (String id : sessions) all.addAll(db.eventsForSession(id));
+            if (sessions.contains(null)) all.addAll(eventsWithoutSession(db));
+            all.sort(java.util.Comparator.comparing(e -> e.ts));
+            all.forEach(e -> out.add(JSON.valueToTree(e)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
+        return out;
+    }
+
+    private static List<UsageEvent> eventsWithoutSession(UsageDb db) throws Exception {
+        List<UsageEvent> out = new ArrayList<>();
+        try (var st = db.connection().createStatement(); var rs = st.executeQuery("SELECT event_id FROM events WHERE session_id IS NULL")) {
+            while (rs.next()) {
+                UsageEvent e = new UsageEvent();
+                e.eventId = rs.getString(1);
+                e.event = "(no session)";
+                out.add(e);
+            }
+        }
+        return out;
     }
 
     /** POSTs are fire-and-forget from the hook's point of view; poll briefly for them to land. */
@@ -176,12 +213,13 @@ class HookInvocationIT {
             assertEquals("sess-1", ev.path("sessionId").asText());
             assertEquals("claude", ev.path("provider").asText());
 
-            assertEquals(1, run.hookTypeEvents().size());
-            assertEquals("session_start", run.hookTypeEvents().get(0).path("event").asText());
-
-            assertEquals(1, run.consolidated().size());
-            assertEquals("sess-1", run.consolidated().get(0).path("sessionId").asText());
-            assertEquals(1, run.consolidated().get(0).path("hooks").size());
+            // Nothing is written to the working directory any more: the database is the only sink.
+            assertFalse(Files.exists(cwd.resolve("ai-usage-events.json")));
+            assertFalse(Files.exists(cwd.resolve("hooks-events.json")));
+            assertFalse(Files.exists(cwd.resolve(".hooks-data")));
+            try (UsageDb db = UsageDb.openReadOnly(dbFor(cwd))) {
+                assertEquals("sess-1", db.session("sess-1").sessionId());
+            }
         }
 
         @Test
@@ -217,31 +255,19 @@ class HookInvocationIT {
         }
 
         @Test
-        void skipsTheSessionsPostAndRecordsACatchUpMissWhenTheLocalSessionGroupWasLost(@TempDir Path cwd)
+        void skipsTheSessionsPostAndCountsAMissWhenASessionEndsWithoutEverHavingStarted(@TempDir Path cwd)
             throws Exception {
             Map<String, String> env = Map.of("ANALYTICS_SERVICE_URL", captureUrl);
-            spawnHook(cwd, "session", sessionPayload("SessionStart", "sess-miss", cwd), env);
-
-            Files.writeString(cwd.resolve("hooks-events.json"), "NOT VALID JSON");
-
             spawnHook(cwd, "session", sessionPayload("SessionEnd", "sess-miss", cwd), env);
 
             List<JsonNode> sessionPosts = awaitCaptured(b -> b.has("hooks"), 0);
             assertEquals(0, sessionPosts.size());
 
-            JsonNode missLog = readJson(cwd.resolve(".hooks-data").resolve("session-catchup-miss.json"));
-            assertEquals(1, missLog.size());
-            assertEquals("sess-miss", missLog.get(0).path("sessionId").asText());
-            assertEquals("session_end", missLog.get(0).path("event").asText());
-
-            JsonNode group = null;
-            for (JsonNode g : readJson(cwd.resolve("hooks-events.json"))) {
-                if ("sess-miss".equals(g.path("sessionId").asText())) {
-                    group = g;
-                }
+            try (UsageDb db = UsageDb.openReadOnly(dbFor(cwd))) {
+                assertEquals(1, db.meta(EventLog.SESSION_END_WITHOUT_START));
+                assertEquals(List.of("session_end"),
+                    db.eventsForSession("sess-miss").stream().map(e -> e.event).toList());
             }
-            assertTrue(group != null, "sess-miss group missing from hooks-events.json");
-            assertEquals(List.of("session_end"), texts(group.path("hooks"), "event"));
         }
 
         @Test
@@ -265,7 +291,7 @@ class HookInvocationIT {
 
             JsonNode start = null;
             JsonNode end = null;
-            for (JsonNode e : readJson(repo.resolve("ai-usage-events.json"))) {
+            for (JsonNode e : storedEvents(repo)) {
                 switch (e.path("event").asText()) {
                     case "session_start" -> start = e;
                     case "session_end" -> end = e;
@@ -305,10 +331,6 @@ class HookInvocationIT {
             assertEquals("default", ev.path("permissionMode").asText());
             assertEquals("prompt-abc", ev.path("promptId").asText());
             assertFalse(ev.has("prompt"));
-
-            assertEquals("user_prompt", run.hookTypeEvents().get(0).path("event").asText());
-            assertEquals("sess-2", run.consolidated().get(0).path("sessionId").asText());
-            assertFalse(run.consolidated().get(0).path("hooks").get(0).has("prompt"));
         }
 
         @Test
@@ -350,9 +372,21 @@ class HookInvocationIT {
             assertEquals("tool_use", ev.path("event").asText());
             assertEquals("claude", ev.path("provider").asText());
             assertTrue(ev.path("model").isNull());
+        }
 
-            assertEquals("tool_use", run.hookTypeEvents().get(0).path("event").asText());
-            assertEquals("sess-3", run.consolidated().get(0).path("sessionId").asText());
+        @Test
+        void recordsTheToolNameIdAndDurationSoPerToolStatsAreRecoverable(@TempDir Path cwd) throws Exception {
+            HookRun run = runHook(cwd, "post-tool-use", Map.of(
+                "session_id", "sess-tool",
+                "tool_name", "Edit",
+                "tool_use_id", "tu-42",
+                "duration_ms", 87,
+                "cwd", "/tmp/proj"));
+
+            JsonNode ev = run.events().get(0);
+            assertEquals("Edit", ev.path("toolName").asText());
+            assertEquals("tu-42", ev.path("toolUseId").asText());
+            assertEquals(87, ev.path("durationMs").asInt());
         }
 
         @Test
@@ -407,9 +441,18 @@ class HookInvocationIT {
             assertEquals("claude", ev.path("provider").asText());
             assertEquals("Bash", ev.path("toolName").asText());
             assertEquals("command not found", ev.path("error").asText());
+        }
 
-            assertEquals("Bash", run.hookTypeEvents().get(0).path("toolName").asText());
-            assertEquals("sess-fail", run.consolidated().get(0).path("sessionId").asText());
+        @Test
+        void redactsAndCapsTheErrorTextBecauseItCanQuoteFileContents(@TempDir Path cwd) throws Exception {
+            String quoted = "Exit code 1\n" + "secret-looking file body\n".repeat(100) + "token=abc123def456";
+            HookRun run = runHook(cwd, "post-tool-use-failure", Map.of(
+                "session_id", "sess-err", "tool_name", "Bash", "error", quoted, "cwd", "/tmp/proj"));
+
+            String stored = run.events().get(0).path("error").asText();
+            assertTrue(stored.length() < 400, "error should be capped, was " + stored.length());
+            assertTrue(stored.endsWith("...[truncated]"));
+            assertFalse(stored.contains("\n"));
         }
 
         @Test
@@ -444,10 +487,66 @@ class HookInvocationIT {
             assertEquals(11, ev.path("lastMessageCharLength").asInt());
             assertEquals(3, ev.path("estimatedOutputTokens").asInt());
             assertFalse(ev.has("last_assistant_message"));
+        }
+    }
 
-            assertEquals(1, run.hookTypeEvents().size());
-            assertEquals("sess-stop", run.consolidated().get(0).path("sessionId").asText());
-            assertFalse(run.consolidated().get(0).path("hooks").get(0).has("last_assistant_message"));
+    // ─── guard ───────────────────────────────────────────────────────────────
+
+    @Nested
+    class Guard {
+
+        private Map<String, Object> bash(String command) {
+            return Map.of("session_id", "sess-guard", "tool_name", "Bash", "tool_input", Map.of("command", command));
+        }
+
+        @Test
+        void blocksWithExitTwoAndRecordsAGuardBlockEvent(@TempDir Path cwd) throws Exception {
+            HookRun run = runHook(cwd, "guard", bash("git push --force origin main"));
+
+            assertEquals(2, run.exitCode());
+            assertEquals(1, run.events().size());
+            JsonNode ev = run.events().get(0);
+            assertEquals("guard_block", ev.path("event").asText());
+            assertEquals("Bash", ev.path("toolName").asText());
+            assertEquals("force-push to main/master", ev.path("guardRule").asText());
+            assertEquals("git push --force origin main", ev.path("command").asText());
+        }
+
+        @Test
+        void allowsWithExitZeroAndRecordsNothing(@TempDir Path cwd) throws Exception {
+            HookRun run = runHook(cwd, "guard", bash("ls -la"));
+
+            assertEquals(0, run.exitCode());
+            assertEquals(0, run.events().size());
+        }
+
+        @Test
+        void stillBlocksWhenTheDatabaseIsUnusable(@TempDir Path cwd) throws Exception {
+            Files.writeString(dbFor(cwd), "not a database ".repeat(100));
+
+            assertEquals(2, spawnHook(cwd, "guard", bash("rm -rf /"), Map.of()));
+        }
+    }
+
+    // ─── concurrency ─────────────────────────────────────────────────────────
+
+    @Nested
+    class Concurrency {
+
+        @Test
+        void manyHookProcessesWritingAtOnceLoseNoEvents(@TempDir Path cwd) throws Exception {
+            int processes = 12;
+            ExecutorService pool = Executors.newFixedThreadPool(processes);
+            List<Future<Integer>> exits = new ArrayList<>();
+            for (int i = 0; i < processes; i++) {
+                String session = "sess-par-" + (i % 3);
+                exits.add(pool.submit(() -> spawnHook(cwd, "user-prompt-submit",
+                    Map.of("session_id", session, "prompt", "hi", "cwd", "/tmp/proj"), Map.of())));
+            }
+            for (Future<Integer> exit : exits) assertEquals(0, exit.get());
+            pool.shutdown();
+
+            assertEquals(processes, storedEvents(cwd).size());
         }
     }
 }

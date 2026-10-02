@@ -49,6 +49,14 @@ public final class HookRegistrar {
     }
 
     public static void registerAll(Path settingsFile, Path hooksJarPath) {
+        registerAll(settingsFile, hooksJarPath, false);
+    }
+
+    public static void registerAll(Path settingsFile, Path hooksJarPath, boolean includeGuard) {
+        List<HookDescriptor> descriptors = new ArrayList<>(HooksRegistry.ALL);
+        if (includeGuard) {
+            descriptors.add(HooksRegistry.GUARD);
+        }
         Map<String, Object> config = readJsonObject(settingsFile);
         @SuppressWarnings("unchecked")
         Map<String, Object> hooksSection = (Map<String, Object>) config.computeIfAbsent(
@@ -56,9 +64,9 @@ public final class HookRegistrar {
         );
 
         boolean changed = false;
-        for (HookDescriptor descriptor : HooksRegistry.ALL) {
+        for (HookDescriptor descriptor : descriptors) {
             for (String eventName : descriptor.claudeEventNames()) {
-                if (registerOne(hooksSection, eventName, descriptor.hookType(), hooksJarPath)) {
+                if (registerOne(hooksSection, eventName, descriptor, hooksJarPath)) {
                     changed = true;
                 }
             }
@@ -71,7 +79,8 @@ public final class HookRegistrar {
 
     /** Returns true if a new entry was appended (i.e. it wasn't already registered). */
     @SuppressWarnings("unchecked")
-    private static boolean registerOne(Map<String, Object> hooksSection, String eventName, String hookType, Path jarPath) {
+    private static boolean registerOne(Map<String, Object> hooksSection, String eventName, HookDescriptor descriptor, Path jarPath) {
+        String hookType = descriptor.hookType();
         List<Object> eventEntries = (List<Object>) hooksSection.computeIfAbsent(
             eventName, k -> new ArrayList<Object>()
         );
@@ -84,9 +93,10 @@ public final class HookRegistrar {
         command.put("type", "command");
         command.put("command", "java");
         command.put("args", List.of("-jar", jarPath.toString(), hookType));
+        command.put("timeout", descriptor.timeoutSeconds());
 
         Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("matcher", "");
+        entry.put("matcher", descriptor.matcher());
         entry.put("hooks", new ArrayList<>(List.of(command)));
 
         eventEntries.add(entry);

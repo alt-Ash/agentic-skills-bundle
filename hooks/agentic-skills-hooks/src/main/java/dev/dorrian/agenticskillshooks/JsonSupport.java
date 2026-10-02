@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillshooks;
 
+import dev.dorrian.usagestore.UsageEvent;
+
 import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.JsonNode;

@@ -43,8 +43,37 @@ class HookRegistrarTest {
         assertCommandArgsEndWith(hooks, "SessionEnd", "session");
     }
 
+    @Test
+    void guardHookIsRegisteredOnlyWhenOptedIn(@TempDir Path tempDir) throws IOException {
+        Path jarPath = tempDir.resolve("agentic-skills-hooks.jar");
+        Path plain = tempDir.resolve("plain.json");
+        Path guarded = tempDir.resolve("guarded.json");
+
+        HookRegistrar.registerAll(plain, jarPath);
+        HookRegistrar.registerAll(guarded, jarPath, true);
+
+        Map<String, Object> plainHooks = MAPPER.readValue(plain.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+        Map<String, Object> guardedHooks = MAPPER.readValue(guarded.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plainSection = (Map<String, Object>) plainHooks.get("hooks");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> guardedSection = (Map<String, Object>) guardedHooks.get("hooks");
+
+        assertFalse(plainSection.containsKey("PreToolUse"));
+        assertCommandArgsEndWith(guardedSection, "PreToolUse", "guard", "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+
+        HookRegistrar.unregisterAll(guarded);
+        assertFalse(guarded.toFile().length() > 0 && MAPPER.readTree(guarded.toFile()).has("hooks"));
+    }
+
     @SuppressWarnings("unchecked")
     private static void assertCommandArgsEndWith(Map<String, Object> hooks, String event, String expectedHookType) {
+        assertCommandArgsEndWith(hooks, event, expectedHookType, "", 30);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void assertCommandArgsEndWith(Map<String, Object> hooks, String event, String expectedHookType,
+                                                 String expectedMatcher, int expectedTimeout) {
         List<Object> entries = (List<Object>) hooks.get(event);
         Map<String, Object> entry = (Map<String, Object>) entries.get(0);
         List<Object> commands = (List<Object>) entry.get("hooks");
@@ -53,6 +82,8 @@ class HookRegistrarTest {
         assertEquals(expectedHookType, args.get(args.size() - 1));
         assertEquals("java", command.get("command"));
         assertEquals("command", command.get("type"));
+        assertEquals(expectedTimeout, command.get("timeout"));
+        assertEquals(expectedMatcher, entry.get("matcher"));
     }
 
     @Test

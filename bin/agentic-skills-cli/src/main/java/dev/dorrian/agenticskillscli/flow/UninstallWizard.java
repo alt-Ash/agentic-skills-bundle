@@ -227,7 +227,7 @@ public final class UninstallWizard {
             : null;
         boolean removeHooks = claudeSettings != null && HooksInstaller.isInstalled(claudeSettings)
             && prompter.confirm("Remove the analytics hooks from Claude Code? "
-                + Ansi.dim("(event files already written in your projects are kept)"), true);
+                + Ansi.dim("(your usage database is kept)"), true);
 
         if (selectedSkills.isEmpty() && selectedAgentFiles.isEmpty() && !removeCommands
             && !removeSkillMcps && !removeAgentMcps && globalMcpsToRemove.isEmpty() && !removeHooks) {
@@ -275,6 +275,8 @@ public final class UninstallWizard {
                 int removed = HooksInstaller.uninstall(claudeSettings);
                 System.out.println("  " + Ansi.green("Analytics hooks removed")
                     + Ansi.dim(" (" + removed + " hook entries from " + claudeSettings + ")"));
+                System.out.println("  " + Ansi.dim("Usage data kept at " + dev.dorrian.usagestore.UsageDb.defaultPath()
+                    + " — delete that file if you no longer want it."));
             } catch (RuntimeException e) {
                 System.out.println("  " + Ansi.yellow("Analytics hooks: could not remove — " + e.getMessage()));
                 System.out.println("  " + Ansi.dim("Remove the agentic-skills-hooks.jar entries from " + claudeSettings + " manually."));

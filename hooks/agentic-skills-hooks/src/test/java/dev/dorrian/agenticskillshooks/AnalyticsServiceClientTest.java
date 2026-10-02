@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillshooks;
 
+import dev.dorrian.usagestore.UsageEvent;
+
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
