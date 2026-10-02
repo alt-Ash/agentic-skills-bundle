@@ -17,6 +17,7 @@ import dev.dorrian.securityscanner.session.ScanSession;
 import dev.dorrian.securityscanner.session.ScanSessionFactory;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Predicate;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
@@ -67,7 +68,7 @@ public class SecurityScannerTools {
         }
 
         String startedAt = Instant.now().toString();
-        ScanSession session = sessionFactory.create(target);
+        ScanSession session = sessionFactory.create(target, redirectPolicy());
         List<Finding> findings = passiveChecks.run(session);
         var stats = session.getStats();
         String finishedAt = Instant.now().toString();
@@ -123,7 +124,7 @@ public class SecurityScannerTools {
         }
 
         String startedAt = Instant.now().toString();
-        ScanSession session = sessionFactory.create(target);
+        ScanSession session = sessionFactory.create(target, redirectPolicy());
         List<Finding> findings = activeChecks.run(session,
             categories != null && !categories.isEmpty() ? ActiveCheckOptions.of(categories) : ActiveCheckOptions.all());
         var stats = session.getStats();
@@ -171,5 +172,17 @@ public class SecurityScannerTools {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize tool response", e);
         }
+    }
+
+    /**
+     * Redirect hops are followed only to hosts present in the allowlist (loaded once per scan);
+     * if it cannot be loaded, nothing is allowed — the session then contacts no host at all.
+     */
+    private Predicate<String> redirectPolicy() {
+        AllowlistLoader.LoadResult loaded = allowlistLoader.load();
+        if (!loaded.ok()) {
+            return host -> false;
+        }
+        return host -> allowlistLoader.checkTarget(host, loaded.allowlist()).allowed();
     }
 }

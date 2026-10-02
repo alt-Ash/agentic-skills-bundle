@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.dorrian.issuetickets.HttpTimeoutProperties;
 import dev.dorrian.issuetickets.credentials.GithubAccount;
 import dev.dorrian.issuetickets.credentials.GithubAccountsResolver;
 import dev.dorrian.issuetickets.model.CreateIssueParams;
@@ -21,6 +22,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,17 +43,21 @@ public class GithubProvider implements TicketProvider {
     private final HttpClient httpClient;
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiBase;
+    private final Duration requestTimeout;
 
     @Autowired
-    public GithubProvider(GithubAccountsResolver accountsResolver) {
-        this(accountsResolver, HttpClient.newHttpClient(), API_BASE);
+    public GithubProvider(GithubAccountsResolver accountsResolver, HttpTimeoutProperties timeouts) {
+        this(accountsResolver, HttpClient.newBuilder().connectTimeout(timeouts.connectTimeout()).build(),
+            API_BASE, timeouts.requestTimeout());
     }
 
     /** @param apiBase overridable for tests to point at a local mock server instead of api.github.com. */
-    GithubProvider(GithubAccountsResolver accountsResolver, HttpClient httpClient, String apiBase) {
+    GithubProvider(GithubAccountsResolver accountsResolver, HttpClient httpClient, String apiBase,
+                   Duration requestTimeout) {
         this.accountsResolver = accountsResolver;
         this.httpClient = httpClient;
         this.apiBase = apiBase;
+        this.requestTimeout = requestTimeout;
     }
 
     public List<NormalizedTicket> pullTicket(PullTicketParams params) {
@@ -208,6 +214,7 @@ public class GithubProvider implements TicketProvider {
     private JsonNode send(GithubAccount account, String method, String path, JsonNode body) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(apiBase + path))
+                .timeout(requestTimeout)
                 .header("Authorization", authHeader(account.token()))
                 .header("Accept", "application/vnd.github+json")
                 .header("X-GitHub-Api-Version", "2022-11-28");

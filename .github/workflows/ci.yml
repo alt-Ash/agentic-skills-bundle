@@ -117,6 +117,9 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
+      - name: Check module revisions match root
+        run: scripts/check-revisions.sh
+
       - name: Test
         run: ${{ matrix.command }}
 

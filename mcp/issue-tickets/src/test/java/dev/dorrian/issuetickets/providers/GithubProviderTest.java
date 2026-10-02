@@ -1,8 +1,10 @@
 package dev.dorrian.issuetickets.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpServer;
+import dev.dorrian.issuetickets.HttpTimeoutProperties;
 import dev.dorrian.issuetickets.credentials.GithubAccountsResolver;
 import dev.dorrian.issuetickets.model.CreateIssueParams;
 import dev.dorrian.issuetickets.model.CreatePrParams;
@@ -11,12 +13,15 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class GithubProviderTest {
 
@@ -53,7 +58,42 @@ class GithubProviderTest {
         server.start();
         String apiBase = "http://localhost:" + server.getAddress().getPort();
         var resolver = new GithubAccountsResolver(Map.of("GITHUB_TOKEN", "ghp_testtoken123")::get);
-        return new GithubProvider(resolver, HttpClient.newHttpClient(), apiBase);
+        return new GithubProvider(resolver, HttpClient.newHttpClient(), apiBase, Duration.ofSeconds(5));
+    }
+
+    @Test
+    void requestTimeoutIsAppliedToEveryRequest() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/", exchange -> {
+            try {
+                Thread.sleep(2000);
+                exchange.sendResponseHeaders(200, -1);
+            } catch (InterruptedException | IOException ignored) {
+                // client gave up on the slow response, which is what the test expects
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        String apiBase = "http://localhost:" + server.getAddress().getPort();
+        var resolver = new GithubAccountsResolver(Map.of("GITHUB_TOKEN", "t")::get);
+        var provider = new GithubProvider(resolver, HttpClient.newHttpClient(), apiBase, Duration.ofMillis(200));
+
+        assertThatThrownBy(() -> provider.pullTicket(new PullTicketParams(List.of("1"), "acme/widgets", null, null, null)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasCauseInstanceOf(HttpTimeoutException.class);
+    }
+
+    @Test
+    void propertiesBuildClientWithConfiguredConnectTimeout() {
+        var props = new HttpTimeoutProperties(Duration.ofSeconds(3), Duration.ofSeconds(7));
+        var resolver = new GithubAccountsResolver(Map.of("GITHUB_TOKEN", "t")::get);
+
+        var provider = new GithubProvider(resolver, props);
+
+        var client = (HttpClient) ReflectionTestUtils.getField(provider, "httpClient");
+        assertThat(client.connectTimeout()).contains(Duration.ofSeconds(3));
+        assertThat(ReflectionTestUtils.getField(provider, "requestTimeout")).isEqualTo(Duration.ofSeconds(7));
     }
 
     @Test
@@ -145,7 +185,7 @@ class GithubProviderTest {
         server.start();
         String apiBase = "http://localhost:" + server.getAddress().getPort();
         var resolver = new GithubAccountsResolver(Map.of("GITHUB_TOKEN", "t")::get);
-        var provider = new GithubProvider(resolver, HttpClient.newHttpClient(), apiBase);
+        var provider = new GithubProvider(resolver, HttpClient.newHttpClient(), apiBase, Duration.ofSeconds(5));
 
         var result = provider.createPullRequest(new CreatePrParams("Title", "feature", "main", null, "acme/widgets", null, null));
 
