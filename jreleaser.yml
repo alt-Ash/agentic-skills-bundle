@@ -13,7 +13,7 @@
 # JRELEASER_PROJECT_VERSION (a documented JReleaser env override for
 # project.version). To run locally:
 #   ./mvnw -B -q -DskipTests package
-#   JRELEASER_PROJECT_VERSION=2.0.0 JRELEASER_GITHUB_TOKEN=dummy \
+#   JRELEASER_PROJECT_VERSION=3.0.0 JRELEASER_GITHUB_TOKEN=dummy \
 #     jreleaser full-release --dry-run
 #
 # Token: JRELEASER_GITHUB_TOKEN must be a PAT that can write to this repo AND to
