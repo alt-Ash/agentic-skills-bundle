@@ -22,10 +22,14 @@ import java.util.Optional;
  * and always exits 0: any failure answers with an empty object so the agent is never held up.
  *
  * <p>Events: {@code post-tool-use} and {@code stop} (analytics; {@code stop --verify} also runs the verify
- * gate and answers {@code {"decision":"continue"}} to keep the agent working) and {@code pre-invocation}
- * (context injection on a conversation's first call). There is deliberately no guard: Antigravity's
- * {@code PreToolUse} has no "no opinion" answer, so a guard would have to answer {@code allow} for everything
- * it does not block, which would silently bypass Antigravity's own permission prompts.
+ * gate and answers {@code {"decision":"continue"}} to keep the agent working), {@code pre-invocation} (context
+ * injection on a conversation's first call) and {@code pre-tool-use} (the guard).
+ *
+ * <p><b>The guard's answers were verified against a live {@code agy} 1.2.14 session.</b> An <em>empty</em> stdout means
+ * "no opinion": the tool call proceeds through Antigravity's normal permission flow. {@code {}} does NOT mean that: it
+ * is treated as a denial ("tool call denied by pre-tool hook"). A block is
+ * {@code {"decision":"deny","reason":...}}; the agent sees the reason. So the guard prints nothing unless it
+ * blocks, and any failure inside it also prints nothing (fail open).
  */
 public final class AntigravityHook {
 
@@ -48,11 +52,13 @@ public final class AntigravityHook {
             return switch (event) {
                 case "post-tool-use" -> postToolUse(payload, cwd);
                 case "stop" -> stop(payload, cwd, verify);
+                case "pre-tool-use" -> preToolUse(payload, cwd);
                 case "pre-invocation" -> preInvocation(payload, cwd);
                 default -> EMPTY;
             };
         } catch (Throwable t) {
-            return EMPTY;
+            // Fail open. For the guard that means NO output (an empty object would be read as a denial).
+            return "pre-tool-use".equals(event) ? "" : EMPTY;
         }
     }
 
@@ -81,6 +87,24 @@ public final class AntigravityHook {
         return EMPTY;
     }
 
+    /** The guard: print nothing to allow, or a deny decision. Never throws. */
+    private static String preToolUse(JsonNode p, String cwd) {
+        JsonNode call = p.get("toolCall");
+        if (call == null || !call.isObject()) return "";
+        ObjectNode n = base(p, cwd, "PreToolUse");
+        n.put("tool_name", toolName(text(call, "name")));
+        n.set("tool_input", toolInput(call.get("args")));
+        HookInput input = HookInput.parse(n.toString());
+        Optional<GuardHook.Denial> denial = GuardHook.evaluate(input);
+        if (denial.isEmpty()) return "";
+        ensureSession(input, cwd);
+        EventLog.recordEvent(GuardHook.denialEvent(input, denial.get()));
+        ObjectNode out = JsonSupport.MAPPER.createObjectNode();
+        out.put("decision", "deny");
+        out.put("reason", denial.get().message());
+        return out.toString();
+    }
+
     private static String stop(JsonNode p, String cwd, boolean verify) {
         ObjectNode n = base(p, cwd, "Stop");
         String finalOutput = text(p, "finalModelOutput");
@@ -88,11 +112,12 @@ public final class AntigravityHook {
         HookInput early = HookInput.parse(n.toString());
         ensureSession(early, cwd);
 
-        // Claude Code tells a Stop hook when it is being asked again because of an earlier block. Antigravity
-        // has only an attempt counter, so also derive it from our own history: that is what bounds the verify
-        // loop (VerifyHook gives up after N consecutive blocks), and it must hold even if the counter never rises.
+        // Claude Code tells a Stop hook when it is being asked again because of an earlier block. Antigravity has
+        // only a 0-indexed attempt counter (executionNum), so also derive it from our own history: that is what
+        // bounds the verify loop (VerifyHook gives up after N consecutive blocks), and it must hold even if the
+        // counter never rises.
         String session = early.sessionId();
-        boolean continuing = p.path("executionNum").asInt(1) > 1
+        boolean continuing = p.path("executionNum").asInt(0) > 0
             || (session != null && VerifyHook.trailingBlocks(EventLog.sessionEvents(session)) > 0);
         n.put("stop_hook_active", continuing);
         HookInput input = HookInput.parse(n.toString());

@@ -24,9 +24,9 @@ import java.util.Map;
  * unregistering removes it, so any other hook the user defined is never touched. A file that exists but cannot be
  * parsed is an error and is left untouched, never rewritten from an empty map.
  *
- * <p>No guard hook is registered for Antigravity: its {@code PreToolUse} has no "no opinion" answer, so a guard
- * would have to answer {@code allow} for everything it doesn't block, silently bypassing the user's own
- * permission prompts.
+ * <p>The opt-in guard registers on {@code PreToolUse}. Its answers were verified against a live {@code agy}
+ * session: an empty stdout means "no opinion" (the call proceeds through Antigravity's own permission flow),
+ * {@code {}} is read as a denial, and {@code {"decision":"deny","reason":...}} blocks and shows the agent the reason.
  */
 public final class AntigravityHookRegistrar {
 
@@ -35,6 +35,9 @@ public final class AntigravityHookRegistrar {
     /** Matches the verify gate's per-command cap plus headroom, like the Claude Code registration. */
     static final int VERIFY_TIMEOUT_SECONDS = 600;
     static final int CONTEXT_TIMEOUT_SECONDS = 10;
+    static final int GUARD_TIMEOUT_SECONDS = 10;
+    /** The tools the guard reads: shell commands and file reads/writes. */
+    static final String GUARD_MATCHER = "run_command|view_file|write_to_file|replace_file_content|multi_replace_file_content";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -46,9 +49,9 @@ public final class AntigravityHookRegistrar {
     }
 
     /** Writes our hook entry, replacing any earlier version of it. */
-    public static void register(Path file, Path hooksJar, boolean verify, boolean context) {
+    public static void register(Path file, Path hooksJar, boolean guard, boolean verify, boolean context) {
         Map<String, Object> config = read(file);
-        config.put(HOOK_NAME, entry(hooksJar, verify, context));
+        config.put(HOOK_NAME, entry(hooksJar, guard, verify, context));
         write(file, config);
     }
 
@@ -83,10 +86,13 @@ public final class AntigravityHookRegistrar {
 
     // ─── our entry ──────────────────────────────────────────────────────────
 
-    private static Map<String, Object> entry(Path jar, boolean verify, boolean context) {
+    private static Map<String, Object> entry(Path jar, boolean guard, boolean verify, boolean context) {
         Map<String, Object> hook = new LinkedHashMap<>();
         hook.put("enabled", true);
 
+        if (guard) {
+            hook.put("PreToolUse", List.of(grouped(GUARD_MATCHER, handler(jar, "pre-tool-use", GUARD_TIMEOUT_SECONDS))));
+        }
         hook.put("PostToolUse", List.of(grouped("*", handler(jar, "post-tool-use", DEFAULT_TIMEOUT_SECONDS))));
         // One JVM handles both analytics and (with --verify) the gate, so a stop costs a single process.
         hook.put("Stop", List.of(handler(jar, verify ? "stop --verify" : "stop",

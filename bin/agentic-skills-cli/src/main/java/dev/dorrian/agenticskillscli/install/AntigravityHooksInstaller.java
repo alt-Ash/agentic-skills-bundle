@@ -9,8 +9,8 @@ import java.nio.file.Path;
 import java.util.function.Supplier;
 
 /**
- * Installs the hooks jar and registers it with Antigravity CLI (analytics always; the verify gate and context
- * injection if chosen). The guard option is ignored: see {@link AntigravityHookRegistrar}.
+ * Installs the hooks jar and registers it with Antigravity (analytics always; the guard, verify gate and context
+ * injection if chosen).
  */
 public final class AntigravityHooksInstaller implements ToolHooksInstaller {
 
@@ -31,7 +31,7 @@ public final class AntigravityHooksInstaller implements ToolHooksInstaller {
     @Override
     public Path install(HookInstallOptions options) {
         Path installed = HooksJarLocation.installFrom(bundledJar.get(), targetJar.get());
-        AntigravityHookRegistrar.register(hooksFile.get(), installed, options.verify(), options.context());
+        AntigravityHookRegistrar.register(hooksFile.get(), installed, options.guard(), options.verify(), options.context());
         return installed;
     }
 

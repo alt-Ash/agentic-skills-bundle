@@ -43,11 +43,11 @@ class AntigravityHooksInstallerTest {
     }
 
     @Test
-    void theGuardOptionIsIgnoredButVerifyAndContextAreHonored() throws Exception {
+    void guardVerifyAndContextAreAllHonored() throws Exception {
         installer.install(new HookInstallOptions(true, true, true));
         String json = Files.readString(hooksFile);
 
-        assertFalse(json.contains("PreToolUse"), "no guard for Antigravity: it has no 'no opinion' answer");
+        assertTrue(json.contains("agy pre-tool-use"));
         assertTrue(json.contains("agy stop --verify"));
         assertTrue(json.contains("agy pre-invocation"));
     }

@@ -29,9 +29,9 @@ final class HookOptionsPrompt {
 
     static Applicable applicable(Collection<String> selectedTools) {
         boolean claude = selectedTools.contains("claude");
-        // The guard needs a tool whose hooks can block by exit code or throw (Claude Code, OpenCode). Antigravity
-        // gets the verify gate and context but no guard.
-        return new Applicable(claude || selectedTools.contains("opencode"), claude || selectedTools.contains("antigravity"));
+        // The guard works for Claude Code, OpenCode and Antigravity; the verify gate and context for Claude Code and Antigravity.
+        boolean antigravity = selectedTools.contains("antigravity");
+        return new Applicable(claude || antigravity || selectedTools.contains("opencode"), claude || antigravity);
     }
 
     static HookInstallOptions ask(Prompter prompter, Collection<String> selectedTools) {

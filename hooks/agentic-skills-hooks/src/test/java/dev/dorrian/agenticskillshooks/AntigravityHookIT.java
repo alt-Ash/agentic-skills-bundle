@@ -113,7 +113,7 @@ class AntigravityHookIT {
     @Test
     void stopRecordsTheTurnAndAnswersEmptyWithoutVerify(@TempDir Path work) throws Exception {
         Map<String, Object> p = common(work);
-        p.put("executionNum", 1);
+        p.put("executionNum", 0);
         p.put("terminationReason", "model_stop");
         p.put("fullyIdle", true);
         p.put("finalModelOutput", "all done");
@@ -136,7 +136,7 @@ class AntigravityHookIT {
     void stopWithVerifyKeepsTheAgentGoingWhileTheCheckFailsAndLetsItStopWhenItPasses(@TempDir Path work) throws Exception {
         verifyConfig(work, "{\"commands\":[\"test -f DONE.txt\"],\"maxConsecutiveBlocks\":5}");
         Map<String, Object> p = common(work);
-        p.put("executionNum", 1);
+        p.put("executionNum", 0);
 
         HookJarHarness.Result blocked = agy(work, "stop", p, "--verify");
         JsonNode out = stdout(blocked);
@@ -152,7 +152,7 @@ class AntigravityHookIT {
     void theVerifyLoopIsBoundedEvenIfTheExecutionCounterNeverRises(@TempDir Path work) throws Exception {
         verifyConfig(work, "{\"commands\":[\"false\"],\"maxConsecutiveBlocks\":2}");
         Map<String, Object> p = common(work);
-        p.put("executionNum", 1); // never rises: the guard must come from our own history
+        p.put("executionNum", 0); // never rises: the guard must come from our own history
 
         List<String> decisions = new java.util.ArrayList<>();
         for (int i = 0; i < 4; i++) decisions.add(stdout(agy(work, "stop", p, "--verify")).path("decision").asText());
@@ -204,5 +204,65 @@ class AntigravityHookIT {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castMap(Map<?, ?> m) {
         return (Map<String, Object>) m;
+    }
+
+    // ─── guard: behavior verified against a live agy 1.2.14 session ──────────────
+
+    private static Map<String, Object> preTool(Path work, String tool, Map<String, Object> args) {
+        Map<String, Object> p = common(work);
+        p.put("toolCall", Map.of("name", tool, "args", args));
+        p.put("stepIdx", 2);
+        return p;
+    }
+
+    @Test
+    void theGuardPrintsNOTHINGToAllowBecauseAnEmptyObjectIsReadAsADenial(@TempDir Path work) throws Exception {
+        HookJarHarness.Result r = agy(work, "pre-tool-use", preTool(work, "run_command", Map.of("CommandLine", "ls -la")));
+
+        assertEquals(0, r.exitCode());
+        assertEquals("", r.stdout(), "must be empty: Antigravity treats {} as 'tool call denied by pre-tool hook'");
+        assertTrue(HookJarHarness.events(work).isEmpty(), "an allowed call records nothing");
+    }
+
+    @Test
+    void theGuardDeniesWithTheDocumentedDecisionAndRecordsTheBlock(@TempDir Path work) throws Exception {
+        HookJarHarness.Result r = agy(work, "pre-tool-use",
+            preTool(work, "run_command", Map.of("CommandLine", "git push --force origin main")));
+
+        assertEquals(0, r.exitCode(), "Antigravity blocks through the JSON decision, not the exit code");
+        JsonNode out = stdout(r);
+        assertEquals("deny", out.path("decision").asText());
+        assertTrue(out.path("reason").asText().contains("force-push to main/master"), out.toString());
+        List<UsageEvent> events = HookJarHarness.events(work);
+        assertTrue(events.stream().anyMatch(e -> "guard_block".equals(e.event) && "antigravity".equals(e.provider)), events.toString());
+    }
+
+    @Test
+    void theGuardSeesFilePathsFromViewFileAndWriteTools(@TempDir Path work) throws Exception {
+        assertEquals("deny", stdout(agy(work, "pre-tool-use", preTool(work, "view_file", Map.of("AbsolutePath", "/proj/.env")))).path("decision").asText());
+        assertEquals("deny", stdout(agy(work, "pre-tool-use", preTool(work, "write_to_file", Map.of("TargetFile", "/home/u/.ssh/id_rsa", "CodeContent", "x")))).path("decision").asText());
+        assertEquals("", agy(work, "pre-tool-use", preTool(work, "view_file", Map.of("AbsolutePath", "/proj/src/Main.java"))).stdout());
+        assertEquals("", agy(work, "pre-tool-use", preTool(work, "view_file", Map.of("AbsolutePath", "/proj/.env.example"))).stdout());
+    }
+
+    @Test
+    void theGuardFailsOpenWithNoOutputOnGarbage(@TempDir Path work) throws Exception {
+        for (Object garbage : new Object[] {"not json", List.of(), Map.of(), Map.of("toolCall", "oops")}) {
+            HookJarHarness.Result r = agy(work, "pre-tool-use", garbage instanceof Map<?, ?> m ? castMap(m) : Map.of("x", garbage));
+            assertEquals(0, r.exitCode());
+            assertEquals("", r.stdout(), "garbage must allow (no output), never {}: " + garbage);
+        }
+    }
+
+    @Test
+    void thePostToolUseErrorFieldIsAnEmptyStringOnSuccessSoItMustNotCountAsAFailure(@TempDir Path work) throws Exception {
+        // Real payloads carry "error": "" for every successful call, including a command that exited non-zero.
+        Map<String, Object> p = common(work);
+        p.put("toolCall", Map.of("name", "run_command", "args", Map.of("CommandLine", "false")));
+        p.put("error", "");
+
+        agy(work, "post-tool-use", p);
+
+        assertEquals("tool_use", HookJarHarness.events(work).get(1).event);
     }
 }

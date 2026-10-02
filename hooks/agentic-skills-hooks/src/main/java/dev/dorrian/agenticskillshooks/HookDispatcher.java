@@ -49,8 +49,11 @@ public final class HookDispatcher {
                         System.err.println(reason.get());
                     }
                 }
-                case "agy" -> System.out.println(AntigravityHook.run(args.length > 1 ? args[1] : "",
-                    java.util.Arrays.asList(args).contains("--verify"), raw));
+                case "agy" -> {
+                    String answer = AntigravityHook.run(args.length > 1 ? args[1] : "",
+                        java.util.Arrays.asList(args).contains("--verify"), raw);
+                    if (!answer.isEmpty()) System.out.println(answer); // empty = "no opinion" for the guard
+                }
                 case "context" -> ContextHook.contextFor(input).ifPresent(System.out::println);
                 case "guard" -> {
                     var denial = GuardHook.evaluate(input);
