@@ -46,6 +46,10 @@ public final class CodexTranscriptParser {
                     out.cachedTokens = (usage.has("cached_input_tokens") && usage.get("cached_input_tokens").isNumber())
                             ? usage.get("cached_input_tokens").asInt()
                             : null;
+                    out.cacheReadTokens = out.cachedTokens;
+                    out.outputTokens = (usage.has("output_tokens") && usage.get("output_tokens").isNumber())
+                            ? usage.get("output_tokens").asInt()
+                            : null;
                 }
             }
         }

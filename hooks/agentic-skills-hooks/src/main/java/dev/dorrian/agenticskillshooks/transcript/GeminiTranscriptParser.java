@@ -57,6 +57,11 @@ public final class GeminiTranscriptParser {
                 out.cachedTokens = (tokens.has("cached") && tokens.get("cached").isNumber())
                         ? tokens.get("cached").asInt()
                         : null;
+                // Gemini `cached` is cache-read; it has no cache-creation counter.
+                out.cacheReadTokens = out.cachedTokens;
+                out.outputTokens = (tokens.has("output") && tokens.get("output").isNumber())
+                        ? tokens.get("output").asInt()
+                        : null;
             }
         }
         return out;

@@ -36,7 +36,23 @@ public final class StopHook {
         event.lastMessageCharLength = msgLength;
         event.estimatedOutputTokens = Math.round(msgLength / 4.0f);
         event.backgroundTaskCount = input.backgroundTaskCount();
+        applyUsage(input, event);
 
         EventLog.recordEvent(event);
+    }
+
+    /** Copies real model/token usage from the transcript onto the event; any failure leaves it untouched. */
+    static void applyUsage(HookInput input, UsageEvent event) {
+        try {
+            PostToolUseHook.UsageRecord r = PostToolUseHook.buildRecord(input);
+            if (!"unavailable".equals(r.model)) event.model = r.model;
+            event.inputTokens = r.inputTokens;
+            event.outputTokens = r.outputTokens;
+            event.cacheReadTokens = r.cacheReadTokens;
+            event.cacheCreationTokens = r.cacheCreationTokens;
+            event.cachedTokens = r.cachedTokens;
+        } catch (RuntimeException ignored) {
+            // fail open: the turn_stop event is still recorded without usage
+        }
     }
 }
