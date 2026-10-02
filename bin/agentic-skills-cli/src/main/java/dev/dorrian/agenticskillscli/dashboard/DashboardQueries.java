@@ -21,6 +21,13 @@ import java.util.Set;
  */
 final class DashboardQueries {
 
+    // Which rows carry which token numbers (so sums are never double counted):
+    //  - output_tokens: only turn_stop rows (the final assistant message of a turn). Tool-call rows repeat the
+    //    last message's usage once per call, so summing them would count one message many times. This is a
+    //    floor for a turn's output, not its full total.
+    //  - cache_read / cache_creation: only tool_use rows, a per-call snapshot of the context, summed like
+    //    "tokens processed".
+
     // GROUP BY uses ordinals throughout: SQLite resolves a bare name to the events *column* before
     // a SELECT alias, so "GROUP BY command" would silently group by the raw command, not the alias.
 
@@ -76,10 +83,10 @@ final class DashboardQueries {
                    COALESCE(SUM(%1$s), 0) AS tokens_processed,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_added END), 0) AS lines_added,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_deleted END), 0) AS lines_deleted,
-                   SUM(%2$s) AS output_tokens,
-                   SUM(%3$s) AS cache_read_tokens,
-                   SUM(%4$s) AS cache_creation_tokens,
-                   SUM(CASE WHEN %3$s IS NOT NULL THEN COALESCE(e.input_tokens, 0) END) AS cache_input_tokens
+                   SUM(CASE WHEN e.event = 'turn_stop' THEN %2$s END) AS output_tokens,
+                   SUM(CASE WHEN e.event = 'tool_use' THEN %3$s END) AS cache_read_tokens,
+                   SUM(CASE WHEN e.event = 'tool_use' THEN %4$s END) AS cache_creation_tokens,
+                   SUM(CASE WHEN e.event = 'tool_use' AND %3$s IS NOT NULL THEN COALESCE(e.input_tokens, 0) END) AS cache_input_tokens
             FROM events e WHERE 1=1""".formatted(TOOL_CONTEXT, col("output_tokens"), col("cache_read_tokens"),
             col("cache_creation_tokens")), f);
         Object cacheRead = row.get("cache_read_tokens");
@@ -164,9 +171,9 @@ final class DashboardQueries {
                    COALESCE(SUM(%1$s), 0) AS tokens_processed,
                    AVG(%1$s) AS avg_context,
                    MAX(%1$s) AS peak_context,
-                   SUM(%2$s) AS output_tokens,
-                   SUM(%3$s) AS cache_read_tokens,
-                   SUM(%4$s) AS cache_creation_tokens
+                   SUM(CASE WHEN e.event = 'turn_stop' THEN %2$s END) AS output_tokens,
+                   SUM(CASE WHEN e.event = 'tool_use' THEN %3$s END) AS cache_read_tokens,
+                   SUM(CASE WHEN e.event = 'tool_use' THEN %4$s END) AS cache_creation_tokens
             FROM events e WHERE (e.event = 'tool_use' OR %2$s IS NOT NULL OR %3$s IS NOT NULL)""".formatted(TOOL_CONTEXT,
             col("output_tokens"), col("cache_read_tokens"), col("cache_creation_tokens")), f,
             "GROUP BY 1 ORDER BY tool_calls DESC");
@@ -227,8 +234,8 @@ final class DashboardQueries {
                    COALESCE(SUM(e.event = 'tool_failure'), 0) AS failures,
                    MAX(%1$s) AS peak_context,
                    COALESCE(SUM(%1$s), 0) AS tokens_processed,
-                   SUM(%2$s) AS output_tokens,
-                   SUM(%3$s) AS cache_read_tokens,
+                   SUM(CASE WHEN e.event = 'turn_stop' THEN %2$s END) AS output_tokens,
+                   SUM(CASE WHEN e.event = 'tool_use' THEN %3$s END) AS cache_read_tokens,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_added END), 0) AS lines_added,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_deleted END), 0) AS lines_deleted
             FROM events e JOIN sessions s ON s.session_id = e.session_id WHERE 1=1""".formatted(TOOL_CONTEXT,

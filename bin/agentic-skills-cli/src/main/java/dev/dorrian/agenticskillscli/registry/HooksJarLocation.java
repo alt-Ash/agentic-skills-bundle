@@ -4,6 +4,7 @@ import dev.dorrian.agenticskillscli.HomeDir;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -49,9 +50,18 @@ public final class HooksJarLocation {
         }
         try {
             Files.createDirectories(target.getParent());
-            Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
-            Files.copy(bundledJar, tmp, StandardCopyOption.REPLACE_EXISTING);
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            // Unique temp name: two installers running at once must not share (and corrupt) one temp file.
+            Path tmp = Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp");
+            try {
+                Files.copy(bundledJar, tmp, StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally {
+                Files.deleteIfExists(tmp);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Could not install hooks jar to " + target, e);
         }

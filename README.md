@@ -272,15 +272,16 @@ Tools:
 
 A shared circuit breaker aborts the rest of a scan the moment the target's error rate or latency degrades sharply. Reports are written to `security-scans/<host>-<timestamp>.json` and `.md` in the calling process's working directory. See `mcp/security-scanner/README.md` for full development docs.
 
-## Hooks (Claude Code)
+## Hooks and usage data
 
-Installing for **Claude Code** also copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it in `~/.claude/settings.json` for `SessionStart`/`SessionEnd`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure` and `Stop`. Each records tool name, model and token counts, prompt/response *lengths* (never the text), the Bash command (secrets redacted) and git change summary.
+Installing for **Claude Code** (analytics also for **Gemini CLI**; an OpenCode plugin) copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
 
-- Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects. Nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set. These hooks never block Claude Code: they always exit 0.
-- `agentic-skills dashboard` serves a read-only localhost dashboard. `data import [dir…]` loads old `ai-usage-events.json` files; `data prune --older-than 90d`.
-- `--uninstall` (select Claude Code) removes our hooks (not yours) and the jar; the database is kept.
+- **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master` and `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass; `context` adds project context at session start. Re-running the installer refreshes our entries.
+- `agentic-skills dashboard` serves a read-only localhost dashboard: usage, tools, installed-vs-used skills and agents, sessions, guard blocks.
+- `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune --older-than 90d`.
+- `--uninstall` removes our hooks (not yours); the database is kept.
 
-**Optional `guard` hook** (full install, default **no**). Unlike the above it **can block**: on `PreToolUse` it exits 2, with a reason, for recursive deletes of `/`, `~` or `*`, force-pushes to `main`/`master`, and reading or editing `.env` files (not `.env.example`), SSH keys or `*.pem`/`*.key`. A pattern check, not a sandbox: keep your `permissions` deny rules.
+Formats, token semantics, limits: [docs/hooks.md](docs/hooks.md).
 
 ## Development
 

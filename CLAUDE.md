@@ -40,11 +40,11 @@ Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 | `CommandRegistry` | Maps skill/agent names to companion slash command files |
 | `HooksRegistry` | Maps each hook type to its Claude Code hook-event name(s) |
 
-Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode-format agent → target tool's format), `install/{Agent,Skill,Command}Installer`, and the wizards in `flow/` (`QuickInstallFlow`, `FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`. `config/HookRegistrar` merges the hooks (5 analytics + opt-in `guard`) into Claude Code's `settings.json`, preserving existing `hooks`; **Claude Code only** (Gemini CLI has a schema, no registrar yet).
+Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode-format agent → target tool's format), `install/{Agent,Skill,Command}Installer`, and the wizards in `flow/` (`QuickInstallFlow`, `FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`. `config/HookRegistrar` merges the hooks (5 analytics + opt-in `guard`) into Claude Code's `settings.json`, preserving existing `hooks`; Claude via `HookRegistrar`, others via `ToolHooksInstallers`.
 
 ### Hooks (`hooks/agentic-skills-hooks`)
 
-Plain Java 21 fat jar, argv-dispatched: `java -jar agentic-skills-hooks.jar <hookType>`. Fresh JVM per firing, no framework. Reads stdin JSON, and **always exits 0** — except `guard` (exit 2 blocks; fails open). `EventLog.recordEvent` → `UsageDb` (`data/agentic-skills-usage-store`: SQLite `~/.agentic-skills/data/usage.db`, override `AGENTIC_SKILLS_DB`), then optional POST to `ANALYTICS_SERVICE_URL`.
+Plain Java 21 fat jar: `java -jar agentic-skills-hooks.jar <hookType>`. Fresh JVM per firing. Reads stdin JSON; **always exits 0** — except opt-in `guard`/`verify` (exit 2 blocks; fail open). Detail: `docs/hooks.md`. `EventLog.recordEvent` → `UsageDb` (`data/agentic-skills-usage-store`: SQLite `~/.agentic-skills/data/usage.db`, override `AGENTIC_SKILLS_DB`), then optional POST to `ANALYTICS_SERVICE_URL`.
 
 | Hook type | Event kind | Fires |
 |---|---|---|
@@ -52,14 +52,15 @@ Plain Java 21 fat jar, argv-dispatched: `java -jar agentic-skills-hooks.jar <hoo
 | `post-tool-use-failure` | `tool_failure` | after a failed tool call |
 | `session` | `session_start` / `session_end` | session lifecycle (`source` / `reason`) |
 | `user-prompt-submit` | `user_prompt` | each prompt submit |
-| `stop` | `turn_stop` | end of each turn; records output length only, never content |
-| `guard` (opt-in) | none | `PreToolUse`; exit 2 to block |
+| `stop` | `turn_stop` | end of each turn; lengths + token usage, never content |
+| `subagent` | `subagent_start`/`_stop` | sub-agent start/stop |
+| `guard`, `verify`, `context` (opt-in) | `guard_block`, `verify_*` | `PreToolUse` / `Stop` / `SessionStart` |
 
-`ProviderDetector` guesses the provider from the payload (Gemini `hook_event_name == "AfterTool"`; Cursor `model` + `user_email`/`conversation_id`; Codex `model` alone; else Claude).
+`ProviderDetector` guesses the provider from payload shape (Gemini, Cursor, Codex; else Claude).
 
 ### Evals (`evals/agentic-skills-evals`)
 
-Behavioral evals: **real, billed model calls; run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases (re-validate after upgrades). `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; it needs a local jar and `claude login`, so it's **not** in `CommandRegistry` and never installed. The module is never bundled into `agentic-skills.jar`.
+Behavioral evals: **real, billed model calls; run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
 
 ### Extension patterns
 
@@ -67,7 +68,7 @@ Behavioral evals: **real, billed model calls; run sparingly.** Plain Java 21. Th
 - **New agent:** add `agents/<name>.md` — auto-discovered.
 - **New command:** add `.opencode/commands/<name>.md` (installed to every tool with `supportsCommands`: OpenCode, Claude Code) and map it in `CommandRegistry`. Frontmatter is `description` (+ optional `subtask`) only; quote a `description` containing a colon.
 - **New local MCP:** no registry pattern exists. Write bespoke build/install/config/uninstall code in `mcp/local/`, modelled on `SecurityScannerMcpInstaller`. MCPs are Java/Spring Boot modules in the root reactor; add the new fat jar to the cli module's `provided` deps and the `maven-dependency-plugin` copy list. Keep MCPs on the JVM.
-- **New hook type:** add the class under `hooks/.../hooks/`, register it in `HookDispatcher`, add a `HookDescriptor` to `HooksRegistry` (`ALL`, or an opt-in constant like `GUARD`). Another tool needs its hook schema added to `HookRegistrar` first.
+- **New hook type:** add the class under `hooks/.../hooks/`, register it in `HookDispatcher`, add a `HookDescriptor` to `HooksRegistry` (`ALL`, or an opt-in constant like `GUARD`). A new tool: implement `ToolHooksInstaller`, add it to `ToolHooksInstallers` and `HookToolSupport`.
 
 ### Test suites
 

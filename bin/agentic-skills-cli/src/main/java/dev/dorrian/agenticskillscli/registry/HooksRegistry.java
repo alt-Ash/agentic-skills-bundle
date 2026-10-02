@@ -36,8 +36,12 @@ public final class HooksRegistry {
     public static final HookDescriptor GUARD = new HookDescriptor(
         "guard", List.of("PreToolUse"), "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
 
-    /** Opt-in {@code Stop} gate: blocks stopping while the project's configured checks fail. Can run long. */
-    public static final HookDescriptor VERIFY = new HookDescriptor("verify", List.of("Stop"), "", 300);
+    /**
+     * Opt-in {@code Stop} gate: blocks stopping while the project's configured checks fail. The host timeout
+     * (600s) must stay above the gate's own per-command cap ({@code VerifyConfig.MAX_TIMEOUT_SECONDS}), or the
+     * host would kill the hook before it could block.
+     */
+    public static final HookDescriptor VERIFY = new HookDescriptor("verify", List.of("Stop"), "", 600);
 
     /** Opt-in context injector at session start, resume and after compaction. */
     public static final HookDescriptor CONTEXT = new HookDescriptor(

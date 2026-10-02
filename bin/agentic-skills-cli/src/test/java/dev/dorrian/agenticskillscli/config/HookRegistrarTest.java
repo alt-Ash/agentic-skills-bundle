@@ -73,7 +73,7 @@ class HookRegistrarTest {
         Map<String, Object> verifyEntry = (Map<String, Object>) ((List<?>) allHooks.get("Stop")).get(1);
         @SuppressWarnings("unchecked")
         Map<String, Object> verifyCommand = (Map<String, Object>) ((List<?>) verifyEntry.get("hooks")).get(0);
-        assertEquals(300, verifyCommand.get("timeout"));
+        assertEquals(600, verifyCommand.get("timeout"));
         @SuppressWarnings("unchecked")
         Map<String, Object> contextEntry = (Map<String, Object>) ((List<?>) allHooks.get("SessionStart")).get(1);
         assertEquals("startup|resume|compact", contextEntry.get("matcher"));

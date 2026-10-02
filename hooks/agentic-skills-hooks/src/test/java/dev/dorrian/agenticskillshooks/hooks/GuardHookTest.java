@@ -11,7 +11,7 @@ class GuardHookTest {
     private static boolean denies(String tool, String key, String value) {
         String json = "{\"tool_name\":\"" + tool + "\",\"tool_input\":{\"" + key + "\":\""
             + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}}";
-        return GuardHook.evaluate(HookInput.parse(json)).isPresent();
+        return GuardHook.evaluate(HookInput.parse(json), GuardConfig.defaults()).isPresent();
     }
 
     private static boolean bashDenies(String command) {
@@ -63,8 +63,8 @@ class GuardHookTest {
     @Test
     void allowsUnknownToolsAndMalformedInput() {
         assertFalse(denies("Glob", "pattern", "**/.env"));
-        assertFalse(GuardHook.evaluate(HookInput.parse("not json")).isPresent());
-        assertFalse(GuardHook.evaluate(HookInput.parse("{\"tool_name\":\"Bash\"}")).isPresent());
+        assertFalse(GuardHook.evaluate(HookInput.parse("not json"), GuardConfig.defaults()).isPresent());
+        assertFalse(GuardHook.evaluate(HookInput.parse("{\"tool_name\":\"Bash\"}"), GuardConfig.defaults()).isPresent());
     }
 
     // ── hardened-rule battery (defaults only, independent of any real guard.json) ──

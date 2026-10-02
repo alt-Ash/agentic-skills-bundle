@@ -150,11 +150,11 @@
       card('Guard blocks', fmt(s.guard_blocks), null, deltaEl(cmp, 'guard_blocks'))));
 
     out.push(el('section', {}, el('h2', {}, 'Real token usage'),
-      el('div', { class: 'muted' }, 'Reported by the model per message, as recorded by the hooks. "n/a" means this data was not recorded (older events or a hook version without it), not zero.'),
+      el('div', { class: 'muted' }, 'Reported by the model, as recorded by the hooks. Output tokens count the final message of each turn only, so they are a floor, not a full total. Cache figures sum a per-call snapshot, like "tokens processed". "n/a" means not recorded (older events or a hook version without it), not zero.'),
       el('div', { class: 'cards' },
-        card('Output tokens', na(s.output_tokens, compact), 'tokens the model generated', deltaEl(cmp, 'output_tokens')),
-        card('Cache-read tokens', na(s.cache_read_tokens, compact), 'input served from the prompt cache'),
-        card('Cache-creation tokens', na(s.cache_creation_tokens, compact), 'input written to the prompt cache'),
+        card('Output tokens', na(s.output_tokens, compact), 'final message of each turn (a floor)', deltaEl(cmp, 'output_tokens')),
+        card('Cache-read tokens', na(s.cache_read_tokens, compact), 'per-call snapshot, summed'),
+        card('Cache-creation tokens', na(s.cache_creation_tokens, compact), 'per-call snapshot, summed'),
         card('Cache-read share', na(s.cache_read_share, pct), 'cache-read ÷ (fresh input + cache-read + cache-creation)', deltaEl(cmp, 'cache_read_share'))),
       table([
         { label: 'Model', key: 'model' }, { label: 'Tool calls', key: 'tool_calls', num: true, fmt: fmt },

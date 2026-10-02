@@ -107,7 +107,7 @@ class HookInvocationIT {
 
     private static Process startHook(Path cwd, String hookType, Object payload, Map<String, String> extraEnv)
         throws Exception {
-        ProcessBuilder pb = new ProcessBuilder("java", "-jar", HOOKS_JAR.toAbsolutePath().toString(), hookType)
+        ProcessBuilder pb = new ProcessBuilder("java", "-Duser.home=" + HookJarHarness.homeFor(cwd), "-jar", HOOKS_JAR.toAbsolutePath().toString(), hookType)
             .directory(cwd.toFile())
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD);

@@ -41,12 +41,17 @@ public final class HookJarHarness {
         return workDir.resolveSibling(workDir.getFileName() + "-usage.db");
     }
 
+    /** A private, empty home for the hook JVM, so a developer's real ~/.agentic-skills/guard.json never leaks into tests. */
+    public static Path homeFor(Path workDir) {
+        return workDir.resolveSibling(workDir.getFileName() + "-home");
+    }
+
     public static Result run(Path workDir, String hookType, Object payload) throws Exception {
         return run(workDir, hookType, payload, Map.of());
     }
 
     public static Result run(Path workDir, String hookType, Object payload, Map<String, String> extraEnv) throws Exception {
-        ProcessBuilder pb = new ProcessBuilder("java", "-jar", jar().toString(), hookType).directory(workDir.toFile());
+        ProcessBuilder pb = new ProcessBuilder("java", "-Duser.home=" + homeFor(workDir), "-jar", jar().toString(), hookType).directory(workDir.toFile());
         pb.environment().remove("ANALYTICS_SERVICE_URL");
         pb.environment().put(UsageDb.ENV_DB_PATH, dbFor(workDir).toString());
         pb.environment().putAll(extraEnv);

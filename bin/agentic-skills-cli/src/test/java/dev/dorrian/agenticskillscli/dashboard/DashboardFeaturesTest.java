@@ -173,10 +173,16 @@ class DashboardFeaturesTest {
             a.model = "m1";
             a.inputTokens = 10;
             a.cachedTokens = 900;
-            a.outputTokens = 50;
+            a.outputTokens = 50; // a tool call repeats the last message's usage: must NOT be added to the output total
             a.cacheReadTokens = 800;
             a.cacheCreationTokens = 90;
             u.record(a);
+            for (int i = 0; i < 2; i++) { // output tokens are counted once per turn, from the turn_stop rows
+                UsageEvent stop = ev("stop" + i, "s", "turn_stop", "2026-10-01T09:0" + (2 + i) + ":00Z");
+                stop.model = "m1";
+                stop.outputTokens = i == 0 ? 40 : 30;
+                u.record(stop);
+            }
             UsageEvent legacy = ev("b", "s", "tool_use", "2026-10-01T09:01:00Z"); // NULL new columns
             legacy.model = "m2";
             legacy.inputTokens = 5;
@@ -185,7 +191,7 @@ class DashboardFeaturesTest {
         }
         start(db, null);
         JsonNode s = json("/api/summary");
-        assertEquals(50, s.path("output_tokens").asInt());
+        assertEquals(70, s.path("output_tokens").asInt(), "turn_stop rows only; the tool call's 50 is a repeat");
         assertEquals(800, s.path("cache_read_tokens").asInt());
         assertEquals(90, s.path("cache_creation_tokens").asInt());
         assertEquals(800.0 / (800 + 90 + 10), s.path("cache_read_share").asDouble(), 1e-9);
@@ -193,14 +199,14 @@ class DashboardFeaturesTest {
         JsonNode models = json("/api/models");
         for (JsonNode m : models) {
             if ("m1".equals(m.path("model").asText())) {
-                assertEquals(50, m.path("output_tokens").asInt());
+                assertEquals(70, m.path("output_tokens").asInt());
                 assertEquals(800, m.path("cache_read_tokens").asInt());
             } else {
                 assertTrue(m.path("output_tokens").isNull(), "legacy model has no real token data: " + m);
             }
         }
         // sessions: null where nothing was recorded, number where it was
-        assertEquals(50, json("/api/sessions").get(0).path("output_tokens").asInt());
+        assertEquals(70, json("/api/sessions").get(0).path("output_tokens").asInt());
     }
 
     @Test

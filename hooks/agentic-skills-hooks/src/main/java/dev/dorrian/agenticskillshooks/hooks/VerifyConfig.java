@@ -13,6 +13,8 @@ import java.util.Optional;
 record VerifyConfig(List<String> commands, int timeoutSeconds, int maxConsecutiveBlocks) {
 
     static final int DEFAULT_TIMEOUT_SECONDS = 300;
+    /** Per-command cap; the registered host timeout (HooksRegistry.VERIFY) is deliberately higher. */
+    static final int MAX_TIMEOUT_SECONDS = 540;
     static final int DEFAULT_MAX_BLOCKS = 3;
 
     /** Empty when the file is missing, unparsable or lists no commands. Never throws. */
@@ -38,7 +40,7 @@ record VerifyConfig(List<String> commands, int timeoutSeconds, int maxConsecutiv
             }
             if (commands.isEmpty()) return Optional.empty();
             return Optional.of(new VerifyConfig(List.copyOf(commands),
-                positive(root.get("timeoutSeconds"), DEFAULT_TIMEOUT_SECONDS),
+                Math.min(positive(root.get("timeoutSeconds"), DEFAULT_TIMEOUT_SECONDS), MAX_TIMEOUT_SECONDS),
                 positive(root.get("maxConsecutiveBlocks"), DEFAULT_MAX_BLOCKS)));
         } catch (Exception e) {
             return Optional.empty();
