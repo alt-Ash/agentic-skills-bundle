@@ -30,10 +30,8 @@ import java.util.Map;
  * ] }] } }
  * }</pre>
  *
- * <p>Merges without clobbering: existing hook entries already present in
- * {@code settings.json} (whether ours from a prior run, or the user's own)
- * are left untouched; only missing {hookType, event} combinations are
- * appended, matching the read-modify-write discipline of {@link
+ * <p>Merges without clobbering: the user's own hook entries are left
+ * untouched; ours are refreshed to the current descriptors (see {@link #registerAll}), matching the read-modify-write discipline of {@link
  * JsonConfigStore}.
  *
  * <p>Our entries are recognised by the jar they run ({@link
@@ -57,53 +55,109 @@ public final class HookRegistrar {
         registerAll(settingsFile, hooksJarPath, new HookInstallOptions(includeGuard, false, false));
     }
 
+    /**
+     * Converges our entries to exactly the current descriptors: each (hook type, event) is updated
+     * in place (command, jar path, timeout, matcher) or added; our entries that the descriptors no
+     * longer call for (an opt-in the user dropped, a stale event, duplicates) are removed. Entries
+     * are recognised by jar name only, so the user's own hooks and other settings are untouched.
+     * Rewrites the file only when something changed, so a repeat run is byte-identical.
+     */
+    @SuppressWarnings("unchecked")
     public static void registerAll(Path settingsFile, Path hooksJarPath, HookInstallOptions options) {
         List<HookDescriptor> descriptors = new ArrayList<>(HooksRegistry.ALL);
         descriptors.addAll(options.descriptors());
         Map<String, Object> config = readJsonObject(settingsFile);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> hooksSection = (Map<String, Object>) config.computeIfAbsent(
-            HOOKS_KEY, k -> new LinkedHashMap<String, Object>()
-        );
+        boolean hadHooks = config.get(HOOKS_KEY) instanceof Map<?, ?>;
+        Map<String, Object> hooksSection = hadHooks
+            ? (Map<String, Object>) config.get(HOOKS_KEY)
+            : new LinkedHashMap<>();
 
-        boolean changed = false;
-        for (HookDescriptor descriptor : descriptors) {
-            for (String eventName : descriptor.claudeEventNames()) {
-                if (registerOne(hooksSection, eventName, descriptor, hooksJarPath)) {
+        Map<String, Map<String, HookDescriptor>> desired = new LinkedHashMap<>();
+        for (HookDescriptor d : descriptors) {
+            for (String event : d.claudeEventNames()) {
+                desired.computeIfAbsent(event, k -> new LinkedHashMap<>()).put(d.hookType(), d);
+            }
+        }
+
+        boolean changed = !hadHooks;
+        // 1. Update / prune existing entries of ours.
+        for (Iterator<Map.Entry<String, Object>> events = hooksSection.entrySet().iterator(); events.hasNext(); ) {
+            Map.Entry<String, Object> ev = events.next();
+            if (!(ev.getValue() instanceof List<?> rawEntries)) continue;
+            List<Object> entries = (List<Object>) rawEntries;
+            Map<String, HookDescriptor> wanted = desired.getOrDefault(ev.getKey(), Map.of());
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            boolean touched = false;
+            for (Iterator<Object> it = entries.iterator(); it.hasNext(); ) {
+                if (!(it.next() instanceof Map<?, ?> rawEntry) || !(rawEntry.get("hooks") instanceof List<?> rawCmds)) continue;
+                Map<String, Object> entry = (Map<String, Object>) rawEntry;
+                List<Object> cmds = (List<Object>) rawCmds;
+                if (cmds.stream().noneMatch(HookRegistrar::isOurCommand)) continue;
+                boolean onlyOurs = cmds.stream().allMatch(HookRegistrar::isOurCommand);
+                for (Iterator<Object> ci = cmds.iterator(); ci.hasNext(); ) {
+                    Object c = ci.next();
+                    if (!isOurCommand(c)) continue;
+                    touched = true;
+                    Object type = lastArg(c);
+                    HookDescriptor d = type instanceof String t ? wanted.get(t) : null;
+                    if (d == null || !seen.add(d.hookType())) {
+                        ci.remove();
+                        changed = true;
+                        continue;
+                    }
+                    Map<String, Object> cmd = (Map<String, Object>) c;
+                    changed |= putIfDifferent(cmd, "type", "command");
+                    changed |= putIfDifferent(cmd, "command", "java");
+                    changed |= putIfDifferent(cmd, "args", List.of("-jar", hooksJarPath.toString(), d.hookType()));
+                    changed |= putIfDifferent(cmd, "timeout", d.timeoutSeconds());
+                    if (onlyOurs) {
+                        changed |= putIfDifferent(entry, "matcher", d.matcher());
+                    }
+                }
+                if (cmds.isEmpty()) {
+                    it.remove();
+                }
+            }
+            if (touched && entries.isEmpty()) {
+                events.remove();
+                changed = true;
+            }
+        }
+
+        // 2. Add what is still missing.
+        for (Map.Entry<String, Map<String, HookDescriptor>> ev : desired.entrySet()) {
+            List<Object> entries = (List<Object>) hooksSection.computeIfAbsent(ev.getKey(), k -> new ArrayList<Object>());
+            for (HookDescriptor d : ev.getValue().values()) {
+                if (!alreadyRegistered(entries, d.hookType())) {
+                    entries.add(newEntry(d, hooksJarPath));
                     changed = true;
                 }
             }
         }
 
         if (changed) {
+            config.put(HOOKS_KEY, hooksSection);
             writeJsonObject(settingsFile, config);
         }
     }
 
-    /** Returns true if a new entry was appended (i.e. it wasn't already registered). */
-    @SuppressWarnings("unchecked")
-    private static boolean registerOne(Map<String, Object> hooksSection, String eventName, HookDescriptor descriptor, Path jarPath) {
-        String hookType = descriptor.hookType();
-        List<Object> eventEntries = (List<Object>) hooksSection.computeIfAbsent(
-            eventName, k -> new ArrayList<Object>()
-        );
+    private static boolean putIfDifferent(Map<String, Object> map, String key, Object value) {
+        if (value.equals(map.get(key))) return false;
+        map.put(key, value);
+        return true;
+    }
 
-        if (alreadyRegistered(eventEntries, hookType)) {
-            return false;
-        }
-
+    private static Map<String, Object> newEntry(HookDescriptor descriptor, Path jarPath) {
         Map<String, Object> command = new LinkedHashMap<>();
         command.put("type", "command");
         command.put("command", "java");
-        command.put("args", List.of("-jar", jarPath.toString(), hookType));
+        command.put("args", List.of("-jar", jarPath.toString(), descriptor.hookType()));
         command.put("timeout", descriptor.timeoutSeconds());
 
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("matcher", descriptor.matcher());
         entry.put("hooks", new ArrayList<>(List.of(command)));
-
-        eventEntries.add(entry);
-        return true;
+        return entry;
     }
 
     private static boolean alreadyRegistered(List<Object> eventEntries, String hookType) {

@@ -36,10 +36,12 @@ public final class DataCommands {
                     out.println(dbPath);
                     yield 0;
                 }
-                case "import" -> importCommand(rest, dbPath, cwd, out, err);
+                case "import" -> rest.contains("--find")
+                    ? findCommand(rest, dbPath, cwd, out, err)
+                    : importCommand(rest, dbPath, cwd, out, err);
                 case "prune" -> pruneCommand(rest, dbPath, out, err);
                 default -> {
-                    err.println("Usage: agentic-skills data <path | import [dir...] | prune --older-than <N>d>");
+                    err.println("Usage: agentic-skills data <path | import [dir...] | import --find <root> | prune --older-than <N>d>");
                     yield 2;
                 }
             };
@@ -78,6 +80,84 @@ public final class DataCommands {
             out.println("Total: " + total.imported() + " imported, " + total.duplicates() + " already present, "
                 + total.skipped() + " skipped");
         }
+        if (total.imported() > 0) {
+            out.println("Imported into " + dbPath + ". The old JSON files were left in place; delete them when you're happy.");
+        }
+        return failures == 0 ? 0 : 1;
+    }
+
+    static final int FIND_MAX_DEPTH = 6;
+    private static final java.util.Set<String> FIND_SKIP =
+        java.util.Set.of("node_modules", "target", "build", ".gradle", ".m2");
+
+    /** Directories under {@code root} (depth <= 6) holding a legacy events file. */
+    static List<Path> findLegacyDirs(Path root) throws IOException {
+        List<Path> found = new ArrayList<>();
+        Files.walkFileTree(root, java.util.EnumSet.noneOf(java.nio.file.FileVisitOption.class), FIND_MAX_DEPTH,
+            new java.nio.file.SimpleFileVisitor<>() {
+                @Override
+                public java.nio.file.FileVisitResult preVisitDirectory(Path dir, java.nio.file.attribute.BasicFileAttributes a) {
+                    if (!dir.equals(root)) {
+                        String name = dir.getFileName().toString();
+                        if (name.startsWith(".") || FIND_SKIP.contains(name)) {
+                            return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+                        }
+                    }
+                    if (Files.isRegularFile(dir.resolve(LegacyJsonImporter.FILE_NAME), java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                        found.add(dir);
+                    }
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public java.nio.file.FileVisitResult visitFileFailed(Path file, IOException exc) {
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
+        java.util.Collections.sort(found);
+        return found;
+    }
+
+    private static int findCommand(List<String> args, Path dbPath, Path cwd, PrintStream out, PrintStream err) {
+        int i = args.indexOf("--find");
+        if (i + 1 >= args.size() || args.size() != 2) {
+            err.println("Usage: agentic-skills data import --find <root>");
+            return 2;
+        }
+        Path root = cwd.resolve(args.get(i + 1));
+        if (!Files.isDirectory(root)) {
+            err.println("Not a directory: " + root);
+            return 1;
+        }
+        List<Path> dirs;
+        try {
+            dirs = findLegacyDirs(root);
+        } catch (IOException e) {
+            err.println("Could not scan " + root + ": " + e.getMessage());
+            return 1;
+        }
+        if (dirs.isEmpty()) {
+            out.println("No " + LegacyJsonImporter.FILE_NAME + " found under " + root);
+            return 0;
+        }
+        int failures = 0;
+        LegacyJsonImporter.Result total = new LegacyJsonImporter.Result(0, 0, 0);
+        try (UsageDb db = UsageDb.open(dbPath)) {
+            for (Path dir : dirs) {
+                try {
+                    LegacyJsonImporter.Result r = LegacyJsonImporter.importDirectory(db, dir);
+                    out.println(dir.resolve(LegacyJsonImporter.FILE_NAME) + ": " + r.imported() + " imported, "
+                        + r.duplicates() + " already present, " + r.skipped() + " skipped");
+                    total = total.plus(r);
+                } catch (IOException e) {
+                    err.println(e.getMessage());
+                    failures++;
+                }
+            }
+        }
+        out.println("Total: " + dirs.size() + " file(s), " + total.imported() + " imported, "
+            + total.duplicates() + " already present, " + total.skipped() + " skipped"
+            + (failures > 0 ? ", " + failures + " invalid" : ""));
         if (total.imported() > 0) {
             out.println("Imported into " + dbPath + ". The old JSON files were left in place; delete them when you're happy.");
         }
