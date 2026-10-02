@@ -53,8 +53,8 @@ public final class IssueTicketsMcpInstaller {
 
     /**
      * Builds the config entry for a given tool. opencode gets {@code
-     * {env:VAR}} placeholders, gemini {@code $VAR} references and codex an
-     * {@code env_vars} forward list — none of those three ever store a token;
+     * {env:VAR}} placeholders and codex an {@code env_vars} forward list —
+     * neither ever stores a token;
      * all other hosts get resolved values. The
      * server is a self-contained Spring Boot fat jar — launched via
      * {@code java -jar}, no separate runtime dependency install needed
@@ -74,13 +74,6 @@ public final class IssueTicketsMcpInstaller {
             return McpServerConfig.of("type", "local", "command", list("java", "-jar", jar), "environment", environment);
         }
 
-        if ("gemini".equals(toolKey)) {
-            // Gemini expands $VAR in env values, so the tokens stay in the shell profile only.
-            Map<String, Object> env = new LinkedHashMap<>();
-            env.put("AZURE_DEVOPS_ACCOUNTS_B64", "$AZURE_DEVOPS_ACCOUNTS_B64");
-            env.put("GITHUB_ACCOUNTS_B64", "$GITHUB_ACCOUNTS_B64");
-            return McpServerConfig.of("command", "java", "args", list("-jar", jar), "env", env);
-        }
         if ("codex".equals(toolKey)) {
             // Codex forwards the named variables from its own environment (env_vars), never stored.
             return McpServerConfig.of("command", "java", "args", list("-jar", jar),
@@ -93,6 +86,11 @@ public final class IssueTicketsMcpInstaller {
 
         if ("zed".equals(toolKey)) {
             return McpServerConfig.of("source", "custom", "command", "java", "args", list("-jar", jar), "env", env);
+        }
+        if ("antigravity".equals(toolKey)) {
+            // Antigravity's mcp_config.json takes {command, args, env} with no "type". Whether it expands $VAR in
+            // env values is undocumented, so like the other hosts without a secret-free mechanism it gets values.
+            return McpServerConfig.of("command", "java", "args", list("-jar", jar), "env", env);
         }
         return McpServerConfig.of("type", "stdio", "command", "java", "args", list("-jar", jar), "env", env);
     }

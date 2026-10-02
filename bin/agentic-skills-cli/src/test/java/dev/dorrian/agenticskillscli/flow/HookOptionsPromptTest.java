@@ -25,18 +25,18 @@ class HookOptionsPromptTest {
     }
 
     @Test
-    void geminiAndOtherToolsGetNoQuestionsAtAll() {
-        assertFalse(HookOptionsPrompt.applicable(List.of("gemini")).any());
-        assertFalse(HookOptionsPrompt.applicable(List.of("cursor", "codex", "gemini")).any());
+    void toolsWithoutHookSupportGetNoQuestionsAtAll() {
+        assertFalse(HookOptionsPrompt.applicable(List.of("windsurf")).any());
+        assertFalse(HookOptionsPrompt.applicable(List.of("cursor", "codex", "windsurf")).any());
         assertEquals(new HookOptionsPrompt.Applicable(false, false), HookOptionsPrompt.applicable(List.of()));
     }
 
     @Test
     void aMixedSelectionAsksTheUnionOfQuestions() {
-        HookOptionsPrompt.Applicable a = HookOptionsPrompt.applicable(List.of("gemini", "opencode", "cursor"));
+        HookOptionsPrompt.Applicable a = HookOptionsPrompt.applicable(List.of("windsurf", "opencode", "cursor"));
         assertTrue(a.guard());
         assertFalse(a.verifyAndContext());
-        assertTrue(HookOptionsPrompt.applicable(List.of("gemini", "claude")).verifyAndContext());
+        assertTrue(HookOptionsPrompt.applicable(List.of("windsurf", "claude")).verifyAndContext());
     }
 
     @Test

@@ -13,10 +13,10 @@ import java.util.function.Function;
 /**
  * Java port of {@code bin/install.js}'s {@code AGENTS} object: one entry per
  * supported AI tool, in the exact order the original file declares them
- * (opencode, claude, cursor, gemini, codex, vscode, windsurf, zed). Ported
+ * (opencode, claude, cursor, antigravity, codex, vscode, windsurf, zed). Ported
  * field-for-field from the source read directly on 2026-09-30 — some tools
  * genuinely lack fields the others have (e.g. vscode has {@code
- * agentsGlobalPath} but no {@code agentsProjectFolder}; cursor/gemini/codex
+ * agentsGlobalPath} but no {@code agentsProjectFolder}; cursor/antigravity/codex
  * have no {@code agentConfigFile}) and that asymmetry is preserved exactly
  * rather than "filled in."
  */
@@ -139,11 +139,14 @@ public final class AgentToolRegistry {
             home(".cursor")
         ));
 
-        m.put("gemini", new AgentToolDef(
-            "gemini", "Gemini CLI",
-            home(".gemini", "skills"), ".gemini/skills",
+        // Antigravity (CLI and desktop IDE): one global customization root, ~/.gemini/config/, and one per-project
+        // root, .agents/. Skills are skills/<name>/SKILL.md (they are also its slash commands, so there is no separate
+        // commands install); agents are agents/<name>/agent.md. Both products document the same layout.
+        m.put("antigravity", new AgentToolDef(
+            "antigravity", "Antigravity (CLI + desktop IDE)",
+            home(".gemini", "config", "skills"), ".agents/skills",
             null, null,
-            home(".gemini", "agents"), ".gemini/agents",
+            home(".gemini", "config", "agents"), ".agents/agents",
             null, null,
             false, true,
             home(".gemini")

@@ -124,13 +124,7 @@ class ClaudeTranscriptTailTest {
     }
 
     @Test
-    void geminiAndCodexExposeOutputAndCacheRead() throws Exception {
-        Path g = tmp.resolve("g.jsonl");
-        Files.writeString(g, "{\"type\":\"gemini\",\"model\":\"gm\",\"tokens\":{\"input\":200,\"output\":9,\"cached\":30}}\n");
-        var ge = GeminiTranscriptParser.extract(g.toString());
-        assertEquals(9, ge.outputTokens);
-        assertEquals(30, ge.cacheReadTokens);
-        assertNull(ge.cacheCreationTokens);
+    void codexExposesOutputAndCacheRead() throws Exception {
         Path c = tmp.resolve("c.jsonl");
         Files.writeString(c, "{\"type\":\"TokenCount\",\"usage\":{\"input_tokens\":300,\"cached_input_tokens\":50,\"output_tokens\":12}}\n");
         var ce = CodexTranscriptParser.extract(c.toString());

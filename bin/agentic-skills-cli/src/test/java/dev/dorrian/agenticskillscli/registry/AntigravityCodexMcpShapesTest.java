@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Exact MCP config shapes for Gemini CLI (settings.json) and Codex CLI (config.toml). */
-class GeminiCodexMcpShapesTest {
+/** Exact MCP config shapes for Antigravity (mcp_config.json) and Codex CLI (config.toml). */
+class AntigravityCodexMcpShapesTest {
 
     private static final String C7 = "https://mcp.context7.com/mcp";
     private static final Path JAR = Path.of("/jar/issue-tickets.jar");
@@ -25,8 +25,8 @@ class GeminiCodexMcpShapesTest {
     // ─── engram ──────────────────────────────────────────────────────────────
 
     @Test
-    void engramGemini() {
-        assertEquals(Map.of("command", "engram", "args", List.of("mcp")), GlobalMcpConfigRegistry.engram("gemini"));
+    void engramAntigravity() {
+        assertEquals(Map.of("command", "engram", "args", List.of("mcp")), GlobalMcpConfigRegistry.engram("antigravity"));
     }
 
     @Test
@@ -37,10 +37,11 @@ class GeminiCodexMcpShapesTest {
     // ─── remote: context7 / figma ───────────────────────────────────────────
 
     @Test
-    void context7GeminiUsesHttpUrl() {
-        assertEquals(Map.of("httpUrl", C7), GlobalMcpConfigRegistry.context7("gemini", null));
-        assertEquals(Map.of("httpUrl", C7, "headers", Map.of("Authorization", "Bearer abc")),
-            GlobalMcpConfigRegistry.context7("gemini", "abc"));
+    void context7AntigravityUsesServerUrl() {
+        // Antigravity rejects the legacy url/httpUrl fields for remote servers
+        assertEquals(Map.of("serverUrl", C7), GlobalMcpConfigRegistry.context7("antigravity", null));
+        assertEquals(Map.of("serverUrl", C7, "headers", Map.of("Authorization", "Bearer abc")),
+            GlobalMcpConfigRegistry.context7("antigravity", "abc"));
     }
 
     @Test
@@ -56,27 +57,29 @@ class GeminiCodexMcpShapesTest {
     }
 
     @Test
-    void figmaGeminiIsNotInTheCatalogSoUsesDesktopServer() {
-        assertEquals(Map.of("httpUrl", "http://127.0.0.1:3845/mcp"), GlobalMcpConfigRegistry.figma("gemini"));
+    void figmaAntigravityIsNotInTheCatalogSoUsesDesktopServer() {
+        assertEquals(Map.of("serverUrl", "http://127.0.0.1:3845/mcp"), GlobalMcpConfigRegistry.figma("antigravity"));
     }
 
     @Test
-    void figmaSetupNoteMentionsGeminiAndCodex() {
+    void figmaSetupNoteMentionsAntigravityAndCodex() {
         assertTrue(GlobalMcpConfigRegistry.FIGMA_SETUP_NOTE.contains("Codex"));
-        assertTrue(GlobalMcpConfigRegistry.FIGMA_SETUP_NOTE.contains("Gemini"));
+        assertTrue(GlobalMcpConfigRegistry.FIGMA_SETUP_NOTE.contains("Antigravity"));
     }
 
     // ─── local java servers ─────────────────────────────────────────────────
 
     @Test
-    void issueTicketsGeminiReferencesEnvVarsInsteadOfTokens() {
+    void issueTicketsAntigravityGetsResolvedValuesInTheDocumentedShape() {
+        // Whether Antigravity expands $VAR in env is undocumented, so (like Claude Code and Cursor) it gets values,
+        // in mcp_config.json's {command, args, env} shape with no "type" key.
         assertEquals(Map.of(
             "command", "java",
             "args", List.of("-jar", JAR.toString()),
             "env", Map.of(
-                "AZURE_DEVOPS_ACCOUNTS_B64", "$AZURE_DEVOPS_ACCOUNTS_B64",
-                "GITHUB_ACCOUNTS_B64", "$GITHUB_ACCOUNTS_B64")
-        ), IssueTicketsMcpInstaller.config("gemini", JAR, AZURE_SECRET, GITHUB_SECRET));
+                "AZURE_DEVOPS_ACCOUNTS_B64", AZURE_SECRET,
+                "GITHUB_ACCOUNTS_B64", GITHUB_SECRET)
+        ), IssueTicketsMcpInstaller.config("antigravity", JAR, AZURE_SECRET, GITHUB_SECRET));
     }
 
     @Test
@@ -89,15 +92,29 @@ class GeminiCodexMcpShapesTest {
     }
 
     @Test
-    void securityScannerGeminiAndCodex() {
+    void securityScannerAntigravityAndCodex() {
         Path jar = Path.of("/jar/security-scanner.jar");
         Map<String, Object> expected = Map.of("command", "java", "args", List.of("-jar", jar.toString()));
-        assertEquals(expected, SecurityScannerMcpInstaller.config("gemini", jar));
+        assertEquals(expected, SecurityScannerMcpInstaller.config("antigravity", jar));
         assertEquals(expected, SecurityScannerMcpInstaller.config("codex", jar));
     }
 
+    @Test
+    void antigravityEntriesCarryNoTypeKeyOrNpx() {
+        String all = String.join(" ",
+            GlobalMcpConfigRegistry.engram("antigravity").toString(),
+            GlobalMcpConfigRegistry.context7("antigravity", null).toString(),
+            GlobalMcpConfigRegistry.figma("antigravity").toString(),
+            IssueTicketsMcpInstaller.config("antigravity", JAR, AZURE_SECRET, GITHUB_SECRET).toString(),
+            SecurityScannerMcpInstaller.config("antigravity", JAR).toString());
+        assertFalse(all.contains("type="), all);
+        assertFalse(all.contains("npx"), all);
+        assertFalse(all.contains("url="), "Antigravity uses serverUrl, never url/httpUrl: " + all);
+        assertFalse(all.contains("httpUrl"), all);
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"gemini", "codex"})
+    @ValueSource(strings = {"codex"})
     void noTokensTypeKeysOrNpxAnywhere(String toolKey) {
         String all = String.join(" ",
             GlobalMcpConfigRegistry.engram(toolKey).toString(),
@@ -108,6 +125,6 @@ class GeminiCodexMcpShapesTest {
         assertFalse(all.contains(AZURE_SECRET), all);
         assertFalse(all.contains(GITHUB_SECRET), all);
         assertFalse(all.contains("npx"), all);
-        assertFalse(all.contains("type="), "Gemini/Codex entries carry no 'type' key: " + all);
+        assertFalse(all.contains("type="), "Codex entries carry no 'type' key: " + all);
     }
 }

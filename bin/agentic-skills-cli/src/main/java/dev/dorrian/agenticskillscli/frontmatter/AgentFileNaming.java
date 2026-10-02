@@ -3,7 +3,8 @@ package dev.dorrian.agenticskillscli.frontmatter;
 /**
  * Java port of {@code bin/install.js}'s {@code agentFileName()} — the
  * correct output filename for an agent given the target tool: {@code
- * <name>.md} for OpenCode/Claude/Gemini, {@code <name>.agent.md} for VS Code
+ * <name>.md} for OpenCode/Claude, {@code <name>/agent.md} for Antigravity (a
+ * directory per agent), {@code <name>.agent.md} for VS Code
  * Copilot, {@code <name>.toml} for Codex (standalone custom-agent TOML files).
  */
 public final class AgentFileNaming {
@@ -14,6 +15,7 @@ public final class AgentFileNaming {
     public static String fileName(String name, String toolKey) {
         if ("vscode".equals(toolKey)) return name + ".agent.md";
         if ("codex".equals(toolKey)) return name + ".toml";
+        if ("antigravity".equals(toolKey)) return name + "/agent.md";
         return name + ".md";
     }
 

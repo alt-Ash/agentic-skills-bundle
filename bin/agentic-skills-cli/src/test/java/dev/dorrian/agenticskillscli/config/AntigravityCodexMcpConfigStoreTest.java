@@ -26,21 +26,21 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end through {@link JsonConfigStore}'s toolKey-level API for gemini (JSON) and codex
+ * End-to-end through {@link JsonConfigStore}'s toolKey-level API for antigravity (JSON) and codex
  * (delegates to {@link TomlMcpConfigStore}). Paths resolve under Surefire's
  * AGENTIC_SKILLS_HOME_OVERRIDE scratch home, never the real ~/.gemini or ~/.codex.
  */
-class GeminiCodexMcpConfigStoreTest {
+class AntigravityCodexMcpConfigStoreTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Path GEMINI = McpConfigRegistry.get("gemini").orElseThrow().globalFile();
+    private static final Path ANTIGRAVITY = McpConfigRegistry.get("antigravity").orElseThrow().globalFile();
     private static final Path CODEX = McpConfigRegistry.get("codex").orElseThrow().globalFile();
 
     @BeforeEach
     @AfterEach
     void clean() throws IOException {
-        assertTrue(GEMINI.toString().contains("test-home"), "must run under the test home override: " + GEMINI);
-        Files.deleteIfExists(GEMINI);
+        assertTrue(ANTIGRAVITY.toString().contains("test-home"), "must run under the test home override: " + ANTIGRAVITY);
+        Files.deleteIfExists(ANTIGRAVITY);
         Files.deleteIfExists(CODEX);
     }
 
@@ -54,26 +54,27 @@ class GeminiCodexMcpConfigStoreTest {
     }
 
     @Test
-    void geminiInstallWritesMcpServersAndKeepsOtherSettings() throws IOException {
-        Files.createDirectories(GEMINI.getParent());
-        Files.writeString(GEMINI, "{ \"ui\": { \"theme\": \"GitHub\" } }");
+    void antigravityInstallWritesMcpServersAndKeepsOtherSettings() throws IOException {
+        Files.createDirectories(ANTIGRAVITY.getParent());
+        Files.writeString(ANTIGRAVITY, "{ \"ui\": { \"theme\": \"GitHub\" } }");
 
-        List<OperationResult> results = JsonConfigStore.installMcpServers(globals("gemini"), "gemini");
+        List<OperationResult> results = JsonConfigStore.installMcpServers(globals("antigravity"), "antigravity");
         assertEquals(4, results.size());
         assertTrue(results.stream().noneMatch(OperationResult::skipped));
 
-        String raw = Files.readString(GEMINI);
-        assertFalse(raw.contains("AZ_SECRET") || raw.contains("GH_SECRET"), raw);
+        String raw = Files.readString(ANTIGRAVITY);
+        // Antigravity's $VAR expansion in env is undocumented, so the token values are written (as for Claude Code).
+        assertTrue(raw.contains("AZ_SECRET") && raw.contains("GH_SECRET"), raw);
         assertFalse(raw.contains("\"type\""), raw);
         Map<String, Object> json = MAPPER.readValue(raw, new TypeReference<LinkedHashMap<String, Object>>() {});
         assertEquals(Map.of("theme", "GitHub"), json.get("ui"));
         @SuppressWarnings("unchecked")
         Map<String, Object> servers = (Map<String, Object>) json.get("mcpServers");
-        assertEquals(Map.of("httpUrl", "https://mcp.context7.com/mcp"), servers.get("context7"));
+        assertEquals(Map.of("serverUrl", "https://mcp.context7.com/mcp"), servers.get("context7"));
 
-        assertTrue(JsonConfigStore.isMcpServerRegistered("issue-tickets", "gemini"));
+        assertTrue(JsonConfigStore.isMcpServerRegistered("issue-tickets", "antigravity"));
         assertEquals(Set.of("engram", "issue-tickets"),
-            InstalledMcpServerDetector.detect(List.of("engram", "issue-tickets", "nope"), "gemini"));
+            InstalledMcpServerDetector.detect(List.of("engram", "issue-tickets", "nope"), "antigravity"));
     }
 
     @Test

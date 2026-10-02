@@ -66,7 +66,7 @@ class CodexLegacyCleanupTest {
     @Test
     void nonCodexAgentRemoveLeavesOtherExtensionsAlone(@TempDir Path tmp) throws IOException {
         Files.writeString(tmp.resolve("x.toml"), "keep");
-        AgentInstaller.remove(new AgentDescriptor("x", tmp, Map.of()), tmp, "gemini");
+        AgentInstaller.remove(new AgentDescriptor("x", tmp, Map.of()), tmp, "claude");
         assertTrue(Files.exists(tmp.resolve("x.toml")));
     }
 
@@ -102,7 +102,7 @@ class CodexLegacyCleanupTest {
         Path legacy = tmp.resolve(".codex").resolve("skills");
         Files.createDirectories(legacy.resolve("s1"));
         Files.writeString(legacy.resolve("s1").resolve("SKILL.md"), "---\nname: s1\n---\n"); // a real installed skill
-        SkillInstaller.remove("s1", tmp.resolve(".gemini").resolve("skills"));
+        SkillInstaller.remove("s1", tmp.resolve(".gemini").resolve("config").resolve("skills"));
         assertTrue(Files.exists(legacy.resolve("s1")));
     }
 

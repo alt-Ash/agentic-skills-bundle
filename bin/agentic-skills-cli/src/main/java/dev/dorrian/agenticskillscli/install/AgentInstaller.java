@@ -47,6 +47,7 @@ public final class AgentInstaller {
             try {
                 String sourceContent = Files.readString(agentDef.srcFile());
                 String transformed = AgentContentTransformer.transform(sourceContent, toolKey, agentDef.name());
+                Files.createDirectories(dest.getParent()); // Antigravity: <agents>/<name>/agent.md
                 Files.writeString(dest, transformed);
                 // Upgrade cleanup: drop files an older version wrote under a different name (Codex .md).
                 for (String legacy : AgentFileNaming.legacyFileNames(agentDef.name(), toolKey)) {
@@ -85,6 +86,7 @@ public final class AgentInstaller {
         OperationResult result;
         try {
             boolean removed = Files.deleteIfExists(dest);
+            deleteIfEmptyAgentDir(dest.getParent(), targetPath);
             // Also clean files older installer versions wrote (e.g. Codex agents as .md).
             for (String legacy : AgentFileNaming.legacyFileNames(agentDef.name(), toolKey)) {
                 removed |= Files.deleteIfExists(targetPath.resolve(legacy));
@@ -103,6 +105,14 @@ public final class AgentInstaller {
             }
         }
         return result;
+    }
+
+    /** Antigravity keeps each agent in its own directory; drop it once its agent.md is gone and nothing else is in it. */
+    private static void deleteIfEmptyAgentDir(Path dir, Path agentsRoot) throws IOException {
+        if (dir == null || dir.equals(agentsRoot) || !Files.isDirectory(dir)) return;
+        try (var entries = Files.list(dir)) {
+            if (entries.findAny().isEmpty()) Files.delete(dir);
+        }
     }
 
     private static void ensureDir(Path dir) {

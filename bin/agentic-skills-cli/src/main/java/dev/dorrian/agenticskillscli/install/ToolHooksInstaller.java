@@ -4,7 +4,7 @@ import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
 
 import java.nio.file.Path;
 
-/** Installs, detects and removes the hooks for one non-Claude AI tool (Gemini CLI, OpenCode, ...). */
+/** Installs, detects and removes the hooks for one non-Claude AI tool (OpenCode, Antigravity, ...). */
 public interface ToolHooksInstaller {
 
     /** Copies/refreshes the hooks jar as needed and registers hooks for this tool. Returns the installed jar. */

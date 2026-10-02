@@ -7,7 +7,6 @@ import dev.dorrian.agenticskillshooks.ProviderDetector;
 import dev.dorrian.usagestore.UsageEvent;
 import dev.dorrian.agenticskillshooks.transcript.ClaudeTranscriptParser;
 import dev.dorrian.agenticskillshooks.transcript.CodexTranscriptParser;
-import dev.dorrian.agenticskillshooks.transcript.GeminiTranscriptParser;
 
 import java.time.Instant;
 
@@ -40,14 +39,6 @@ public final class PostToolUseHook {
 
         if ("claude".equals(provider) && transcript != null) {
             ClaudeTranscriptParser.Extracted e = ClaudeTranscriptParser.extract(transcript);
-            model = e.model;
-            inputTokens = e.inputTokens;
-            cachedTokens = e.cachedTokens;
-            outputTokens = e.outputTokens;
-            cacheReadTokens = e.cacheReadTokens;
-            cacheCreationTokens = e.cacheCreationTokens;
-        } else if ("gemini".equals(provider) && transcript != null) {
-            GeminiTranscriptParser.Extracted e = GeminiTranscriptParser.extract(transcript);
             model = e.model;
             inputTokens = e.inputTokens;
             cachedTokens = e.cachedTokens;

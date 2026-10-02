@@ -17,7 +17,7 @@ class AgentToolRegistryTest {
     @Test
     void hasExactlyEightToolsInSourceOrder() {
         assertEquals(
-            List.of("opencode", "claude", "cursor", "gemini", "codex", "vscode", "windsurf", "zed"),
+            List.of("opencode", "claude", "cursor", "antigravity", "codex", "vscode", "windsurf", "zed"),
             List.copyOf(AgentToolRegistry.ALL.keySet())
         );
     }
@@ -139,5 +139,16 @@ class AgentToolRegistryTest {
     @Test
     void otherToolsDetectOnlyByTheirOwnDetectPath() {
         assertEquals(List.of(AgentToolRegistry.get("cursor").detectPath()), AgentToolRegistry.detectPaths("cursor"));
+    }
+
+    @Test
+    void antigravityUsesTheUnifiedGlobalRootAndTheProjectAgentsFolder() {
+        AgentToolDef a = AgentToolRegistry.get("antigravity");
+        assertTrue(a.globalPath().endsWith(java.nio.file.Path.of(".gemini", "config", "skills")), a.globalPath().toString());
+        assertEquals(".agents/skills", a.projectFolder());
+        assertTrue(a.agentsGlobalPath().endsWith(java.nio.file.Path.of(".gemini", "config", "agents")));
+        assertEquals(".agents/agents", a.agentsProjectFolder());
+        assertTrue(a.supportsAgents());
+        assertFalse(a.supportsCommands(), "skills are Antigravity's slash commands: there is no separate commands install");
     }
 }

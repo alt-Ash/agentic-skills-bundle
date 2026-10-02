@@ -1,12 +1,9 @@
 package dev.dorrian.agenticskillscli.flow;
 
-import dev.dorrian.agenticskillscli.HomeDir;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
 import dev.dorrian.agenticskillscli.ui.Prompter;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Collection;
 
 /**
@@ -61,36 +58,6 @@ final class HookOptionsPrompt {
                 current.context());
         }
         return new HookInstallOptions(guard, verify, context);
-    }
-
-    /**
-     * Antigravity CLI is not a tool the installer installs skills for, so its hooks are a separate question, asked
-     * only if Antigravity looks installed (its config directories exist) or our hooks are already registered there.
-     * Defaults to yes in both cases, like the other tools' analytics hooks.
-     */
-    static boolean askAntigravity(Prompter prompter) {
-        boolean registered = HooksInstaller.isInstalledForTool("antigravity");
-        if (!registered && !antigravityPresent()) {
-            return false;
-        }
-        return prompter.confirm("Also register usage hooks with Antigravity CLI (~/.gemini/config/hooks.json)?"
-            + enabledNote(registered), true);
-    }
-
-    static boolean antigravityPresent() {
-        Path gemini = HomeDir.resolve().resolve(".gemini");
-        return Files.isDirectory(gemini.resolve("antigravity-cli")) || Files.isDirectory(gemini.resolve("antigravity"))
-            || Files.isDirectory(gemini.resolve("config"));
-    }
-
-    /** Registers the hooks with Antigravity and says what happened; a failure never aborts the install. */
-    static void installAntigravity(HookInstallOptions options) {
-        try {
-            HooksInstaller.installForTool("antigravity", options);
-            System.out.println("  Hooks registered with Antigravity CLI.");
-        } catch (RuntimeException e) {
-            System.out.println("  Hooks not registered for Antigravity CLI: " + e.getMessage());
-        }
     }
 
     private static String enabledNote(boolean enabled) {

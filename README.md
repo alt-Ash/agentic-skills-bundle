@@ -46,7 +46,7 @@ Each path is `global` / `project`. A dash means the tool doesn't support that it
 | OpenCode | `~/.config/opencode/skills` / `.opencode/skills` | `~/.config/opencode/agents` / `.opencode/agents` | `~/.config/opencode/commands` / `.opencode/commands` |
 | Claude Code | `~/.claude/skills` / `.claude/skills` | `~/.claude/agents` / `.claude/agents` | `~/.claude/commands` / `.claude/commands` |
 | Cursor | `~/.cursor/rules` / `.cursor/rules` | `~/.cursor/agents` / `.cursor/agents` | — |
-| Gemini CLI | `~/.gemini/skills` / `.gemini/skills` | `~/.gemini/agents` / `.gemini/agents` | — |
+| Antigravity (CLI + IDE) | `~/.gemini/config/skills` / `.agents/skills` | `~/.gemini/config/agents/<name>/agent.md` / `.agents/agents` | — |
 | OpenAI Codex CLI | `~/.agents/skills` / `.agents/skills` | `~/.codex/agents` / `.codex/agents` (`.toml`) | — |
 | VS Code (GitHub Copilot) | `~/.vscode/skills` / `.vscode/skills` | `~/.copilot/agents` / — (global only) | — |
 | Devin Desktop (Windsurf) | `~/.codeium/windsurf/skills` / `.windsurf/skills` | — | — |
@@ -214,9 +214,9 @@ If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `
 
 ## Global MCP tools
 
-The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill. Gemini CLI (`~/.gemini/settings.json` → `mcpServers`) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
+The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
 
-MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Gemini CLI and Codex CLI**.
+MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Antigravity and Codex CLI**.
 
 For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), because Devin's docs give both locations. Uninstall removes them from both files.
 
@@ -225,7 +225,7 @@ For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/wi
 MCP server for Figma — gives your AI agent access to Figma files, components, and design tokens. No token or local install needed:
 
 - **Claude Code, Cursor, VS Code, Codex** — configured against Figma's hosted server (`https://mcp.figma.com/mcp`); you sign in with Figma (OAuth) on first use (Codex: `codex mcp login figma-mcp`).
-- **OpenCode, Devin Desktop (Windsurf), Zed, Gemini CLI** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
+- **OpenCode, Devin Desktop (Windsurf), Zed, Antigravity** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
 
 ### `engram`
 
@@ -239,7 +239,7 @@ Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to 
 
 ## Local MCP servers
 
-The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar`. For Gemini CLI and Codex CLI the `issue-tickets` credentials are never written into the tool's config: Gemini's entry references `$AZURE_DEVOPS_ACCOUNTS_B64`/`$GITHUB_ACCOUNTS_B64` and Codex's forwards them via `env_vars`, both read from the environment your shell profile sets.
+The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar`. For Codex CLI the `issue-tickets` credentials are never written into its config: it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
 
 ### `issue-tickets`
 
@@ -274,11 +274,11 @@ A shared circuit breaker aborts the rest of a scan the moment the target's error
 
 ## Hooks and usage data
 
-Installing for **Claude Code** (analytics also for **Antigravity CLI**; an OpenCode plugin) copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
+Installing for **Claude Code** (also **Antigravity**, and an OpenCode plugin) copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
 
 - **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master`, `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass (approve per project: `agentic-skills verify trust`); `context` adds session context. Re-running the installer refreshes our entries.
 - `agentic-skills dashboard` serves a read-only localhost dashboard: usage, tools, installed-vs-used skills and agents, sessions, guard blocks.
-- `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune --older-than 90d`.
+- `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune`.
 - `--uninstall` removes our hooks (not yours); the database is kept.
 
 Formats and limits: [docs/hooks.md](docs/hooks.md).

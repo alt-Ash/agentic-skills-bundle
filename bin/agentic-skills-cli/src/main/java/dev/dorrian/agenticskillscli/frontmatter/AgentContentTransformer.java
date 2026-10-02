@@ -30,16 +30,12 @@ import java.util.Set;
  *       simulated.
  *   <li>{@code vscode} — rewritten as VS Code {@code .agent.md} format:
  *       description, user-invocable, tools (derived from permission), model.
- *   <li>{@code gemini} — Gemini CLI subagent Markdown ({@code ~/.gemini/agents/*.md}):
- *       required {@code name} (lowercase slug) + {@code description}, {@code kind: local},
- *       {@code temperature} (0–2), and — only for agents whose OpenCode permission denies
- *       both edit and write — a {@code tools} allowlist of Gemini's read-only built-ins (plus
- *       {@code run_shell_command} unless bash is fully denied, the web tools unless webfetch
- *       is denied, and {@code mcp_<server>_<tool>} for each allowed MCP grant). Omitting
- *       {@code tools} inherits every tool. Body = system prompt. Tool names verified against
- *       context7 {@code /google-gemini/gemini-cli} (docs/reference/tools.md,
- *       docs/core/subagents.md) on 2026-10-01. OpenCode {@code model} ids are not Gemini
- *       models, so {@code model} is not carried over.
+ *   <li>{@code antigravity} — an Antigravity custom agent, {@code <agents>/<name>/agent.md}: YAML
+ *       frontmatter with a lowercase-slug {@code name} and a {@code description}, then the body as the
+ *       system prompt. This is the minimal documented form and was verified to be discovered by
+ *       {@code agy agent}. OpenCode's permission/model/temperature settings have no verified Antigravity
+ *       equivalent ({@code commandExecutionPolicy}, {@code inheritMcp}... exist but their values are not
+ *       documented), so they are not carried over.
  *   <li>{@code codex} — a standalone Codex custom-agent TOML file ({@code ~/.codex/agents/*.toml}):
  *       {@code name}, {@code description}, {@code developer_instructions} (the body), and
  *       {@code sandbox_mode = "read-only"} when edit+write are denied (allowed values
@@ -63,10 +59,6 @@ public final class AgentContentTransformer {
         "grep", "search/codebase"
     );
 
-    /** Gemini CLI built-ins of kind Read/Search (docs/reference/tools.md) — never write_file/replace. */
-    private static final List<String> GEMINI_READ_ONLY_TOOLS =
-        List.of("read_file", "read_many_files", "list_directory", "glob", "grep_search");
-
     private AgentContentTransformer() {
     }
 
@@ -77,8 +69,8 @@ public final class AgentContentTransformer {
 
         FrontmatterParser.FrontmatterAndBody split = FrontmatterParser.splitFrontmatterAndBody(content);
         if (split == null) {
-            // Gemini/Codex need their own required keys even for a bare body; others pass through.
-            if ("gemini".equals(toolKey)) return transformForGemini(Map.of(), content, agentName);
+            // Antigravity/Codex need their own required keys even for a bare body; others pass through.
+            if ("antigravity".equals(toolKey)) return transformForAntigravity(Map.of(), content, agentName);
             if ("codex".equals(toolKey)) return transformForCodex(Map.of(), content, agentName);
             return content; // no frontmatter — pass through unchanged
         }
@@ -86,8 +78,8 @@ public final class AgentContentTransformer {
         Map<String, Object> fm = FrontmatterParser.parse(content);
         String body = split.body();
 
-        if ("gemini".equals(toolKey)) {
-            return transformForGemini(fm, body, agentName);
+        if ("antigravity".equals(toolKey)) {
+            return transformForAntigravity(fm, body, agentName);
         }
         if ("codex".equals(toolKey)) {
             return transformForCodex(fm, body, agentName);
@@ -185,50 +177,16 @@ public final class AgentContentTransformer {
         return String.join("\n", lines);
     }
 
-    static String transformForGemini(Map<String, Object> fm, String body, String agentName) {
-        String name = geminiSlug(agentName);
-        Map<?, ?> perm = fm.get("permission") instanceof Map<?, ?> m ? m : Map.of();
-
+    static String transformForAntigravity(Map<String, Object> fm, String body, String agentName) {
+        String name = agentSlug(agentName);
         List<String> lines = new ArrayList<>();
         lines.add("---");
         lines.add("name: " + name);
         lines.add("description: " + yamlQuote(descriptionOr(fm, name)));
-        lines.add("kind: local");
-        if (fm.get("temperature") instanceof Number t && t.doubleValue() >= 0 && t.doubleValue() <= 2) {
-            lines.add("temperature: " + t);
-        }
-        if (isReadOnly(perm)) {
-            lines.add("tools:");
-            for (String tool : geminiReadOnlyTools(perm)) {
-                lines.add("  - " + yamlQuote(tool));
-            }
-        }
         lines.add("---");
         lines.add("");
         lines.add(stripLeading(body));
         return String.join("\n", lines);
-    }
-
-    private static List<String> geminiReadOnlyTools(Map<?, ?> perm) {
-        List<String> tools = new ArrayList<>(GEMINI_READ_ONLY_TOOLS);
-        if (!"deny".equals(perm.get("webfetch"))) {
-            tools.add("web_fetch");
-            tools.add("google_web_search");
-        }
-        if (!isBashFullyDenied(perm)) {
-            // Shell stays available (subject to Gemini's own confirmation policy) so read-only
-            // agents can still run `git diff` & co.; OpenCode's per-command patterns have no
-            // subagent-level equivalent in Gemini.
-            tools.add("run_shell_command");
-        }
-        if (perm.get("mcp") instanceof Map<?, ?> mcp) {
-            for (Map.Entry<?, ?> e : mcp.entrySet()) {
-                if ("deny".equals(e.getValue())) continue;
-                // OpenCode "server/tool" (or "server/*") -> Gemini "mcp_server_tool" (or "mcp_server_*").
-                tools.add("mcp_" + String.valueOf(e.getKey()).replace('/', '_'));
-            }
-        }
-        return tools;
     }
 
     static String transformForCodex(Map<String, Object> fm, String body, String agentName) {
@@ -299,8 +257,8 @@ public final class AgentContentTransformer {
         return d == null || String.valueOf(d).isBlank() ? "The " + fallbackName + " agent" : String.valueOf(d).strip();
     }
 
-    /** Gemini requires a lowercase slug (letters, digits, '-', '_'). */
-    static String geminiSlug(String agentName) {
+    /** Antigravity agent names are lowercase slugs (letters, digits, '-', '_'). */
+    static String agentSlug(String agentName) {
         String slug = (agentName == null ? "" : agentName).toLowerCase(Locale.ROOT)
             .replaceAll("[^a-z0-9_-]+", "-")
             .replaceAll("^-+|-+$", "");

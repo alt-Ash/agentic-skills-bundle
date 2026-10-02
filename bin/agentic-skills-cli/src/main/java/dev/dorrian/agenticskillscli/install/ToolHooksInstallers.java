@@ -5,8 +5,7 @@ import java.util.Optional;
 
 /**
  * The per-tool hook installers for tools other than Claude Code, keyed by tool key. A tool must also
- * be listed in {@code HookToolSupport.TOOLS} for the install flows to offer hooks for it.  Antigravity is not a
- * selectable tool in the installer (it has no skills/agents install here), so it is offered separately.
+ * be listed in {@code HookToolSupport.TOOLS} for the install flows to offer hooks for it. 
  */
 public final class ToolHooksInstallers {
 

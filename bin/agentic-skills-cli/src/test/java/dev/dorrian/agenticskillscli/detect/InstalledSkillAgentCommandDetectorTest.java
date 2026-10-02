@@ -58,7 +58,7 @@ class InstalledSkillAgentCommandDetectorTest {
 
     @Test
     void commandDetectorSkipsToolsWithNoCommandsGlobalPath() {
-        // cursor/gemini/codex/vscode/windsurf/zed all have commandsGlobalPath == null.
+        // cursor/antigravity/codex/vscode/windsurf/zed all have commandsGlobalPath == null.
         assertTrue(InstalledCommandDetector.detect(
             List.of("definitely-not-installed-xyz"), List.of("cursor", "windsurf", "zed")
         ).isEmpty());
