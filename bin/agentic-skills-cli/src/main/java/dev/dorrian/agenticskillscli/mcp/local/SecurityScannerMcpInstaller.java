@@ -24,7 +24,7 @@ public final class SecurityScannerMcpInstaller {
 
     public static final Path DEFAULT_INSTALL_DIR =
         HomeDir.resolve().resolve(".config").resolve("opencode").resolve("mcp").resolve("security-scanner");
-    private static final String JAR_NAME = "security-scanner.jar";
+    public static final String JAR_NAME = "security-scanner.jar";
 
     private SecurityScannerMcpInstaller() {
     }

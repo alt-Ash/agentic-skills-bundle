@@ -14,6 +14,7 @@ import dev.dorrian.agenticskillscli.flow.TokenUpdateFlow;
 import dev.dorrian.agenticskillscli.flow.UninstallWizard;
 import dev.dorrian.agenticskillscli.ui.Ansi;
 import dev.dorrian.agenticskillscli.ui.Prompter;
+import dev.dorrian.agenticskillscli.update.LatestVersion;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
@@ -57,6 +58,12 @@ public final class App {
                 dev.dorrian.usagestore.UsageDb.defaultPath(), System.out, System.err));
         }
         PackageRoot.initFromArgs(args);
+        java.util.List<String> upgradeArgs = upgradeArgs(args);
+        if (upgradeArgs != null) {
+            int exit = dev.dorrian.agenticskillscli.flow.UpgradeCommand.runDefault(upgradeArgs);
+            if (exit == 0) printUpdateNotice();
+            System.exit(exit);
+        }
 
         boolean uninstallRequested = containsFlag(args, "--uninstall");
 
@@ -86,6 +93,7 @@ public final class App {
                 case "install-quick" -> QuickInstallFlow.run(prompter, availableSkills, availableAgentFiles, detectedTools);
                 default -> FullInstallFlow.run(prompter, availableSkills, availableAgentFiles, detectedTools);
             }
+            if (!"uninstall".equals(mode)) printUpdateNotice();
         } catch (UserInterruptException e) {
             System.out.println();
             System.out.println("  " + Ansi.dim("Cancelled."));
@@ -95,6 +103,27 @@ public final class App {
             System.out.println("  " + Ansi.dim("No input received — exiting."));
             System.exit(1);
         }
+    }
+
+    /** The arguments after the {@code upgrade} subcommand, or null if it is not one. Allows a leading {@code --package-root <p>}. */
+    static java.util.List<String> upgradeArgs(String[] args) {
+        int i = 0;
+        java.util.List<String> lead = new java.util.ArrayList<>();
+        while (i + 1 < args.length && "--package-root".equals(args[i])) {
+            lead.add(args[i]);
+            lead.add(args[i + 1]);
+            i += 2;
+        }
+        if (i >= args.length || !"upgrade".equals(args[i])) return null;
+        java.util.List<String> rest = new java.util.ArrayList<>(lead);
+        rest.addAll(java.util.List.of(args).subList(i + 1, args.length));
+        return rest;
+    }
+
+    /** One dim line when a newer release exists; silent on any failure or when disabled. */
+    private static void printUpdateNotice() {
+        LatestVersion.newerThan(BundleExtractor.runningVersion())
+            .ifPresent(latest -> System.out.println("  " + Ansi.dim(LatestVersion.notice(latest))));
     }
 
     private static boolean containsFlag(String[] args, String flag) {

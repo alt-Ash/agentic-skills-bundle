@@ -35,4 +35,14 @@ public final class InstalledCommandDetector {
         }
         return installed;
     }
+
+    /** Commands present under one explicit commands directory. */
+    public static Set<String> detect(List<String> commandNames, Path commandsPath) {
+        Set<String> installed = new LinkedHashSet<>();
+        if (commandsPath == null) return installed;
+        for (String name : commandNames) {
+            if (Files.exists(commandsPath.resolve(name + ".md"))) installed.add(name);
+        }
+        return installed;
+    }
 }

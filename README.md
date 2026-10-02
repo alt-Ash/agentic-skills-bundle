@@ -18,13 +18,19 @@ jbang agentic-skills@alt-Ash
 java -jar agentic-skills.jar
 ```
 
-To remove everything the CLI installed:
+To upgrade (`brew update` first if it shows the old version):
+
+```bash
+brew upgrade agentic-skills && agentic-skills upgrade
+```
+
+To remove everything installed:
 
 ```bash
 agentic-skills --uninstall
 ```
 
-The jar is self-contained: on first run it unpacks its skills, agents, commands, templates and MCP server jars to `~/.agentic-skills/dist/<version>/`.
+The jar is self-contained: on first run it unpacks its content to `~/.agentic-skills/dist/<version>/`.
 
 ## What it does
 
@@ -32,9 +38,9 @@ Running `agentic-skills` opens a menu with four modes:
 
 | Mode | What it does |
 |---|---|
-| **Quick install** | Pick which AI tools you use, then installs every skill, agent, and MCP server globally in one pass (prompts for credentials as needed). Recommended for first-time setup. |
-| **Install** | Pick individual skills and agents, choose global or project scope, review a summary, then install. |
-| **Update token** | Rotate an expired Azure DevOps or GitHub PAT used by the `issue-tickets` MCP without reinstalling anything else. |
+| **Quick install** | Pick your AI tools, then install every skill, agent, and MCP server globally in one pass (prompts for credentials). |
+| **Install** | Pick skills and agents, choose global or project scope. |
+| **Update token** | Rotate an expired Azure DevOps or GitHub PAT used by the `issue-tickets` MCP. |
 | **Uninstall** | Remove previously installed skills, agents, and MCP servers for one or more tools. |
 
 ## Supported AI tools
@@ -53,7 +59,7 @@ Each path is `global` / `project`. A dash means the tool doesn't support that it
 | Zed AI | `~/.config/zed/skills` / `.zed/skills` | — | — |
 
 > [!NOTE]
-> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes older versions' `~/.codex/skills` and `~/.codex/agents/*.md`.
+> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes older `~/.codex/skills` and `~/.codex/agents/*.md`.
 
 Some skills and agents ship a companion slash command (see each entry's **Companion command** line); commands install only for tools that support them.
 
@@ -69,7 +75,7 @@ Spring Boot best practices: dependency injection, transaction boundaries, JPA/Hi
 
 #### `java-version-migrator`
 
-Guides safe Java/JDK version upgrades — audits breaking changes, runs automated migration tooling (OpenRewrite recipes), and updates build configs. Includes a Spring Boot major-version migration guide (2.x→3.x Jakarta EE namespace migration) and supports multi-hop JDK upgrades by chaining guides in order.
+Guides safe Java/JDK version upgrades — audits breaking changes, runs automated migration tooling (OpenRewrite recipes), and updates build configs. Includes a Spring Boot major-version migration guide (2.x→3.x Jakarta EE namespace migration); supports multi-hop JDK upgrades.
 
 **Use when:** upgrading Java/JDK versions, migrating Spring Boot major versions, or investigating breaking changes between versions.
 **Companion command:** `/migrate-java <from> <to>`
@@ -78,7 +84,7 @@ Guides safe Java/JDK version upgrades — audits breaking changes, runs automate
 
 #### `cicd-pipelines`
 
-Authoring, debugging, and best-practice reference for GitHub Actions and Azure DevOps Pipelines, routed by platform to keep context small.
+Authoring, debugging, and best practices for GitHub Actions and Azure DevOps Pipelines.
 
 **Use when:** creating, fixing, optimizing, or reviewing a CI/CD pipeline, workflow file, or build configuration.
 
@@ -86,7 +92,7 @@ Authoring, debugging, and best-practice reference for GitHub Actions and Azure D
 
 #### `pr-review-checklist`
 
-Reviews a pending diff (uncommitted, staged, or against a base branch) for Java/Spring Boot best practices and alignment with the originating ticket's actual scope. Diff-first and token-efficient — reads the change, not the whole repo — and never edits, blocks, or runs a full security audit.
+Reviews a pending diff (uncommitted, staged, or against a base branch) for Java/Spring Boot best practices and alignment with the originating ticket's actual scope. Diff-first and token-efficient; never edits, blocks, or runs a full security audit.
 
 **Use when:** a diff needs an advisory best-practice pass before a PR is opened.
 **Companion command:** `/pr-check [ticket-id-or-branch-context]` (drives the `pr-reviewer` agent).
@@ -110,7 +116,7 @@ Separates genuine scope from noise in a ticket, PBI, or User Story, in both dire
 
 #### `validation-loop`
 
-Bounded iterate-fix-reverify protocol for any caller-supplied gate set — build/test/lint (`./mvnw verify`, `./gradlew check`), an OWASP Dependency-Check re-scan, a live endpoint re-check. Defines cheapest-first gate ordering, introduced-vs-pre-existing failure classification, and a uniform hard-stop template; the caller always supplies the concrete gates and fixes.
+Bounded iterate-fix-reverify protocol for any caller-supplied gate set — build/test/lint (`./mvnw verify`, `./gradlew check`), an OWASP Dependency-Check re-scan, a live endpoint re-check. Defines cheapest-first ordering, introduced-vs-pre-existing classification, and a hard-stop template; the caller supplies the gates and fixes.
 
 **Use when:** an agent needs to iterate until a set of checks pass rather than declaring success after the first pass. Used internally by `dev-orchestrator`, `issue-implementer`, `security-implementor`, and `spring-boot-backend-engineer`.
 
@@ -196,7 +202,7 @@ Writes a failing test first, confirms it fails for the right reason, implements 
 
 #### `@security-auditor`
 
-Full Spring Boot/Spring MVC/Spring WebFlux security audit specialized in OWASP Top 10:2025 — OWASP Dependency-Check with confirmed-version triage, a full grep sweep across every category, optional live exploitation as proof-of-concept, and a structured report with fixes. Can optionally invoke the `security-scanner` MCP for a complementary live-HTTP-probe layer.
+Full Spring Boot/Spring MVC/Spring WebFlux security audit specialized in OWASP Top 10:2025 — OWASP Dependency-Check with confirmed-version triage, a grep sweep of every category, optional proof-of-concept exploitation, and a structured report with fixes. Can optionally invoke the `security-scanner` MCP for live HTTP probes.
 
 **Invoke when:** a thorough security review is needed (heavier than the always-on `secure-feature-gate`).
 
@@ -214,7 +220,7 @@ If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `
 
 ## Global MCP tools
 
-The CLI can also configure global MCP tools during Install/Quick install. These are not tied to any specific skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
+The CLI can also configure global MCP tools during Install/Quick install, independent of any skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
 
 MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Antigravity and Codex CLI**.
 
@@ -239,7 +245,7 @@ Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to 
 
 ## Local MCP servers
 
-The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers shipped prebuilt inside `agentic-skills.jar`. For Codex CLI the `issue-tickets` credentials are never written into its config: it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
+The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers prebuilt inside `agentic-skills.jar`. For Codex CLI the `issue-tickets` credentials are never written into its config: it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
 
 ### `issue-tickets`
 
@@ -247,7 +253,7 @@ MCP server for ticket/issue management — supports **Azure DevOps and GitHub** 
 
 Tools: `pull_ticket`, `create_issue`, `create_pull_request`
 
-**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>` `url`/`connection`/`developerConnection`, then `<issueManagement><url>`, then the project `<url>`). GitHub is recognised by `github.com` and Azure DevOps by `dev.azure.com` or `visualstudio.com`. If none of these match and only one provider has credentials configured, that provider is used.
+**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>`, `<issueManagement><url>`, project `<url>`). GitHub is recognised by `github.com`, Azure DevOps by `dev.azure.com` or `visualstudio.com`. Failing that, the only provider with credentials is used.
 
 Credentials come from environment variables. The installer collects one or more accounts per provider and writes them to your shell profile (`~/.zshrc` or `~/.bashrc`) as base64-encoded JSON; for each provider the first variable set wins:
 
@@ -274,9 +280,10 @@ A shared circuit breaker aborts the rest of a scan the moment the target's error
 
 ## Hooks and usage data
 
-Installing for **Claude Code** (also **Antigravity**, and an OpenCode plugin) copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
+Installing for **Claude Code** (also **Antigravity** and an OpenCode plugin) copies a hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
 
 - **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master`, `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass (approve per project: `agentic-skills verify trust`); `context` adds session context. Re-running the installer refreshes our entries.
+- `agentic-skills upgrade [--dry-run] [--project <dir>]...` refreshes installed skills, agents, commands, templates, hooks (opt-ins kept) and local MCP jars; never touches MCP config or deletes files. Project installs aren't tracked, so pass `--project`. Exit 0 ok, 1 a step failed (others ran), 2 bad args. A newer-version notice asks GitHub for the latest release at most once/24h (off: `AGENTIC_SKILLS_NO_UPDATE_CHECK=1`); no self-update.
 - `agentic-skills dashboard` serves a read-only localhost dashboard: usage, tools, installed-vs-used skills and agents, sessions, guard blocks.
 - `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune`.
 - `--uninstall` removes our hooks (not yours); the database is kept.

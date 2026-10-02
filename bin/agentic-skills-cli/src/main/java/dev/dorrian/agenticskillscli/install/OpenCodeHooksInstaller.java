@@ -11,6 +11,8 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.function.Supplier;
 
 /**
@@ -25,6 +27,8 @@ public final class OpenCodeHooksInstaller implements ToolHooksInstaller {
     static final String RESOURCE = "/opencode/agentic-skills-hooks.js";
     static final String JAR_PLACEHOLDER = "__AGENTIC_SKILLS_HOOKS_JAR__";
     static final String GUARD_PLACEHOLDER = "__AGENTIC_SKILLS_GUARD__";
+
+    private static final Pattern GUARD_LINE = Pattern.compile("(?m)^const GUARD = (true|false)\\s*$");
 
     private final Supplier<Path> bundledJar;
     private final Supplier<Path> targetJar;
@@ -83,6 +87,22 @@ public final class OpenCodeHooksInstaller implements ToolHooksInstaller {
             return Files.isRegularFile(file) && Files.readString(file).contains(MARKER);
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    /** The opt-ins baked into the installed plugin (only guard exists here); NONE if missing or unreadable. */
+    HookInstallOptions currentOptions() {
+        try {
+            Path file = pluginFile();
+            if (!Files.isRegularFile(file)) {
+                return HookInstallOptions.NONE;
+            }
+            String content = Files.readString(file);
+            Matcher m = GUARD_LINE.matcher(content);
+            boolean guard = content.contains(MARKER) && m.find() && Boolean.parseBoolean(m.group(1));
+            return new HookInstallOptions(guard, false, false);
+        } catch (IOException | RuntimeException e) {
+            return HookInstallOptions.NONE;
         }
     }
 

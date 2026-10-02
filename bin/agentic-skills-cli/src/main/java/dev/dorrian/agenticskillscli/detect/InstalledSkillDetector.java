@@ -39,4 +39,17 @@ public final class InstalledSkillDetector {
         }
         return installed;
     }
+
+    /** Skills present under one explicit skills directory (a project folder, say), incl. legacy locations. */
+    public static Set<String> detect(List<SkillDescriptor> skills, Path skillsPath) {
+        Set<String> installed = new LinkedHashSet<>();
+        if (skillsPath == null) return installed;
+        for (SkillDescriptor skill : skills) {
+            boolean found = Files.exists(skillsPath.resolve(skill.name()))
+                || LegacySkillLocations.forTarget(skillsPath).stream()
+                    .anyMatch(d -> Files.isRegularFile(d.resolve(skill.name()).resolve("SKILL.md")));
+            if (found) installed.add(skill.name());
+        }
+        return installed;
+    }
 }
