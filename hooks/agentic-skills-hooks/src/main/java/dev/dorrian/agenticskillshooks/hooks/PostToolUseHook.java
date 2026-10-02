@@ -24,6 +24,8 @@ public final class PostToolUseHook {
         public Integer outputTokens;
         public Integer cacheReadTokens;
         public Integer cacheCreationTokens;
+        /** Whole-turn output tokens (Claude only); null when not known. */
+        public Integer turnOutputTokens;
     }
 
     public static UsageRecord buildRecord(HookInput input) {
@@ -36,6 +38,7 @@ public final class PostToolUseHook {
         Integer outputTokens = null;
         Integer cacheReadTokens = null;
         Integer cacheCreationTokens = null;
+        Integer turnOutputTokens = null;
 
         if ("claude".equals(provider) && transcript != null) {
             ClaudeTranscriptParser.Extracted e = ClaudeTranscriptParser.extract(transcript);
@@ -45,6 +48,7 @@ public final class PostToolUseHook {
             outputTokens = e.outputTokens;
             cacheReadTokens = e.cacheReadTokens;
             cacheCreationTokens = e.cacheCreationTokens;
+            turnOutputTokens = e.turnOutputTokens;
         } else if ("codex".equals(provider)) {
             if (transcript != null) {
                 CodexTranscriptParser.Extracted e = CodexTranscriptParser.extract(transcript);
@@ -71,6 +75,7 @@ public final class PostToolUseHook {
         record.outputTokens = outputTokens;
         record.cacheReadTokens = cacheReadTokens;
         record.cacheCreationTokens = cacheCreationTokens;
+        record.turnOutputTokens = turnOutputTokens;
         return record;
     }
 

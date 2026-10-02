@@ -47,7 +47,8 @@ public final class StopHook {
             PostToolUseHook.UsageRecord r = PostToolUseHook.buildRecord(input);
             if (!"unavailable".equals(r.model)) event.model = r.model;
             event.inputTokens = r.inputTokens;
-            event.outputTokens = r.outputTokens;
+            // The turn's total across all its API messages; falls back to the last message's number.
+            event.outputTokens = r.turnOutputTokens != null ? r.turnOutputTokens : r.outputTokens;
             event.cacheReadTokens = r.cacheReadTokens;
             event.cacheCreationTokens = r.cacheCreationTokens;
             event.cachedTokens = r.cachedTokens;

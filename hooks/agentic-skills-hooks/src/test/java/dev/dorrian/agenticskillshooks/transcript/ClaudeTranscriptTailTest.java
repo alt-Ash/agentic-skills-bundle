@@ -133,4 +133,46 @@ class ClaudeTranscriptTailTest {
         assertEquals(50, ce.cachedTokens);
         assertNull(ce.cacheCreationTokens);
     }
+
+    private static String block(String id, int out) {
+        return "{\"type\":\"assistant\",\"message\":{\"id\":\"" + id + "\",\"model\":\"m\",\"usage\":{\"output_tokens\":" + out + "}}}";
+    }
+
+    private static final String PROMPT = "{\"type\":\"user\",\"message\":{\"content\":\"do it\"}}";
+    private static final String TOOL_RESULT =
+        "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"content\":\"ok\"}]}}";
+    private static final String INTERRUPT =
+        "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"[Request interrupted by user]\"}]}}";
+
+    @Test
+    void turnOutputSumsDistinctMessagesOnceAcrossBlocksAndToolResults() throws Exception {
+        Path p = write(
+            block("old", 1000), PROMPT,
+            block("a", 350), block("a", 350), block("a", 350), TOOL_RESULT,
+            block("b", 40));
+        var e = ClaudeTranscriptParser.extract(p.toString());
+        assertEquals(390, e.turnOutputTokens);
+        assertEquals(40, e.outputTokens);
+    }
+
+    @Test
+    void turnOutputIsUnknownWhenTheTurnStartIsCutOffByTheTail() throws Exception {
+        Path p = write(PROMPT, block("a", 50), block("b", 60));
+        assertNull(ClaudeTranscriptParser.extract(p.toString(), 120).turnOutputTokens);
+    }
+
+    @Test
+    void anInterruptMarkerIsNotATurnBoundary() throws Exception {
+        Path p = write(PROMPT, block("a", 10), INTERRUPT, block("b", 5));
+        assertEquals(15, ClaudeTranscriptParser.extract(p.toString()).turnOutputTokens);
+    }
+
+    @Test
+    void detectsAnInterruptedPreviousTurnWhetherOrNotThePromptIsWrittenYet() throws Exception {
+        assertTrue(ClaudeTranscriptParser.previousTurnInterrupted(write(PROMPT, block("a", 10), INTERRUPT).toString()));
+        assertTrue(ClaudeTranscriptParser.previousTurnInterrupted(
+            write(PROMPT, block("a", 10), INTERRUPT, PROMPT).toString()));
+        assertEquals(false, ClaudeTranscriptParser.previousTurnInterrupted(write(PROMPT, block("a", 10)).toString()));
+        assertEquals(false, ClaudeTranscriptParser.previousTurnInterrupted("/nonexistent"));
+    }
 }

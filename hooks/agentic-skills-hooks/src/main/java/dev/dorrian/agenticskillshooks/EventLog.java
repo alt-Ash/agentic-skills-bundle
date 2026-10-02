@@ -60,6 +60,15 @@ public final class EventLog {
         }
     }
 
+    /** The most recent model recorded for the session, or null if none yet or the store is unavailable. */
+    public static synchronized String sessionModel(String sessionId) {
+        List<UsageEvent> events = sessionEvents(sessionId);
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).model != null) return events.get(i).model;
+        }
+        return null;
+    }
+
     /** A session's stored events in time order; empty if unknown or the store is unavailable. */
     public static synchronized List<UsageEvent> sessionEvents(String sessionId) {
         try {

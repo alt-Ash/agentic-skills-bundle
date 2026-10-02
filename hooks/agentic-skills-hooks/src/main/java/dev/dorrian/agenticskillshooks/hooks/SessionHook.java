@@ -43,6 +43,7 @@ public final class SessionHook {
         event.user = identity.user;
         event.project = identity.project;
         event.client = identity.client;
+        event.model = input.model() != null ? input.model() : EventLog.sessionModel(input.sessionId());
         event.source = "session_start".equals(kind) ? input.source() : null;
         event.reason = "session_end".equals(kind) ? input.reason() : null;
 

@@ -27,7 +27,7 @@ import java.util.UUID;
 public final class UsageDb implements AutoCloseable {
 
     public static final String ENV_DB_PATH = "AGENTIC_SKILLS_DB";
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
     public static final String DROPPED_EVENTS = "dropped_events";
     private static final int BUSY_TIMEOUT_MS = 2000;
     private static final int OPEN_ATTEMPTS = 8;
@@ -159,6 +159,9 @@ public final class UsageDb implements AutoCloseable {
                 if (version < 2) {
                     for (String ddl : SchemaV2.STATEMENTS) s.execute(ddl);
                 }
+                if (version < 3) {
+                    for (String ddl : SchemaV3.STATEMENTS) s.execute(ddl);
+                }
                 s.execute("PRAGMA user_version = " + SCHEMA_VERSION);
                 s.execute("COMMIT");
             } catch (SQLException | RuntimeException e) {
@@ -250,7 +253,8 @@ public final class UsageDb implements AutoCloseable {
             setInt(p, i++, e.cacheReadTokens);
             setInt(p, i++, e.cacheCreationTokens);
             p.setString(i++, e.agentName);
-            p.setString(i, e.skillName);
+            p.setString(i++, e.skillName);
+            setBool(p, i, e.isInterrupt);
             return p.executeUpdate() == 1;
         }
     }
@@ -478,6 +482,8 @@ public final class UsageDb implements AutoCloseable {
         e.cacheCreationTokens = getInt(rs, "cache_creation_tokens");
         e.agentName = rs.getString("agent_name");
         e.skillName = rs.getString("skill_name");
+        int interrupt = rs.getInt("is_interrupt");
+        e.isInterrupt = rs.wasNull() ? null : interrupt != 0;
         return e;
     }
 

@@ -43,4 +43,16 @@ class StopHookUsageTest {
         assertNull(e.cacheCreationTokens);
         assertNull(e.cachedTokens);
     }
+
+    @Test
+    void outputTokensAreTheWholeTurnNotJustTheLastMessage() throws Exception {
+        Path t = tmp.resolve("turn.jsonl");
+        Files.writeString(t, String.join("\n",
+            "{\"type\":\"user\",\"message\":{\"content\":\"go\"}}",
+            "{\"type\":\"assistant\",\"message\":{\"id\":\"a\",\"model\":\"m\",\"usage\":{\"output_tokens\":300}}}",
+            "{\"type\":\"assistant\",\"message\":{\"id\":\"b\",\"model\":\"m\",\"usage\":{\"output_tokens\":20}}}") + "\n");
+        UsageEvent e = new UsageEvent();
+        StopHook.applyUsage(HookInput.parse("{\"transcript_path\":\"" + t + "\"}"), e);
+        assertEquals(320, e.outputTokens);
+    }
 }

@@ -356,6 +356,28 @@ class HookInvocationIT {
 
             assertTrue(run.events().get(0).path("slashCommand").isNull());
         }
+
+        @Test
+        void carriesTheSessionModelAndFlagsAPromptThatFollowsAnInterruptedTurn(@TempDir Path cwd) throws Exception {
+            Path transcript = cwd.resolve("t.jsonl");
+            Files.writeString(transcript, String.join("\n",
+                "{\"type\":\"user\",\"message\":{\"content\":\"first\"}}",
+                "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"[Request interrupted by user]\"}]}}") + "\n");
+            Map<String, Object> start = new java.util.HashMap<>(sessionPayload("SessionStart", "sess-model", cwd));
+            start.put("model", "claude-sonnet-5-5");
+            spawnHook(cwd, "session", start, Map.of());
+            spawnHook(cwd, "user-prompt-submit", Map.of(
+                "session_id", "sess-model", "prompt", "again", "cwd", cwd.toString(),
+                "transcript_path", transcript.toString()), Map.of());
+
+            try (UsageDb db = UsageDb.openReadOnly(dbFor(cwd))) {
+                var events = db.eventsForSession("sess-model");
+                assertEquals("claude-sonnet-5-5", events.get(0).model);
+                assertEquals("user_prompt", events.get(1).event);
+                assertEquals("claude-sonnet-5-5", events.get(1).model);
+                assertEquals(Boolean.TRUE, events.get(1).isInterrupt);
+            }
+        }
     }
 
     // ─── post-tool-use ───────────────────────────────────────────────────────

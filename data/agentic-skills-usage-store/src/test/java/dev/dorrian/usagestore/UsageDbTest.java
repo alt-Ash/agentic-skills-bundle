@@ -51,6 +51,7 @@ class UsageDbTest {
         e.cacheCreationTokens = 50;
         e.agentName = "tdd-engineer";
         e.skillName = "validation-loop";
+        e.isInterrupt = true;
         e.gitLinesAdded = 7;
         e.gitCommits = List.of(new GitCommitInfo("abc", "msg"));
         e.gitFilesAdded = List.of("a.txt");
@@ -70,6 +71,7 @@ class UsageDbTest {
             assertEquals(50, back.cacheCreationTokens);
             assertEquals("tdd-engineer", back.agentName);
             assertEquals("validation-loop", back.skillName);
+            assertEquals(Boolean.TRUE, back.isInterrupt);
             assertEquals("/work/demo", back.cwd);
             assertEquals("abc", back.gitCommits.get(0).hash);
             assertEquals(List.of("a.txt"), back.gitFilesAdded);

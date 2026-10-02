@@ -49,4 +49,6 @@ public final class UsageEvent {
     public String guardRule;
     public String agentName;
     public String skillName;
+    /** On user_prompt: the previous turn was interrupted by the user. */
+    public Boolean isInterrupt;
 }
