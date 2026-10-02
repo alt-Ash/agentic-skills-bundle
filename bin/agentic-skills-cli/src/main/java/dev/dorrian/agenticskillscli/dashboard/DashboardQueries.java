@@ -281,7 +281,7 @@ final class DashboardQueries {
         out.put("installed", inst);
         Map<String, Object> never = new LinkedHashMap<>();
         out.put("skills", usageKind(usedRows("skill_name", "1=1", f), installed == null ? null : installed.skills(), never, "skills"));
-        out.put("agents", usageKind(usedRows("agent_name", "1=1", f), installed == null ? null : installed.agents(), never, "agents"));
+        out.put("agents", usageKind(agentRows(f), installed == null ? null : installed.agents(), never, "agents"));
         out.put("commands", usageKind(slashUsed(f), installed == null ? null : installed.commands(), never, "commands"));
         out.put("neverUsed", never);
         return out;
@@ -292,6 +292,50 @@ final class DashboardQueries {
         return rows("SELECT e." + column + " AS name, COUNT(*) AS uses, COUNT(DISTINCT e.session_id) AS sessions,"
             + " MAX(e.ts) AS last_used FROM events e WHERE e." + column + " IS NOT NULL AND e." + column + " <> ''"
             + " AND " + extraWhere, f, "GROUP BY 1 ORDER BY uses DESC");
+    }
+
+    /**
+     * One sub-agent invocation can leave up to three rows: the Task/Agent tool call (tool_use, or
+     * tool_failure), SubagentStart and SubagentStop. Counting them all would triple-count, so an
+     * agent's uses are the larger of its start events and its tool-call attempts; stop rows are ignored.
+     * Which source exists depends on the hooks installed when the data was recorded.
+     */
+    private List<Map<String, Object>> agentRows(Filters f) {
+        if (!columns.contains("agent_name")) return new ArrayList<>();
+        List<Map<String, Object>> perKind = rows("SELECT e.agent_name AS name, e.event AS kind, COUNT(*) AS uses,"
+            + " COUNT(DISTINCT e.session_id) AS sessions, MAX(e.ts) AS last_used FROM events e"
+            + " WHERE e.agent_name IS NOT NULL AND e.agent_name <> '' AND e.event IN ('subagent_start', 'tool_use', 'tool_failure')",
+            f, "GROUP BY 1, 2");
+        Map<String, Map<String, Object>> byName = new LinkedHashMap<>();
+        Map<String, long[]> counts = new LinkedHashMap<>(); // [subagent_start, tool_use + tool_failure]
+        for (Map<String, Object> r : perKind) {
+            String name = String.valueOf(r.get("name"));
+            long uses = ((Number) r.get("uses")).longValue();
+            long[] c = counts.computeIfAbsent(name, k -> new long[2]);
+            c["subagent_start".equals(r.get("kind")) ? 0 : 1] += uses;
+            Map<String, Object> m = byName.get(name);
+            if (m == null) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("name", name);
+                row.put("sessions", r.get("sessions"));
+                row.put("last_used", r.get("last_used"));
+                byName.put(name, row);
+            } else {
+                // distinct sessions can't be summed across sources; the max is a lower bound
+                m.put("sessions", Math.max(((Number) m.get("sessions")).longValue(), ((Number) r.get("sessions")).longValue()));
+                if (String.valueOf(r.get("last_used")).compareTo(String.valueOf(m.get("last_used"))) > 0) {
+                    m.put("last_used", r.get("last_used"));
+                }
+            }
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Object>> e : byName.entrySet()) {
+            long[] c = counts.get(e.getKey());
+            e.getValue().put("uses", Math.max(c[0], c[1]));
+            out.add(e.getValue());
+        }
+        out.sort((a, b) -> Long.compare(((Number) b.get("uses")).longValue(), ((Number) a.get("uses")).longValue()));
+        return out;
     }
 
     /** Slash commands stored as typed ("/plan"); merged by name without the leading slash. */

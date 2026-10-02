@@ -455,4 +455,35 @@ class DashboardFeaturesTest {
         InstalledContent none = InstalledContent.load(dir.resolve("empty"));
         assertTrue(none.skills().isEmpty() && none.agents().isEmpty() && none.commands().isEmpty());
     }
+
+    @Test
+    void oneAgentInvocationIsCountedOnceEvenThoughItLeavesThreeRows(@TempDir Path dir) throws Exception {
+        Path db = dir.resolve("agents.db");
+        try (UsageDb u = UsageDb.open(db)) {
+            for (int i = 0; i < 3; i++) { // three invocations of tdd-engineer, each recorded three ways
+                UsageEvent call = ev("call" + i, "s" + i, "tool_use", "2026-10-01T09:0" + i + ":00Z");
+                call.agentName = "tdd-engineer";
+                u.record(call);
+                UsageEvent start = ev("start" + i, "s" + i, "subagent_start", "2026-10-01T09:0" + i + ":01Z");
+                start.agentName = "tdd-engineer";
+                u.record(start);
+                UsageEvent stop = ev("stop" + i, "s" + i, "subagent_stop", "2026-10-01T09:0" + i + ":09Z");
+                stop.agentName = "tdd-engineer";
+                u.record(stop);
+            }
+            // an agent seen only through the older tool-call rows still counts, one per call
+            for (int i = 0; i < 2; i++) {
+                UsageEvent old = ev("old" + i, "o" + i, "tool_use", "2026-10-01T10:0" + i + ":00Z");
+                old.agentName = "pr-reviewer";
+                u.record(old);
+            }
+        }
+        start(db, null);
+        JsonNode agents = json("/api/usage").path("agents");
+        for (JsonNode a : agents) {
+            if ("tdd-engineer".equals(a.path("name").asText())) assertEquals(3, a.path("uses").asInt(), a.toString());
+            if ("pr-reviewer".equals(a.path("name").asText())) assertEquals(2, a.path("uses").asInt(), a.toString());
+        }
+        assertEquals(2, agents.size());
+    }
 }
