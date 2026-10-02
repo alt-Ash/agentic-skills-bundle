@@ -89,8 +89,8 @@ verbatim, and what's been tried already — never a vague "still failing."
 
 ## Reporting
 
-Emit results as the `### Checks` table already defined in
-[`templates/HANDOFF-BLOCK.md`](../../../templates/HANDOFF-BLOCK.md) — one row
+Emit results as the `### Checks` table already defined in the standard
+HANDOFF BLOCK format (see the block at the end of this file) — one row
 per gate, `✅ passed` / `❌ failed` / `⚪ n/a` — rather than inventing a new
 report shape. A caller embedding this skill's result inside its own HANDOFF
 BLOCK reuses that same table; it does not produce a second, differently

@@ -161,6 +161,7 @@ Agents run in `primary` or `subagent` mode and are invoked by name (`@agent-name
 Main orchestrator for development workflows. Pulls tickets, plans with OpenSpec, executes via specialist sub-agents, runs the mandatory security gate, iterates until all checks pass, and opens a pull request.
 
 **Invoke when:** starting any feature, bug fix, issue, or audit — the default entry point for development work.
+**Claude Code:** run it as the whole session with `claude --agent dev-orchestrator`, or call it as a sub-agent with `@dev-orchestrator`. Independent slices of a feature are built in parallel, each by the matching specialist (e.g. `@spring-boot-backend-engineer`), or by `general-purpose` when none fits or is installed.
 
 #### `@issue-architect`
 
