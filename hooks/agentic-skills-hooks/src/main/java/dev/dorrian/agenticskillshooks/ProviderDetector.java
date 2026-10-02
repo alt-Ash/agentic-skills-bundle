@@ -19,7 +19,7 @@ public final class ProviderDetector {
             return envProvider;
         }
 
-        if ("AfterTool".equals(input.hookEventName())) return "gemini";
+        if (isGeminiEvent(input)) return "gemini";
 
         String model = input.model();
         boolean hasModel = model != null && !model.isEmpty();
@@ -28,6 +28,21 @@ public final class ProviderDetector {
         }
         if (hasModel) return "codex";
         return "claude";
+    }
+
+    /**
+     * Gemini CLI event names that Claude Code never emits (AfterTool, BeforeAgent, AfterAgent), plus
+     * SessionStart/SessionEnd, which both tools share but only Gemini stamps with a top-level
+     * {@code timestamp}.
+     */
+    private static boolean isGeminiEvent(HookInput input) {
+        String event = input.hookEventName();
+        if (event == null) return false;
+        return switch (event) {
+            case "AfterTool", "BeforeAgent", "AfterAgent" -> true;
+            case "SessionStart", "SessionEnd" -> input.hasKey("timestamp");
+            default -> false;
+        };
     }
 
     private static boolean isTruthy(String s) {
