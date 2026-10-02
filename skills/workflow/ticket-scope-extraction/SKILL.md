@@ -13,25 +13,13 @@ description:
 
 # Ticket Scope Extraction
 
-Real tickets are messier than a template. An author writes the actual requirement,
-then — in the same description or the comment thread — adds a question nobody
-answered, a color-styled caveat, a meeting-notes paste, or an explicit "to be
-elaborated" placeholder. Treating all of that as one undifferentiated blob means an
-implementing agent either builds noise into the acceptance criteria, or silently
-drops something the author actually needed answered. This skill separates the two
-without ever discarding anything unrecoverably.
+Real tickets mix the actual requirement with unanswered questions, color-styled caveats, meeting-notes pastes, and "to be elaborated" placeholders. Treated as one blob, an implementing agent either builds the noise into the acceptance criteria or silently drops something the author needed answered. This skill separates the two without discarding anything unrecoverably.
 
 ## When this applies
 
-- **Reading**: after `issue-tickets` `pull_ticket` returns a ticket whose `comments`,
-  `flaggedAsides`, or `openItems` fields are non-empty, or whose `description` reads
-  like free-form prose rather than a clean template (mixed AS-A/bug-report content
-  with asides).
-- **Drafting**: when a human's own request for a new ticket mixes the real ask with
-  a tangent, an aside, or unresolved "we might also need X, not sure yet."
-- Skip this skill entirely for a ticket that already reads as clean, structured
-  signal (see the negative-control example in the few-shot file) — do not
-  over-trigger on tickets that have nothing to filter.
+- **Reading**: after `pull_ticket` returns a ticket with non-empty `comments`, `flaggedAsides`, or `openItems`, or a `description` that reads as free-form prose with asides.
+- **Drafting**: when a human's request for a new ticket mixes the real ask with a tangent, an aside, or an unresolved "we might also need X".
+- **Skip** a ticket that already reads as clean, structured signal (see the negative-control few-shot example); do not over-trigger.
 
 ## Method
 

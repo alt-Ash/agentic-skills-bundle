@@ -30,14 +30,14 @@ Follow these phases in strict order. Do not skip or reorder them.
 
 Before writing anything, collect the facts you need:
 
-1. Read `pom.xml` or `build.gradle` / `build.gradle.kts` (or the equivalent manifest for the project language — `pyproject.toml`, `go.mod`, `package.json`, …) to identify:
-   - The test framework and how to invoke it (e.g., JUnit 5 via `./mvnw test` or `./gradlew test` — prefer the wrapper when present; `pytest`, `go test` elsewhere).
-   - How to run a single test (e.g., `./mvnw test -Dtest=UserServiceTest`, `./gradlew test --tests "*UserServiceTest"`).
-   - The test file naming convention (e.g., `*Test.java` for Surefire unit tests, `*IT.java` for Failsafe integration tests, `test_*.py`, `_test.go`).
-   - Available check plugins/tasks: Checkstyle, SpotBugs, PMD, Spotless, JaCoCo, `./mvnw verify`, `./gradlew check`, or similar.
-2. Identify the directory structure for tests (`src/test/java/` mirroring the main package, `src/integrationTest/`, `tests/`, etc.).
-3. Read any existing test files near the code you will touch to understand the testing patterns in use (assertion style — AssertJ vs JUnit `Assertions`; mocking approach — Mockito, `@MockitoBean`/`@MockBean`; slice tests like `@WebMvcTest`/`@DataJpaTest` vs `@SpringBootTest`; fixtures, Testcontainers).
-4. Use any installed skills relevant to the project language, framework, or testing tool.
+1. Read `pom.xml` or `build.gradle[.kts]` (or the language's manifest: `pyproject.toml`, `go.mod`, `package.json`, …) to identify:
+   - the test framework and how to invoke it (e.g. JUnit 5 via `./mvnw test` / `./gradlew test`, wrapper preferred; `pytest`, `go test` elsewhere);
+   - how to run a single test (`./mvnw test -Dtest=UserServiceTest`, `./gradlew test --tests "*UserServiceTest"`);
+   - the test naming convention (`*Test.java` Surefire, `*IT.java` Failsafe, `test_*.py`, `_test.go`);
+   - available checks: Checkstyle, SpotBugs, PMD, Spotless, JaCoCo, `./mvnw verify`, `./gradlew check`.
+2. Identify the test directory layout (`src/test/java/` mirroring main, `src/integrationTest/`, `tests/`).
+3. Read nearby existing tests for patterns: assertion style (AssertJ vs JUnit `Assertions`), mocking (Mockito, `@MockitoBean`/`@MockBean`), slice tests (`@WebMvcTest`/`@DataJpaTest`) vs `@SpringBootTest`, fixtures, Testcontainers.
+4. Use any installed skills relevant to the language, framework, or testing tool.
 
 Do not write any code until Phase 0 is complete.
 
@@ -60,12 +60,7 @@ Do not write any code until Phase 0 is complete.
 Inspect the test output carefully.
 
 - **Acceptable red:** The test fails because the production code does not yet implement the required behavior (e.g., function returns wrong value, feature not found, assertion fails on actual vs expected).
-- **Unacceptable red:** The test fails because of:
-  - Missing imports or unresolved modules in the test itself (for Java, a `cannot find symbol` compile error for something the test should already be able to reference — as opposed to the production class/method under test not existing yet, which is an acceptable red).
-  - Syntax errors in the test file.
-  - Missing test doubles (mocks, stubs, fakes) that are needed for isolation.
-  - Wrong test setup or teardown.
-  - Test framework configuration issues.
+- **Unacceptable red:** missing imports or unresolved modules in the test itself (for Java, a `cannot find symbol` for something the test should already be able to reference, as opposed to the production class/method under test not existing yet, which is an acceptable red); syntax errors in the test; missing test doubles needed for isolation; wrong setup or teardown; test framework configuration issues.
 
 If the failure is unacceptable, fix the test or setup until the failure is acceptable. Re-run after each fix. Do not proceed to Phase 3 until the test is in a clean red state for the right reason.
 
@@ -77,12 +72,9 @@ State explicitly before moving on:
 
 ### Phase 3 — Implement the change
 
-1. Write the minimum production code that makes the failing test pass.
-2. Do not modify the test.
-3. Do not implement behavior that no test currently demands.
-4. Run the full test suite (not just the new test) after each iteration to catch regressions.
-5. If new failures appear, address them before continuing — do not accumulate broken tests.
-6. Repeat until all tests pass, including the new one.
+1. Write the minimum production code that makes the failing test pass, without modifying the test or implementing behavior no test demands.
+2. Run the full suite (not just the new test) after each iteration; fix new failures before continuing, never accumulating broken tests.
+3. Repeat until all tests pass, including the new one.
 
 ---
 
@@ -100,17 +92,9 @@ Re-run the full test suite after any refactor to confirm nothing broke.
 
 ### Phase 5 — Run all project checks
 
-Run every available check found in Phase 0, in this order if all exist:
+Run every check found in Phase 0, in this order when they exist: (1) lint / static analysis (Checkstyle, SpotBugs, PMD, Spotless; `ruff`, `golangci-lint` elsewhere); (2) type check / compile (`./mvnw test-compile`, `./gradlew compileJava compileTestJava`; `mypy`, `go vet`); (3) build (`./mvnw verify`/`package`, `./gradlew build`; `go build`); (4) other aggregate checks (`./gradlew check`, scripts named `check`, `validate`, `ci`).
 
-1. Lint / static analysis (e.g., Checkstyle, SpotBugs, PMD, Spotless via their configured Maven goals or Gradle tasks; `ruff`, `golangci-lint` elsewhere)
-2. Type check / compile (e.g., `./mvnw test-compile`, `./gradlew compileJava compileTestJava`; `mypy`, `go vet` elsewhere)
-3. Build (e.g., `./mvnw verify` or `./mvnw package`, `./gradlew build`; `go build` elsewhere)
-4. Any other configured aggregate checks (e.g., `./gradlew check`, or scripts labeled `check`, `validate`, `ci`, or similar).
-
-For each check:
-- Run it.
-- If it fails, fix the issue and re-run until it passes.
-- Do not mark a check as done until it exits with code 0.
+For each check: run it, fix failures and re-run until it exits 0; do not mark it done before that.
 
 Do not move to the final report until every check passes.
 
@@ -162,8 +146,7 @@ was added. No unrelated refactoring was performed.
 
 - Do not edit production code before Phase 1 is complete and the test is in a confirmed red state.
 - Do not modify a test to make it pass — fix the production code instead.
-- Do not declare the task done if any test is failing.
-- Do not declare the task done if any available project check is failing.
+- Do not declare the task done if any test or available project check is failing.
 - Do not add `System.out.println`, `printStackTrace()`, `print`, `console.log`, or other debug statements as permanent code.
 - Do not refactor code that is outside the scope of the current change.
 - Do not guess at test runner commands — read them from the project manifest.
