@@ -1,5 +1,5 @@
 // Agentic Skills usage dashboard. Plain browser JS, no build step.
-// Every value from the API is rendered with textContent — never innerHTML — because commands,
+// Every value from the API is rendered as text nodes (textContent), never as markup, because commands,
 // errors and paths in the data are untrusted text.
 (() => {
   'use strict';
@@ -48,25 +48,49 @@
     return p.toString();
   }
 
-  async function api(path) {
-    const q = query();
+  async function api(path, extra) {
+    const p = new URLSearchParams(query());
+    for (const [k, v] of Object.entries(extra || {})) p.set(k, v);
+    const q = p.toString();
     const res = await fetch('/api/' + path + (q && !path.includes('?') ? '?' + q : ''), { cache: 'no-store' });
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || res.statusText);
     return body;
   }
 
-  function card(label, value, sub) {
+  const na = (v, f) => (v === null || v === undefined) ? 'n/a' : f(v);
+
+  function card(label, value, sub, delta) {
     return el('div', { class: 'card' }, el('div', { class: 'v' }, value), el('div', { class: 'l' }, label),
-      sub ? el('div', { class: 'l' }, sub) : null);
+      sub ? el('div', { class: 'l' }, sub) : null, delta || null);
+  }
+
+  const RATE_KEYS = ['failure_rate', 'cache_read_share'];
+
+  // Delta line for a KPI card: arrow + sign + amount, coloured good/bad only where a direction is
+  // clearly better (the arrow and sign carry the meaning, so colour is never the only cue).
+  function deltaEl(cmp, key) {
+    if (!cmp) return null;
+    const d = cmp.deltas[key];
+    if (!d || d.abs === null || d.abs === undefined) return el('div', { class: 'delta neutral' }, 'n/a vs previous period');
+    const amount = RATE_KEYS.includes(key) ? (Math.abs(d.abs) * 100).toFixed(1) + ' pp'
+      : d.pct !== null && d.pct !== undefined ? Math.abs(d.pct * 100).toFixed(0) + '%' : fmt(Math.abs(d.abs));
+    // a change that rounds to nothing is shown as no change, not as a good/bad arrow
+    const dir = /^0(\.0)?(\s|%|$)/.test(amount) ? 0 : d.abs > 0 ? 1 : d.abs < 0 ? -1 : 0;
+    const arrow = dir > 0 ? '▲ +' : dir < 0 ? '▼ −' : '■ ';
+    const lower = d.lowerIsBetter;
+    const cls = dir === 0 || lower === null || lower === undefined ? 'neutral' : (dir < 0) === lower ? 'good' : 'bad';
+    const word = cls === 'good' ? ' (better)' : cls === 'bad' ? ' (worse)' : '';
+    return el('div', { class: 'delta ' + cls }, arrow + amount + word + ' vs previous period');
   }
 
   function table(columns, rows, opts = {}) {
     if (!rows.length) return el('div', { class: 'empty' }, opts.empty || 'No data for these filters.');
     const head = el('tr', {}, columns.map((c) => el('th', { class: c.num ? 'n' : '' }, c.label)));
     const body = rows.map((r) => {
-      const tr = el('tr', opts.onRow ? { class: 'click', tabindex: '0',
-        onclick: () => opts.onRow(r), onkeydown: (e) => { if (e.key === 'Enter') opts.onRow(r); } } : {},
+      const rc = opts.rowClass ? opts.rowClass(r) : '';
+      const tr = el('tr', opts.onRow ? { class: ('click ' + rc).trim(), tabindex: '0',
+        onclick: () => opts.onRow(r), onkeydown: (e) => { if (e.key === 'Enter') opts.onRow(r); } } : (rc ? { class: rc } : {}),
       columns.map((c) => el('td', { class: (c.num ? 'n ' : '') + (c.mono ? 'mono' : '') }, c.fmt ? c.fmt(r[c.key], r) : (r[c.key] ?? '–'))));
       return tr;
     });
@@ -98,22 +122,46 @@
   // ─── views ───────────────────────────────────────────────────────────────
 
   async function overview() {
-    const [s, series, models, insights] = await Promise.all([api('summary'), api('timeseries'), api('models'), api('insights')]);
+    const cmpOn = !form.elements.compare.disabled && form.elements.compare.checked;
+    const [raw, series, models, insights] = await Promise.all([
+      api('summary', cmpOn ? { compare: 'prev' } : undefined), api('timeseries'), api('models'), api('insights')]);
+    const cmp = raw.deltas ? raw : null;
+    const s = cmp ? cmp.current : raw;
     const out = [];
+    if (cmp) {
+      const lastDay = (d) => new Date(Date.parse(d) - 86400000).toISOString().slice(0, 10);
+      out.push(el('div', { class: 'note' }, 'Comparing ' + cmp.window.from + ' to ' + lastDay(cmp.window.to) + ' with the previous '
+        + 'equal-length window ' + cmp.window.previousFrom + ' to ' + lastDay(cmp.window.previousTo) + '.'));
+    }
 
     out.push(el('section', {}, el('h2', {}, 'Insights'),
       insights.length ? insights.map((i) => el('div', { class: 'insight ' + i.severity }, el('b', {}, i.title), i.detail))
         : el('div', { class: 'muted' }, 'Nothing stands out for these filters.')));
 
     out.push(el('div', { class: 'cards' },
-      card('Sessions', fmt(s.sessions)),
-      card('Prompts', fmt(s.prompts)),
-      card('Tool calls', fmt(s.tool_calls), fmt(s.tool_failures) + ' failed (' + pct(s.failure_rate) + ')'),
-      card('Avg context / call', compact(s.avg_context), 'tokens (input + cached)'),
+      card('Sessions', fmt(s.sessions), null, deltaEl(cmp, 'sessions')),
+      card('Prompts', fmt(s.prompts), null, deltaEl(cmp, 'prompts')),
+      card('Tool calls', fmt(s.tool_calls), fmt(s.tool_failures) + ' failed (' + pct(s.failure_rate) + ')', deltaEl(cmp, 'tool_calls')),
+      card('Tool failure rate', pct(s.failure_rate), 'failed ÷ (successful + failed) calls', deltaEl(cmp, 'failure_rate')),
+      card('Avg context / call', compact(s.avg_context), 'tokens (input + cached)', deltaEl(cmp, 'avg_context')),
       card('Peak context', compact(s.peak_context), 'tokens'),
-      card('Tokens processed', compact(s.tokens_processed), 'sum of per-call context, approximate'),
-      card('Lines changed', '+' + fmt(s.lines_added) + ' / −' + fmt(s.lines_deleted), 'from session summaries'),
-      card('Guard blocks', fmt(s.guard_blocks))));
+      card('Tokens processed', compact(s.tokens_processed), 'sum of per-call context, approximate', deltaEl(cmp, 'tokens_processed')),
+      card('Lines changed', '+' + fmt(s.lines_added) + ' / −' + fmt(s.lines_deleted), 'from session summaries', deltaEl(cmp, 'lines_added')),
+      card('Guard blocks', fmt(s.guard_blocks), null, deltaEl(cmp, 'guard_blocks'))));
+
+    out.push(el('section', {}, el('h2', {}, 'Real token usage'),
+      el('div', { class: 'muted' }, 'Reported by the model per message, as recorded by the hooks. "n/a" means this data was not recorded (older events or a hook version without it), not zero.'),
+      el('div', { class: 'cards' },
+        card('Output tokens', na(s.output_tokens, compact), 'tokens the model generated', deltaEl(cmp, 'output_tokens')),
+        card('Cache-read tokens', na(s.cache_read_tokens, compact), 'input served from the prompt cache'),
+        card('Cache-creation tokens', na(s.cache_creation_tokens, compact), 'input written to the prompt cache'),
+        card('Cache-read share', na(s.cache_read_share, pct), 'cache-read ÷ (fresh input + cache-read + cache-creation)', deltaEl(cmp, 'cache_read_share'))),
+      table([
+        { label: 'Model', key: 'model' }, { label: 'Tool calls', key: 'tool_calls', num: true, fmt: fmt },
+        { label: 'Output tokens', key: 'output_tokens', num: true, fmt: (v) => na(v, compact) },
+        { label: 'Cache-read', key: 'cache_read_tokens', num: true, fmt: (v) => na(v, compact) },
+        { label: 'Cache-creation', key: 'cache_creation_tokens', num: true, fmt: (v) => na(v, compact) },
+        { label: 'Avg context / call', key: 'avg_context', num: true, fmt: (v) => na(v, compact) }], models)));
 
     const daily = chartBox('Activity per day', 'Prompts, tool calls and failures');
     const tokens = chartBox('Tokens processed per day', 'Sum of per-call context size — a proxy for load, not billing');
@@ -172,6 +220,7 @@
         { label: 'Tool calls', key: 'tool_calls', num: true, fmt: fmt },
         { label: 'Failures', key: 'failures', num: true, fmt: fmt },
         { label: 'Peak context', key: 'peak_context', num: true, fmt: compact },
+        { label: 'Output tokens', key: 'output_tokens', num: true, fmt: (v) => na(v, compact) },
         { label: 'Lines +/−', key: 'lines_added', num: true, fmt: (v, r) => '+' + fmt(v) + ' / −' + fmt(r.lines_deleted) }],
       rows, { onRow: (r) => sessionDetail(r) })));
   }
@@ -186,7 +235,8 @@
           { label: 'Event', key: 'event' },
           { label: 'Tool', key: 'tool' },
           { label: 'Detail', key: 'command', mono: true,
-            fmt: (v, r) => r.guard_rule ? 'BLOCKED: ' + r.guard_rule + ' — ' + (v || '') : (r.error || v || r.slash_command || '') },
+            fmt: (v, r) => r.guard_rule ? 'BLOCKED: ' + r.guard_rule + ' — ' + (v || '')
+              : (r.error || v || r.slash_command || (r.skill_name ? 'skill: ' + r.skill_name : '') || (r.agent_name ? 'agent: ' + r.agent_name : '')) },
           { label: 'Context', key: 'context_tokens', num: true, fmt: (v) => v ? compact(v) : '–' }], events)));
   }
 
@@ -214,8 +264,45 @@
           { label: 'Sessions', key: 'sessions', num: true, fmt: fmt }], files, { empty: 'No git changes recorded.' })));
   }
 
-  const TABS = { overview, tools, sessions, guard, git };
-  const TITLES = { overview: 'Overview', tools: 'Tools & commands', sessions: 'Sessions', guard: 'Guard', git: 'Git impact' };
+  const KINDS = [['skills', 'Skills'], ['agents', 'Agents'], ['commands', 'Slash commands']];
+
+  async function usage() {
+    const u = await api('usage');
+    const have = u.installed.available;
+    const out = [];
+    out.push(have
+      ? el('div', { class: 'note' }, 'Installed list read from ' + u.installed.source + '. "Never used" means no recorded use in the selected window: '
+        + 'a candidate to cut or to make easier to trigger, not proof it is useless. Usage is only recorded by hooks that capture skill and agent names, so older data undercounts.')
+      : el('div', { class: 'note' }, 'No installed list available, so this shows used items only. Start the dashboard with --package-root <dir>, '
+        + 'or run agentic-skills once so the bundle is extracted, to see installed-but-never-used items.'));
+    if (have) {
+      out.push(el('div', { class: 'cards' }, KINDS.map(([k, label]) =>
+        card(label + ' never used', fmt(u.neverUsed[k].length), 'of ' + fmt(u[k].filter((r) => r.installed).length) + ' installed'))));
+    }
+    for (const [k, label] of KINDS) {
+      out.push(el('section', {}, el('h2', {}, label), table([
+        { label: 'Name', key: 'name', mono: true },
+        { label: 'Status', key: 'uses', fmt: (v, r) => !have ? (v > 0 ? 'Used' : '') : r.installed === false ? 'Used (not in bundle)'
+          : v === 0 ? el('span', { class: 'badge cut' }, '✂ Never used: cut candidate') : el('span', { class: 'badge' }, '✓ Used') },
+        { label: 'Uses', key: 'uses', num: true, fmt: fmt },
+        { label: 'Sessions', key: 'sessions', num: true, fmt: fmt },
+        { label: 'Last used', key: 'last_used', fmt: (v) => v ? v.replace('T', ' ').slice(0, 16) : '–' }],
+      u[k], { rowClass: (r) => have && r.installed && r.uses === 0 ? 'cut' : '', empty: 'Nothing recorded for these filters.' })));
+    }
+    view.replaceChildren(...out);
+  }
+
+  const TABS = { overview, usage, tools, sessions, guard, git };
+  const TITLES = { overview: 'Overview', usage: 'Skills & agents', tools: 'Tools & commands', sessions: 'Sessions', guard: 'Guard', git: 'Git impact' };
+
+  function syncControls() {
+    const range = form.elements.from.value && form.elements.to.value;
+    form.elements.compare.disabled = !range;
+    if (!range) form.elements.compare.checked = false;
+    const q = query();
+    document.getElementById('exp-sessions').href = '/api/export/sessions.csv' + (q ? '?' + q : '');
+    document.getElementById('exp-events').href = '/api/export/events.csv' + (q ? '?' + q : '');
+  }
 
   async function select(name) {
     current = name;
@@ -245,8 +332,9 @@
       view.replaceChildren(el('div', { class: 'empty bad' }, 'Could not reach the usage database: ' + e.message));
       return;
     }
-    form.addEventListener('change', () => select(current));
-    document.getElementById('reset').addEventListener('click', () => { form.reset(); select(current); });
+    form.addEventListener('change', () => { syncControls(); select(current); });
+    document.getElementById('reset').addEventListener('click', () => { form.reset(); syncControls(); select(current); });
+    syncControls();
     select('overview');
   }
 

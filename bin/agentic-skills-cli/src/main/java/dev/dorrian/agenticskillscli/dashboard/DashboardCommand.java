@@ -7,7 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-/** {@code agentic-skills dashboard [--port N] [--no-open]}: serves the local usage dashboard until interrupted. */
+/** {@code agentic-skills dashboard [--port N] [--no-open] [--package-root <dir>]}: serves the local usage dashboard until interrupted. */
 public final class DashboardCommand {
 
     static final int DEFAULT_PORT = 8787;
@@ -19,6 +19,7 @@ public final class DashboardCommand {
     public static int run(List<String> args, Path dbPath, PrintStream out, PrintStream err) {
         int port = DEFAULT_PORT;
         boolean open = true;
+        Path packageRoot = null;
         for (int i = 0; i < args.size(); i++) {
             switch (args.get(i)) {
                 case "--no-open" -> open = false;
@@ -29,8 +30,19 @@ public final class DashboardCommand {
                     }
                     port = Integer.parseInt(args.get(++i));
                 }
+                case "--package-root" -> {
+                    if (i + 1 >= args.size() || args.get(i + 1).startsWith("--")) {
+                        err.println("--package-root needs a directory");
+                        return 2;
+                    }
+                    packageRoot = Path.of(args.get(++i));
+                    if (!Files.isDirectory(packageRoot)) {
+                        err.println("--package-root is not a directory: " + packageRoot);
+                        return 2;
+                    }
+                }
                 default -> {
-                    err.println("Usage: agentic-skills dashboard [--port N] [--no-open]");
+                    err.println("Usage: agentic-skills dashboard [--port N] [--no-open] [--package-root <dir>]");
                     return 2;
                 }
             }
@@ -41,9 +53,18 @@ public final class DashboardCommand {
             return 1;
         }
 
+        // Installed list: explicit --package-root, else the already-extracted bundle, else used-only.
+        InstalledContent installed = packageRoot != null
+            ? InstalledContent.load(packageRoot)
+            : InstalledContent.fromExtractedBundle().orElse(null);
+        if (installed == null) {
+            out.println("No installed bundle found: Skills & agents shows usage only."
+                + " Pass --package-root <dir> or run agentic-skills once to extract it.");
+        }
+
         DashboardServer server;
         try {
-            server = startWithFallback(dbPath, port, out);
+            server = startWithFallback(dbPath, port, installed, out);
         } catch (IOException e) {
             err.println("Could not start the dashboard: " + e.getMessage());
             return 1;
@@ -62,13 +83,14 @@ public final class DashboardCommand {
         return 0;
     }
 
-    private static DashboardServer startWithFallback(Path dbPath, int port, PrintStream out) throws IOException {
+    private static DashboardServer startWithFallback(Path dbPath, int port, InstalledContent installed, PrintStream out)
+        throws IOException {
         try {
-            return DashboardServer.start(dbPath, port);
+            return DashboardServer.start(dbPath, port, installed);
         } catch (BindException e) {
             if (port == 0) throw e;
             out.println("Port " + port + " is busy; picking a free one.");
-            return DashboardServer.start(dbPath, 0);
+            return DashboardServer.start(dbPath, 0, installed);
         }
     }
 }

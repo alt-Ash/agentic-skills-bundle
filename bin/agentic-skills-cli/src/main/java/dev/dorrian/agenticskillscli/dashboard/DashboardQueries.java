@@ -8,9 +8,11 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Read-only aggregate queries behind the dashboard API. "Context tokens" for a tool call is
@@ -28,8 +30,19 @@ final class DashboardQueries {
 
     private final UsageDb db;
 
+    /** Columns of {@code events}: a database not yet migrated to schema v2 lacks the newer ones. */
+    private final Set<String> columns = new HashSet<>();
+
     DashboardQueries(UsageDb db) {
         this.db = db;
+        for (Map<String, Object> r : query("PRAGMA table_info(events)", List.of())) {
+            columns.add(String.valueOf(r.get("name")));
+        }
+    }
+
+    /** {@code e.<name>} when the column exists, else a typed NULL, so older databases degrade to "n/a". */
+    private String col(String name) {
+        return columns.contains(name) ? "e." + name : "NULL";
     }
 
     Map<String, Object> filters() {
@@ -62,12 +75,74 @@ final class DashboardQueries {
                    MAX(%1$s) AS peak_context,
                    COALESCE(SUM(%1$s), 0) AS tokens_processed,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_added END), 0) AS lines_added,
-                   COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_deleted END), 0) AS lines_deleted
-            FROM events e WHERE 1=1""".formatted(TOOL_CONTEXT), f);
+                   COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_deleted END), 0) AS lines_deleted,
+                   SUM(%2$s) AS output_tokens,
+                   SUM(%3$s) AS cache_read_tokens,
+                   SUM(%4$s) AS cache_creation_tokens,
+                   SUM(CASE WHEN %3$s IS NOT NULL THEN COALESCE(e.input_tokens, 0) END) AS cache_input_tokens
+            FROM events e WHERE 1=1""".formatted(TOOL_CONTEXT, col("output_tokens"), col("cache_read_tokens"),
+            col("cache_creation_tokens")), f);
+        Object cacheRead = row.get("cache_read_tokens");
+        if (cacheRead instanceof Number cr) {
+            double denom = cr.doubleValue() + num(row.get("cache_creation_tokens")) + num(row.get("cache_input_tokens"));
+            row.put("cache_read_share", denom > 0 ? cr.doubleValue() / denom : null);
+        } else {
+            row.put("cache_read_share", null);
+        }
         long calls = ((Number) row.get("tool_calls")).longValue();
         long failures = ((Number) row.get("tool_failures")).longValue();
         row.put("failure_rate", calls + failures == 0 ? 0.0 : (double) failures / (calls + failures));
         return row;
+    }
+
+    private static double num(Object o) {
+        return o instanceof Number n ? n.doubleValue() : 0.0;
+    }
+
+    /** The compared KPIs and whether a lower value is the good direction (null: neutral). */
+    private static final Map<String, Boolean> KPIS = new LinkedHashMap<>();
+    static {
+        KPIS.put("sessions", null);
+        KPIS.put("prompts", null);
+        KPIS.put("tool_calls", null);
+        KPIS.put("tool_failures", true);
+        KPIS.put("failure_rate", true);
+        KPIS.put("avg_context", true);
+        KPIS.put("tokens_processed", null);
+        KPIS.put("output_tokens", null);
+        KPIS.put("cache_read_share", false);
+        KPIS.put("guard_blocks", null);
+        KPIS.put("lines_added", null);
+    }
+
+    /** Current window, the equal-length window right before it, and per-KPI deltas. Needs from and to. */
+    Map<String, Object> summaryCompare(Filters f) {
+        Filters prev = f.previous();
+        Map<String, Object> cur = summary(f);
+        Map<String, Object> old = summary(prev);
+        Map<String, Object> deltas = new LinkedHashMap<>();
+        for (Map.Entry<String, Boolean> k : KPIS.entrySet()) {
+            Object a = cur.get(k.getKey());
+            Object b = old.get(k.getKey());
+            Map<String, Object> d = new LinkedHashMap<>();
+            boolean both = a instanceof Number && b instanceof Number;
+            double abs = both ? ((Number) a).doubleValue() - ((Number) b).doubleValue() : Double.NaN;
+            d.put("abs", both ? abs : null);
+            d.put("pct", both && ((Number) b).doubleValue() != 0 ? abs / ((Number) b).doubleValue() : null);
+            d.put("lowerIsBetter", k.getValue());
+            deltas.put(k.getKey(), d);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("current", cur);
+        out.put("previous", old);
+        out.put("deltas", deltas);
+        Map<String, Object> window = new LinkedHashMap<>();
+        window.put("from", f.from());
+        window.put("to", f.to());
+        window.put("previousFrom", prev.from());
+        window.put("previousTo", prev.to());
+        out.put("window", window);
+        return out;
     }
 
     List<Map<String, Object>> timeseries(Filters f) {
@@ -85,11 +160,16 @@ final class DashboardQueries {
     List<Map<String, Object>> models(Filters f) {
         return rows("""
             SELECT COALESCE(e.model, 'unknown') AS model,
-                   COUNT(*) AS tool_calls,
+                   SUM(e.event = 'tool_use') AS tool_calls,
                    COALESCE(SUM(%1$s), 0) AS tokens_processed,
                    AVG(%1$s) AS avg_context,
-                   MAX(%1$s) AS peak_context
-            FROM events e WHERE e.event = 'tool_use'""".formatted(CONTEXT), f, "GROUP BY 1 ORDER BY tool_calls DESC");
+                   MAX(%1$s) AS peak_context,
+                   SUM(%2$s) AS output_tokens,
+                   SUM(%3$s) AS cache_read_tokens,
+                   SUM(%4$s) AS cache_creation_tokens
+            FROM events e WHERE (e.event = 'tool_use' OR %2$s IS NOT NULL OR %3$s IS NOT NULL)""".formatted(TOOL_CONTEXT,
+            col("output_tokens"), col("cache_read_tokens"), col("cache_creation_tokens")), f,
+            "GROUP BY 1 ORDER BY tool_calls DESC");
     }
 
     /** Per tool: successful calls, failures and rate. Older rows without a recorded tool name group as "(not recorded)". */
@@ -132,7 +212,14 @@ final class DashboardQueries {
             "GROUP BY 1 ORDER BY count DESC");
     }
 
+    /** Row cap for the CSV exports. */
+    static final int EXPORT_CAP = 50_000;
+
     List<Map<String, Object>> sessions(Filters f) {
+        return sessions(f, 300);
+    }
+
+    List<Map<String, Object>> sessions(Filters f, int limit) {
         return rows("""
             SELECT s.session_id AS session_id, s.project AS project, s.user_name AS user, s.started_at AS started_at, s.ended_at AS ended_at,
                    COALESCE(SUM(e.event = 'user_prompt'), 0) AS prompts,
@@ -140,18 +227,115 @@ final class DashboardQueries {
                    COALESCE(SUM(e.event = 'tool_failure'), 0) AS failures,
                    MAX(%1$s) AS peak_context,
                    COALESCE(SUM(%1$s), 0) AS tokens_processed,
+                   SUM(%2$s) AS output_tokens,
+                   SUM(%3$s) AS cache_read_tokens,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_added END), 0) AS lines_added,
                    COALESCE(SUM(CASE WHEN e.event = 'session_end' THEN e.git_lines_deleted END), 0) AS lines_deleted
-            FROM events e JOIN sessions s ON s.session_id = e.session_id WHERE 1=1""".formatted(TOOL_CONTEXT), f,
-            "GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT 300");
+            FROM events e JOIN sessions s ON s.session_id = e.session_id WHERE 1=1""".formatted(TOOL_CONTEXT,
+            col("output_tokens"), col("cache_read_tokens")), f,
+            "GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT " + limit);
     }
 
     List<Map<String, Object>> sessionEvents(String sessionId) {
         return query("""
             SELECT e.ts AS ts, e.event AS event, e.tool_name AS tool, e.command AS command, e.error AS error,
                    e.slash_command AS slash_command, e.guard_rule AS guard_rule, e.model AS model,
-                   %s AS context_tokens, e.prompt_char_length AS prompt_chars, e.estimated_output_tokens AS output_tokens_est
-            FROM events e WHERE e.session_id = ? ORDER BY e.ts, e.rowid LIMIT 2000""".formatted(CONTEXT), List.of(sessionId));
+                   %s AS context_tokens, e.prompt_char_length AS prompt_chars, e.estimated_output_tokens AS output_tokens_est,
+                   %s AS skill_name, %s AS agent_name, %s AS output_tokens, %s AS cache_read_tokens
+            FROM events e WHERE e.session_id = ? ORDER BY e.ts, e.rowid LIMIT 2000""".formatted(CONTEXT,
+            col("skill_name"), col("agent_name"), col("output_tokens"), col("cache_read_tokens")), List.of(sessionId));
+    }
+
+    /**
+     * Flat event rows for the CSV export. Only fields the API already exposes (commands are
+     * redacted at capture); no cwd, user or prompt text. One extra row is fetched to detect truncation.
+     */
+    List<Map<String, Object>> exportEvents(Filters f) {
+        return rows("""
+            SELECT e.ts AS ts, e.event AS event, e.session_id AS session_id, e.project AS project, e.model AS model,
+                   e.tool_name AS tool, e.slash_command AS slash_command, %s AS skill_name, %s AS agent_name,
+                   e.guard_rule AS guard_rule, e.input_tokens AS input_tokens, e.cached_tokens AS cached_tokens,
+                   %s AS output_tokens, %s AS cache_read_tokens, %s AS cache_creation_tokens,
+                   e.duration_ms AS duration_ms, e.command AS command, e.error AS error
+            FROM events e WHERE 1=1""".formatted(col("skill_name"), col("agent_name"), col("output_tokens"),
+            col("cache_read_tokens"), col("cache_creation_tokens")), f,
+            "ORDER BY e.ts, e.rowid LIMIT " + (EXPORT_CAP + 1));
+    }
+
+    /**
+     * Skills, agents and slash commands seen in the window (per name: uses, sessions, last used),
+     * merged with the installed list when there is one so never-used names show up with zero uses.
+     */
+    Map<String, Object> usage(Filters f, InstalledContent installed) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> inst = new LinkedHashMap<>();
+        inst.put("available", installed != null);
+        inst.put("source", installed == null ? null : installed.source());
+        out.put("installed", inst);
+        Map<String, Object> never = new LinkedHashMap<>();
+        out.put("skills", usageKind(usedRows("skill_name", "1=1", f), installed == null ? null : installed.skills(), never, "skills"));
+        out.put("agents", usageKind(usedRows("agent_name", "1=1", f), installed == null ? null : installed.agents(), never, "agents"));
+        out.put("commands", usageKind(slashUsed(f), installed == null ? null : installed.commands(), never, "commands"));
+        out.put("neverUsed", never);
+        return out;
+    }
+
+    private List<Map<String, Object>> usedRows(String column, String extraWhere, Filters f) {
+        if (!columns.contains(column)) return new ArrayList<>();
+        return rows("SELECT e." + column + " AS name, COUNT(*) AS uses, COUNT(DISTINCT e.session_id) AS sessions,"
+            + " MAX(e.ts) AS last_used FROM events e WHERE e." + column + " IS NOT NULL AND e." + column + " <> ''"
+            + " AND " + extraWhere, f, "GROUP BY 1 ORDER BY uses DESC");
+    }
+
+    /** Slash commands stored as typed ("/plan"); merged by name without the leading slash. */
+    private List<Map<String, Object>> slashUsed(Filters f) {
+        Map<String, Map<String, Object>> byName = new LinkedHashMap<>();
+        for (Map<String, Object> r : usedRows("slash_command", "e.event = 'user_prompt'", f)) {
+            String name = String.valueOf(r.get("name")).replaceFirst("^/+", "");
+            if (name.isEmpty()) continue;
+            Map<String, Object> m = byName.get(name);
+            if (m == null) {
+                r.put("name", name);
+                byName.put(name, r);
+            } else {
+                m.put("uses", ((Number) m.get("uses")).longValue() + ((Number) r.get("uses")).longValue());
+                // distinct sessions can't be summed exactly across spellings; the max is a lower bound
+                m.put("sessions", Math.max(((Number) m.get("sessions")).longValue(), ((Number) r.get("sessions")).longValue()));
+                if (String.valueOf(r.get("last_used")).compareTo(String.valueOf(m.get("last_used"))) > 0) {
+                    m.put("last_used", r.get("last_used"));
+                }
+            }
+        }
+        List<Map<String, Object>> out = new ArrayList<>(byName.values());
+        out.sort((a, b) -> Long.compare(((Number) b.get("uses")).longValue(), ((Number) a.get("uses")).longValue()));
+        return out;
+    }
+
+    private static List<Map<String, Object>> usageKind(List<Map<String, Object>> used, List<String> installed,
+                                                       Map<String, Object> never, String kind) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        Set<String> usedNames = new HashSet<>();
+        for (Map<String, Object> r : used) {
+            usedNames.add(String.valueOf(r.get("name")));
+            r.put("installed", installed == null ? null : installed.contains(String.valueOf(r.get("name"))));
+            out.add(r);
+        }
+        if (installed != null) {
+            List<String> unused = new ArrayList<>();
+            for (String name : installed) {
+                if (usedNames.contains(name)) continue;
+                unused.add(name);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("name", name);
+                m.put("uses", 0);
+                m.put("sessions", 0);
+                m.put("last_used", null);
+                m.put("installed", true);
+                out.add(m);
+            }
+            never.put(kind, unused);
+        }
+        return out;
     }
 
     List<Map<String, Object>> guardByRule(Filters f) {

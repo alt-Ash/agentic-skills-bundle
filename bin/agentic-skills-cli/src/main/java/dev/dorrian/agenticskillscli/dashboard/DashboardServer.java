@@ -15,6 +15,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -43,17 +44,24 @@ public final class DashboardServer implements AutoCloseable {
     private final HttpServer server;
     private final Path dbPath;
     private final int port;
+    private final InstalledContent installed;
 
-    private DashboardServer(HttpServer server, Path dbPath) {
+    private DashboardServer(HttpServer server, Path dbPath, InstalledContent installed) {
         this.server = server;
         this.dbPath = dbPath;
+        this.installed = installed;
         this.port = server.getAddress().getPort();
     }
 
     /** Starts on loopback. {@code port} 0 picks a free one. */
     public static DashboardServer start(Path dbPath, int port) throws IOException {
+        return start(dbPath, port, null);
+    }
+
+    /** As {@link #start(Path, int)}, with the bundle's installed names (null: show used-only). */
+    static DashboardServer start(Path dbPath, int port, InstalledContent installed) throws IOException {
         HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 0);
-        DashboardServer s = new DashboardServer(http, dbPath);
+        DashboardServer s = new DashboardServer(http, dbPath, installed);
         http.createContext("/", s::handle);
         http.setExecutor(Executors.newFixedThreadPool(4, r -> {
             Thread t = new Thread(r, "dashboard-http");
@@ -127,32 +135,66 @@ public final class DashboardServer implements AutoCloseable {
     private void api(HttpExchange ex, String path) throws IOException {
         Map<String, String> query = parseQuery(ex.getRequestURI().getRawQuery());
         Filters filters;
+        boolean compare;
         try {
             filters = Filters.parse(query);
+            compare = Filters.comparePrev(query);
         } catch (IllegalArgumentException e) {
             sendJson(ex, 400, Map.of("error", e.getMessage()));
             return;
         }
-        Function<DashboardQueries, Object> handler = route(path, filters);
+        if (path.equals("/api/export/sessions.csv") || path.equals("/api/export/events.csv")) {
+            export(ex, path, filters);
+            return;
+        }
+        Function<DashboardQueries, Object> handler = route(path, filters, compare);
         if (handler == null) {
             sendJson(ex, 404, Map.of("error", "Unknown endpoint"));
             return;
         }
         try (UsageDb db = UsageDb.openReadOnly(dbPath)) {
             sendJson(ex, 200, handler.apply(new DashboardQueries(db)));
+        } catch (IllegalArgumentException e) {
+            sendJson(ex, 400, Map.of("error", e.getMessage()));
         } catch (UsageStoreException e) {
             sendJson(ex, 503, Map.of("error", e.getMessage()));
         }
     }
 
-    private static Function<DashboardQueries, Object> route(String path, Filters f) {
+    private static final List<String> SESSION_COLUMNS = List.of("session_id", "project", "user", "started_at", "ended_at",
+        "prompts", "tool_calls", "failures", "peak_context", "tokens_processed", "output_tokens", "cache_read_tokens",
+        "lines_added", "lines_deleted");
+    private static final List<String> EVENT_COLUMNS = List.of("ts", "event", "session_id", "project", "model", "tool",
+        "slash_command", "skill_name", "agent_name", "guard_rule", "input_tokens", "cached_tokens", "output_tokens",
+        "cache_read_tokens", "cache_creation_tokens", "duration_ms", "command", "error");
+
+    /** CSV download of the filtered sessions or events, capped at {@link DashboardQueries#EXPORT_CAP} rows. */
+    private void export(HttpExchange ex, String path, Filters f) throws IOException {
+        boolean events = path.endsWith("events.csv");
+        try (UsageDb db = UsageDb.openReadOnly(dbPath)) {
+            DashboardQueries q = new DashboardQueries(db);
+            int cap = DashboardQueries.EXPORT_CAP;
+            List<Map<String, Object>> rows = events ? q.exportEvents(f) : q.sessions(f, cap + 1);
+            boolean truncated = rows.size() > cap;
+            if (truncated) rows = rows.subList(0, cap);
+            ex.getResponseHeaders().set("Content-Disposition",
+                "attachment; filename=\"" + (events ? "events.csv" : "sessions.csv") + "\"");
+            ex.getResponseHeaders().set("X-Export-Truncated", String.valueOf(truncated));
+            send(ex, 200, "text/csv; charset=utf-8", Csv.write(events ? EVENT_COLUMNS : SESSION_COLUMNS, rows));
+        } catch (UsageStoreException e) {
+            sendJson(ex, 503, Map.of("error", e.getMessage()));
+        }
+    }
+
+    private Function<DashboardQueries, Object> route(String path, Filters f, boolean compare) {
         if (path.startsWith("/api/sessions/")) {
             String id = URLDecoder.decode(path.substring("/api/sessions/".length()), StandardCharsets.UTF_8);
             return q -> q.sessionEvents(id);
         }
         return switch (path) {
             case "/api/filters" -> DashboardQueries::filters;
-            case "/api/summary" -> q -> q.summary(f);
+            case "/api/summary" -> q -> compare ? q.summaryCompare(f) : q.summary(f);
+            case "/api/usage" -> q -> q.usage(f, installed);
             case "/api/timeseries" -> q -> q.timeseries(f);
             case "/api/models" -> q -> q.models(f);
             case "/api/tools" -> q -> {
@@ -171,7 +213,7 @@ public final class DashboardServer implements AutoCloseable {
                 return m;
             };
             case "/api/git" -> q -> q.hotFiles(f);
-            case "/api/insights" -> q -> Insights.compute(q, f);
+            case "/api/insights" -> q -> Insights.compute(q, f, installed);
             default -> null;
         };
     }

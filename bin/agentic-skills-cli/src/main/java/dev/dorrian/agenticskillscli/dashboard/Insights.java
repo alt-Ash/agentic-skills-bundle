@@ -18,7 +18,14 @@ final class Insights {
     private Insights() {
     }
 
+    /** Minimum sessions in the window before "never used" means anything. */
+    static final long MIN_SESSIONS_FOR_UNUSED = 20;
+
     static List<Map<String, Object>> compute(DashboardQueries q, Filters f) {
+        return compute(q, f, null);
+    }
+
+    static List<Map<String, Object>> compute(DashboardQueries q, Filters f, InstalledContent installed) {
         List<Map<String, Object>> out = new ArrayList<>();
 
         for (Map<String, Object> t : q.tools(f)) {
@@ -49,6 +56,25 @@ final class Insights {
         if (notRecorded > 0) {
             out.add(insight("info", notRecorded + " tool call(s) have no tool name",
                 "These predate per-tool recording, so they are grouped together on the Tools tab."));
+        }
+
+        if (installed != null && num(q.summary(f).get("sessions")) >= MIN_SESSIONS_FOR_UNUSED) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> never = (Map<String, Object>) q.usage(f, installed).get("neverUsed");
+            long total = 0;
+            List<String> sample = new ArrayList<>();
+            for (Map.Entry<String, Object> e : never.entrySet()) {
+                for (Object name : (List<?>) e.getValue()) {
+                    total++;
+                    if (sample.size() < 8) sample.add(e.getKey().replaceAll("s$", "") + " " + name);
+                }
+            }
+            if (total > 0) {
+                out.add(insight("info", total + " installed skill/agent/command name(s) never used in this window",
+                    "Candidates to cut (or to make easier to trigger), e.g. " + String.join(", ", sample)
+                        + (total > sample.size() ? ", ..." : "") + ". See Skills & agents."
+                        + " Usage is only recorded for hooks installed with skill/agent capture, so older data undercounts."));
+            }
         }
 
         Map<String, Object> health = q.health();

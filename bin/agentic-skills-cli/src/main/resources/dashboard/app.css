@@ -44,3 +44,16 @@ tr.click:hover { background: var(--bg); }
 .bad { color: var(--bad); }
 footer { padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
 .scroll { overflow-x: auto; }
+label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+label.chk input { padding: 0; }
+.exports { font-size: 12px; color: var(--muted); display: flex; gap: 8px; }
+a { color: var(--accent); }
+.delta { font-size: 12px; font-weight: 600; }
+.delta.good { color: var(--accent3); }
+.delta.bad { color: var(--accent2); }
+.delta.neutral { color: var(--muted); }
+tr.cut td { background: var(--warn-bg); }
+.badge { display: inline-block; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 12px; white-space: nowrap; }
+.badge.cut { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+.cards + .scroll { margin-top: 12px; }
+.note { padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--accent); background: var(--info-bg); }
