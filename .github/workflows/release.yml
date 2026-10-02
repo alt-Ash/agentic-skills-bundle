@@ -14,6 +14,12 @@
 # GITHUB_TOKEN is scoped to this repository only, so it cannot push the tap or
 # catalog.
 #
+# Manual run: Actions > Release > "Run workflow". Pick `main` (releases the root
+# pom version, JReleaser creates the v<version> tag if it is missing) or an
+# existing v* tag (re-runs that release). `dry-run` defaults to true: it builds,
+# tests and runs `jreleaser full-release --dry-run`, publishing nothing. Untick it
+# to publish for real.
+#
 # Billed LLM evals are excluded from `verify` by default (opt-in -Pbilled-evals,
 # never used here) and need a logged-in `claude` CLI the runner does not have.
 
@@ -23,6 +29,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Dry run: build, test and simulate the release without publishing"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -61,14 +73,22 @@ jobs:
       - name: Resolve and check project version
         id: version
         env:
-          TAG: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           version="$(./mvnw -B -q -N help:evaluate -Dexpression=project.version -DforceStdout)"
-          echo "Project version: $version, tag: $TAG"
-          if [ "v$version" != "$TAG" ]; then
-            echo "::error::Tag $TAG does not match the root pom version v$version. Bump <revision> in pom.xml (and the mcp/* revisions) or re-tag."
-            exit 1
-          fi
+          echo "Project version: $version, ref: $REF"
+          case "$REF" in
+            refs/tags/v*)
+              if [ "v$version" != "$REF_NAME" ]; then
+                echo "::error::Tag $REF_NAME does not match the root pom version v$version. Bump <revision> in pom.xml (and the mcp/* revisions) or re-tag."
+                exit 1
+              fi ;;
+            refs/heads/main) ;;
+            *)
+              echo "::error::Releases run from main or a v* tag, not $REF."
+              exit 1 ;;
+          esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
@@ -78,7 +98,7 @@ jobs:
         uses: jreleaser/release-action@v2
         with:
           version: ${{ env.JRELEASER_VERSION }}
-          arguments: full-release
+          arguments: full-release ${{ inputs.dry-run && '--dry-run' || '' }}
           setup-java: false
         env:
           JRELEASER_PROJECT_VERSION: ${{ steps.version.outputs.version }}
