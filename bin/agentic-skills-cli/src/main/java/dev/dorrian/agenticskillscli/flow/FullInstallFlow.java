@@ -9,6 +9,8 @@ import dev.dorrian.agenticskillscli.install.AgentInstaller;
 import dev.dorrian.agenticskillscli.install.CommandDescriptor;
 import dev.dorrian.agenticskillscli.install.CommandInstaller;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
+import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
+import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.install.TemplateInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
@@ -164,12 +166,7 @@ public final class FullInstallFlow {
                 "Install required MCP servers for selected agents? (" + String.join(", ", agentMcpPreview) + ")", true);
         }
 
-        boolean installGuard = false;
-        if (selectedTools.contains("claude")) {
-            installGuard = prompter.confirm(
-                "Also enable the guardrail hook for Claude Code? It BLOCKS rm -rf on /, ~ or *, force-push to"
-                    + " main/master, and reading .env/private-key files", false);
-        }
+        HookInstallOptions hookOptions = HookOptionsPrompt.ask(prompter, selectedTools);
 
         printReadySummary(selectedTools, selectedSkills, skillsInstallTarget, projectPath, installCommands, availableCommands,
             selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, installObTickets, installSecurityScanner,
@@ -190,7 +187,7 @@ public final class FullInstallFlow {
             resultsByTool.put(toolKey, executeInstallForTool(
                 tool, toolKey, selectedSkills, skillsInstallTarget, finalProjectPath, installCommands, availableCommands,
                 selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, globalTools,
-                installObTickets, azureOrgs, githubAccounts, installSecurityScanner, installGuard
+                installObTickets, azureOrgs, githubAccounts, installSecurityScanner, hookOptions
             ));
         }
 
@@ -209,7 +206,7 @@ public final class FullInstallFlow {
         boolean installCommands, List<CommandDescriptor> availableCommands, List<AgentDescriptor> selectedAgentFiles,
         String agentInstallTarget, boolean installSkillMcps, boolean installAgentMcps, GlobalToolsSelection globalTools,
         boolean installObTickets, List<AzureOrg> azureOrgs, List<GithubAccount> githubAccounts, boolean installSecurityScanner,
-        boolean installGuard
+        HookInstallOptions hookOptions
     ) {
         List<OperationResult> skillResults = List.of();
         String skillsPathStr = null;
@@ -314,14 +311,12 @@ public final class FullInstallFlow {
             }
         }
 
-        if ("claude".equals(toolKey)) {
-            McpConfigRegistry.get("claude").ifPresent(cfg -> {
-                try {
-                    HooksInstaller.installAndRegister(cfg.globalFile(), installGuard);
-                } catch (RuntimeException e) {
-                    System.out.println("  " + Ansi.yellow("Analytics hooks not registered: " + e.getMessage()));
-                }
-            });
+        if (HookToolSupport.supports(toolKey)) {
+            try {
+                HooksInstaller.installForTool(toolKey, hookOptions);
+            } catch (RuntimeException e) {
+                System.out.println("  " + Ansi.yellow("Hooks not registered for " + tool.name() + ": " + e.getMessage()));
+            }
         }
 
         return new ToolResults(tool.name(), skillResults, commandResults, agentResults, configRegs, templateResults,

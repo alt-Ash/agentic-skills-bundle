@@ -44,6 +44,47 @@ class HookRegistrarTest {
     }
 
     @Test
+    void subagentAnalyticsAreAlwaysRegisteredButVerifyAndContextOnlyWhenOptedIn(@TempDir Path tempDir) throws IOException {
+        Path jarPath = tempDir.resolve("agentic-skills-hooks.jar");
+        Path plain = tempDir.resolve("plain.json");
+        Path all = tempDir.resolve("all.json");
+
+        HookRegistrar.registerAll(plain, jarPath);
+        HookRegistrar.registerAll(all, jarPath, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, true, true));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plainHooks = (Map<String, Object>) MAPPER.readValue(plain.toFile(),
+            new TypeReference<LinkedHashMap<String, Object>>() {}).get("hooks");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> allHooks = (Map<String, Object>) MAPPER.readValue(all.toFile(),
+            new TypeReference<LinkedHashMap<String, Object>>() {}).get("hooks");
+
+        assertTrue(plainHooks.containsKey("SubagentStart"));
+        assertTrue(plainHooks.containsKey("SubagentStop"));
+        assertFalse(plainHooks.containsKey("PreToolUse"));
+        assertEquals(1, ((List<?>) plainHooks.get("Stop")).size());
+        assertEquals(1, ((List<?>) plainHooks.get("SessionStart")).size());
+
+        // Opt-ins share the Stop and SessionStart events with the analytics hooks as separate entries.
+        assertEquals(2, ((List<?>) allHooks.get("Stop")).size());
+        assertEquals(2, ((List<?>) allHooks.get("SessionStart")).size());
+        assertCommandArgsEndWith(allHooks, "PreToolUse", "guard", "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> verifyEntry = (Map<String, Object>) ((List<?>) allHooks.get("Stop")).get(1);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> verifyCommand = (Map<String, Object>) ((List<?>) verifyEntry.get("hooks")).get(0);
+        assertEquals(300, verifyCommand.get("timeout"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> contextEntry = (Map<String, Object>) ((List<?>) allHooks.get("SessionStart")).get(1);
+        assertEquals("startup|resume|compact", contextEntry.get("matcher"));
+
+        // Registering again changes nothing.
+        String before = Files.readString(all);
+        HookRegistrar.registerAll(all, jarPath, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, true, true));
+        assertEquals(before, Files.readString(all));
+    }
+
+    @Test
     void guardHookIsRegisteredOnlyWhenOptedIn(@TempDir Path tempDir) throws IOException {
         Path jarPath = tempDir.resolve("agentic-skills-hooks.jar");
         Path plain = tempDir.resolve("plain.json");
@@ -152,7 +193,7 @@ class HookRegistrarTest {
 
         int removed = HookRegistrar.unregisterAll(settingsFile);
 
-        assertEquals(6, removed); // one per Claude event across the 5 hook types
+        assertEquals(8, removed); // one per Claude event across the 6 analytics hook types
         assertFalse(HookRegistrar.isRegistered(settingsFile));
         Map<String, Object> written = MAPPER.readValue(settingsFile.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
         assertEquals("opus", written.get("model"));

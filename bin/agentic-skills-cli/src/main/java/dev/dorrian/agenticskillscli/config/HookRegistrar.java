@@ -3,6 +3,7 @@ package dev.dorrian.agenticskillscli.config;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.dorrian.agenticskillscli.registry.HookDescriptor;
+import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
 import dev.dorrian.agenticskillscli.registry.HooksJarLocation;
 import dev.dorrian.agenticskillscli.registry.HooksRegistry;
 
@@ -53,10 +54,12 @@ public final class HookRegistrar {
     }
 
     public static void registerAll(Path settingsFile, Path hooksJarPath, boolean includeGuard) {
+        registerAll(settingsFile, hooksJarPath, new HookInstallOptions(includeGuard, false, false));
+    }
+
+    public static void registerAll(Path settingsFile, Path hooksJarPath, HookInstallOptions options) {
         List<HookDescriptor> descriptors = new ArrayList<>(HooksRegistry.ALL);
-        if (includeGuard) {
-            descriptors.add(HooksRegistry.GUARD);
-        }
+        descriptors.addAll(options.descriptors());
         Map<String, Object> config = readJsonObject(settingsFile);
         @SuppressWarnings("unchecked")
         Map<String, Object> hooksSection = (Map<String, Object>) config.computeIfAbsent(

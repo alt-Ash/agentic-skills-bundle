@@ -22,6 +22,9 @@ public final class PostToolUseHook {
         public String model;
         public Integer inputTokens;
         public Integer cachedTokens;
+        public Integer outputTokens;
+        public Integer cacheReadTokens;
+        public Integer cacheCreationTokens;
     }
 
     public static UsageRecord buildRecord(HookInput input) {
@@ -31,23 +34,35 @@ public final class PostToolUseHook {
         String model = null;
         Integer inputTokens = null;
         Integer cachedTokens = null;
+        Integer outputTokens = null;
+        Integer cacheReadTokens = null;
+        Integer cacheCreationTokens = null;
 
         if ("claude".equals(provider) && transcript != null) {
             ClaudeTranscriptParser.Extracted e = ClaudeTranscriptParser.extract(transcript);
             model = e.model;
             inputTokens = e.inputTokens;
             cachedTokens = e.cachedTokens;
+            outputTokens = e.outputTokens;
+            cacheReadTokens = e.cacheReadTokens;
+            cacheCreationTokens = e.cacheCreationTokens;
         } else if ("gemini".equals(provider) && transcript != null) {
             GeminiTranscriptParser.Extracted e = GeminiTranscriptParser.extract(transcript);
             model = e.model;
             inputTokens = e.inputTokens;
             cachedTokens = e.cachedTokens;
+            outputTokens = e.outputTokens;
+            cacheReadTokens = e.cacheReadTokens;
+            cacheCreationTokens = e.cacheCreationTokens;
         } else if ("codex".equals(provider)) {
             if (transcript != null) {
                 CodexTranscriptParser.Extracted e = CodexTranscriptParser.extract(transcript);
                 model = e.model;
                 inputTokens = e.inputTokens;
                 cachedTokens = e.cachedTokens;
+            outputTokens = e.outputTokens;
+            cacheReadTokens = e.cacheReadTokens;
+            cacheCreationTokens = e.cacheCreationTokens;
             }
             if (input.model() != null) model = input.model();
         } else if ("cursor".equals(provider)) {
@@ -60,6 +75,9 @@ public final class PostToolUseHook {
         record.model = model != null ? model : "unavailable";
         record.inputTokens = inputTokens;
         record.cachedTokens = cachedTokens;
+        record.outputTokens = outputTokens;
+        record.cacheReadTokens = cacheReadTokens;
+        record.cacheCreationTokens = cacheCreationTokens;
         return record;
     }
 
@@ -79,10 +97,14 @@ public final class PostToolUseHook {
         event.model = !"unavailable".equals(record.model) ? record.model : null;
         event.inputTokens = record.inputTokens;
         event.cachedTokens = record.cachedTokens;
+        event.outputTokens = record.outputTokens;
+        event.cacheReadTokens = record.cacheReadTokens;
+        event.cacheCreationTokens = record.cacheCreationTokens;
         event.toolName = input.toolName();
         event.toolUseId = input.toolUseId();
         event.durationMs = input.durationMs();
         event.command = input.extractBashCommand();
+        ToolAttribution.apply(input, event);
 
         EventLog.recordEvent(event);
     }

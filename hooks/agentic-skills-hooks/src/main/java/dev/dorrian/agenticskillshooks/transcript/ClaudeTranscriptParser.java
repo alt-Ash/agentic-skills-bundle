@@ -15,6 +15,9 @@ public final class ClaudeTranscriptParser {
         public String model;
         public Integer inputTokens;
         public Integer cachedTokens;
+        public Integer outputTokens;
+        public Integer cacheReadTokens;
+        public Integer cacheCreationTokens;
     }
 
     public static Extracted extract(String path) {

@@ -22,6 +22,9 @@ public final class UsageEvent {
     public String model;
     public Integer inputTokens;
     public Integer cachedTokens;
+    public Integer outputTokens;
+    public Integer cacheReadTokens;
+    public Integer cacheCreationTokens;
     public String toolName;
     public String toolUseId;
     public String error;
@@ -44,4 +47,6 @@ public final class UsageEvent {
     public String command;
     public String slashCommand;
     public String guardRule;
+    public String agentName;
+    public String skillName;
 }

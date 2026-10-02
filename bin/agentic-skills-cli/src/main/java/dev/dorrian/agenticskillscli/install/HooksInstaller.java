@@ -2,7 +2,11 @@ package dev.dorrian.agenticskillscli.install;
 
 import dev.dorrian.agenticskillscli.PackageRoot;
 import dev.dorrian.agenticskillscli.config.HookRegistrar;
+import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
+import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.registry.HooksJarLocation;
+import dev.dorrian.agenticskillscli.registry.McpConfigDef;
+import dev.dorrian.agenticskillscli.registry.McpConfigRegistry;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -30,14 +34,73 @@ public final class HooksInstaller {
         return installAndRegister(PackageRoot.hooksJar(), HooksJarLocation.jarPath(), settingsFile, includeGuard);
     }
 
+    public static Path installAndRegister(Path settingsFile, HookInstallOptions options) {
+        return installAndRegister(PackageRoot.hooksJar(), HooksJarLocation.jarPath(), settingsFile, options);
+    }
+
     public static Path installAndRegister(Path bundledJar, Path targetJar, Path settingsFile) {
         return installAndRegister(bundledJar, targetJar, settingsFile, false);
     }
 
     public static Path installAndRegister(Path bundledJar, Path targetJar, Path settingsFile, boolean includeGuard) {
+        return installAndRegister(bundledJar, targetJar, settingsFile, new HookInstallOptions(includeGuard, false, false));
+    }
+
+    public static Path installAndRegister(Path bundledJar, Path targetJar, Path settingsFile, HookInstallOptions options) {
         Path installed = HooksJarLocation.installFrom(bundledJar, targetJar);
-        HookRegistrar.registerAll(settingsFile, installed, includeGuard);
+        HookRegistrar.registerAll(settingsFile, installed, options);
         return installed;
+    }
+
+    // ─── per tool ───────────────────────────────────────────────────────────
+
+    /** Installs the jar and registers hooks for one tool. Only for tools listed in {@link HookToolSupport}. */
+    public static Path installForTool(String toolKey, HookInstallOptions options) {
+        if (!HookToolSupport.supports(toolKey)) {
+            throw new IllegalArgumentException("No hook support for tool: " + toolKey);
+        }
+        return switch (toolKey) {
+            case "claude" -> installAndRegister(claudeSettings(), options);
+            default -> ToolHooksInstallers.forTool(toolKey)
+                .orElseThrow(() -> new IllegalArgumentException("No hook installer for tool: " + toolKey))
+                .install(options);
+        };
+    }
+
+    /** True if our hooks are registered for this tool, or (Claude) the jar is still installed. */
+    public static boolean isInstalledForTool(String toolKey) {
+        return switch (toolKey) {
+            case "claude" -> isInstalled(claudeSettings());
+            default -> ToolHooksInstallers.forTool(toolKey).map(ToolHooksInstaller::isRegistered).orElse(false);
+        };
+    }
+
+    /**
+     * Removes this tool's hook registrations; the shared jar is deleted only once no supported tool
+     * still has hooks registered. Returns the number of entries removed.
+     */
+    public static int uninstallForTool(String toolKey) {
+        int removed = switch (toolKey) {
+            case "claude" -> HookRegistrar.unregisterAll(claudeSettings());
+            default -> ToolHooksInstallers.forTool(toolKey).map(ToolHooksInstaller::uninstall).orElse(0);
+        };
+        boolean stillUsed = HookToolSupport.TOOLS.stream().anyMatch(t -> isRegisteredFor(t));
+        if (!stillUsed) {
+            deleteInstalledJar(HooksJarLocation.jarPath());
+        }
+        return removed;
+    }
+
+    private static boolean isRegisteredFor(String toolKey) {
+        return switch (toolKey) {
+            case "claude" -> HookRegistrar.isRegistered(claudeSettings());
+            default -> ToolHooksInstallers.forTool(toolKey).map(ToolHooksInstaller::isRegistered).orElse(false);
+        };
+    }
+
+    private static Path claudeSettings() {
+        return McpConfigRegistry.get("claude").map(McpConfigDef::globalFile)
+            .orElseThrow(() -> new IllegalStateException("No Claude Code config location known"));
     }
 
     /** Removes our hooks from Claude Code's {@code settings.json} and deletes the installed jar. */
@@ -52,6 +115,11 @@ public final class HooksInstaller {
      */
     public static int uninstall(Path installedJar, Path settingsFile) {
         int removed = HookRegistrar.unregisterAll(settingsFile);
+        deleteInstalledJar(installedJar);
+        return removed;
+    }
+
+    private static void deleteInstalledJar(Path installedJar) {
         try {
             Files.deleteIfExists(installedJar);
             Path dir = installedJar.getParent();
@@ -65,7 +133,6 @@ public final class HooksInstaller {
         } catch (IOException e) {
             throw new UncheckedIOException("Could not delete hooks jar " + installedJar, e);
         }
-        return removed;
     }
 
     /** True if our hooks are registered in {@code settingsFile} or the jar is still installed. */

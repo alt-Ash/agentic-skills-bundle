@@ -25,7 +25,8 @@ public final class HooksRegistry {
         new HookDescriptor("post-tool-use-failure", List.of("PostToolUseFailure")),
         new HookDescriptor("user-prompt-submit", List.of("UserPromptSubmit")),
         new HookDescriptor("stop", List.of("Stop")),
-        new HookDescriptor("session", List.of("SessionStart", "SessionEnd"))
+        new HookDescriptor("session", List.of("SessionStart", "SessionEnd")),
+        new HookDescriptor("subagent", List.of("SubagentStart", "SubagentStop"))
     );
 
     /**
@@ -34,6 +35,13 @@ public final class HooksRegistry {
      */
     public static final HookDescriptor GUARD = new HookDescriptor(
         "guard", List.of("PreToolUse"), "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+
+    /** Opt-in {@code Stop} gate: blocks stopping while the project's configured checks fail. Can run long. */
+    public static final HookDescriptor VERIFY = new HookDescriptor("verify", List.of("Stop"), "", 300);
+
+    /** Opt-in context injector at session start, resume and after compaction. */
+    public static final HookDescriptor CONTEXT = new HookDescriptor(
+        "context", List.of("SessionStart"), "startup|resume|compact", 10);
 
     private HooksRegistry() {
     }

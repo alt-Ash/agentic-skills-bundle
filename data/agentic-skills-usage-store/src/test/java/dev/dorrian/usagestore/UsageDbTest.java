@@ -46,6 +46,11 @@ class UsageDbTest {
         e.command = "ls";
         e.slashCommand = "/plan";
         e.guardRule = "force-push";
+        e.outputTokens = 321;
+        e.cacheReadTokens = 1000;
+        e.cacheCreationTokens = 50;
+        e.agentName = "tdd-engineer";
+        e.skillName = "validation-loop";
         e.gitLinesAdded = 7;
         e.gitCommits = List.of(new GitCommitInfo("abc", "msg"));
         e.gitFilesAdded = List.of("a.txt");
@@ -60,6 +65,11 @@ class UsageDbTest {
             assertEquals(Boolean.TRUE, back.stopHookActive);
             assertEquals("/plan", back.slashCommand);
             assertEquals("force-push", back.guardRule);
+            assertEquals(321, back.outputTokens);
+            assertEquals(1000, back.cacheReadTokens);
+            assertEquals(50, back.cacheCreationTokens);
+            assertEquals("tdd-engineer", back.agentName);
+            assertEquals("validation-loop", back.skillName);
             assertEquals("/work/demo", back.cwd);
             assertEquals("abc", back.gitCommits.get(0).hash);
             assertEquals(List.of("a.txt"), back.gitFilesAdded);
@@ -210,6 +220,46 @@ class UsageDbTest {
         }
         try (UsageDb db = UsageDb.open(file)) {
             assertEquals(1, db.countEvents());
+        }
+    }
+
+    @Test
+    void upgradesAVersionOneDatabaseInPlaceKeepingItsRows(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("v1.db");
+        try (var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + file); Statement s = c.createStatement()) {
+            for (String ddl : SchemaV1.STATEMENTS) s.execute(ddl);
+            s.execute("INSERT INTO events(event_id, ts, event, session_id) VALUES ('old', '2026-01-01T00:00:00Z', 'tool_use', 's1')");
+            s.execute("PRAGMA user_version = 1");
+        }
+
+        try (UsageDb db = UsageDb.open(file)) {
+            assertEquals(1, db.countEvents());
+            UsageEvent old = db.eventsForSession("s1").get(0);
+            assertNull(old.outputTokens);
+            assertNull(old.skillName);
+
+            UsageEvent fresh = event("new", "s1", "tool_use", "2026-10-02T10:00:00Z");
+            fresh.skillName = "x";
+            fresh.outputTokens = 5;
+            db.record(fresh);
+            assertEquals(2, db.countEvents());
+        }
+        try (UsageDb db = UsageDb.open(file); Statement s = db.connection().createStatement();
+             var rs = s.executeQuery("PRAGMA user_version")) {
+            assertTrue(rs.next());
+            assertEquals(UsageDb.SCHEMA_VERSION, rs.getInt(1));
+        }
+    }
+
+    @Test
+    void manyConcurrentOpensOfAVersionOneDatabaseMigrateExactlyOnce(@TempDir Path dir) throws Exception {
+        for (int round = 0; round < 8; round++) {
+            Path file = dir.resolve("m" + round + ".db");
+            try (var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + file); Statement s = c.createStatement()) {
+                for (String ddl : SchemaV1.STATEMENTS) s.execute(ddl);
+                s.execute("PRAGMA user_version = 1");
+            }
+            raceWriters(file, 12);
         }
     }
 }

@@ -34,8 +34,10 @@ class SmallRegistriesTest {
     }
 
     @Test
-    void hooksRegistryHasFiveEntriesAndSessionMapsToTwoClaudeEvents() {
-        assertEquals(5, HooksRegistry.ALL.size());
+    void hooksRegistryHasSixAnalyticsEntriesAndSessionMapsToTwoClaudeEvents() {
+        assertEquals(6, HooksRegistry.ALL.size());
+        // opt-in hooks are deliberately not in ALL
+        assertTrue(HooksRegistry.ALL.stream().noneMatch(h -> List.of("guard", "verify", "context").contains(h.hookType())));
         HookDescriptor session = HooksRegistry.ALL.stream()
             .filter(h -> h.hookType().equals("session"))
             .findFirst()

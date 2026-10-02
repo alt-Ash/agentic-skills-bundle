@@ -76,14 +76,16 @@ final class SchemaV1 {
         "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)"
     );
 
+    /** Inserts into the full current column set (v1 + v2): the schema is always migrated before use. */
     static final String INSERT_EVENT = """
         INSERT OR IGNORE INTO events (
           event_id, ts, event, session_id, provider, user_name, project, client, cwd, source, reason, model,
           input_tokens, cached_tokens, tool_name, tool_use_id, error, duration_ms, stop_hook_active,
           last_message_char_length, estimated_output_tokens, background_task_count, prompt_char_length,
           estimated_input_tokens, permission_mode, prompt_id, git_start_commit, git_lines_added,
-          git_lines_deleted, command, slash_command, guard_rule
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""";
+          git_lines_deleted, command, slash_command, guard_rule,
+          output_tokens, cache_read_tokens, cache_creation_tokens, agent_name, skill_name
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""";
 
     static final String UPSERT_SESSION = """
         INSERT INTO sessions (session_id, user_name, project, client, cwd, git_start_commit, started_at, ended_at)

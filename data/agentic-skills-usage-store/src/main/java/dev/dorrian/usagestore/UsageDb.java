@@ -27,7 +27,7 @@ import java.util.UUID;
 public final class UsageDb implements AutoCloseable {
 
     public static final String ENV_DB_PATH = "AGENTIC_SKILLS_DB";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
     public static final String DROPPED_EVENTS = "dropped_events";
     private static final int BUSY_TIMEOUT_MS = 2000;
     private static final int OPEN_ATTEMPTS = 8;
@@ -140,26 +140,37 @@ public final class UsageDb implements AutoCloseable {
     private void migrate() throws SQLException {
         int version = userVersion();
         if (version > SCHEMA_VERSION) {
-            throw new UsageStoreException("Database schema v" + version + " is newer than this build (v"
-                + SCHEMA_VERSION + "); upgrade agentic-skills", null);
+            throw newerSchema(version);
         }
         if (version == SCHEMA_VERSION) {
             return;
         }
-        // IF NOT EXISTS everywhere: two hooks may race through first-time migration.
         try (Statement s = connection.createStatement()) {
             s.execute("BEGIN IMMEDIATE");
             try {
-                for (String ddl : SchemaV1.STATEMENTS) {
-                    s.execute(ddl);
+                // Re-read under the write lock: another hook JVM may have migrated while we waited.
+                version = userVersion();
+                if (version > SCHEMA_VERSION) {
+                    throw newerSchema(version);
+                }
+                if (version < 1) {
+                    for (String ddl : SchemaV1.STATEMENTS) s.execute(ddl);
+                }
+                if (version < 2) {
+                    for (String ddl : SchemaV2.STATEMENTS) s.execute(ddl);
                 }
                 s.execute("PRAGMA user_version = " + SCHEMA_VERSION);
                 s.execute("COMMIT");
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 s.execute("ROLLBACK");
                 throw e;
             }
         }
+    }
+
+    private static UsageStoreException newerSchema(int version) {
+        return new UsageStoreException("Database schema v" + version + " is newer than this build (v"
+            + SCHEMA_VERSION + "); upgrade agentic-skills", null);
     }
 
     private int userVersion() throws SQLException {
@@ -234,7 +245,12 @@ public final class UsageDb implements AutoCloseable {
             setInt(p, i++, e.gitLinesDeleted);
             p.setString(i++, e.command);
             p.setString(i++, e.slashCommand);
-            p.setString(i, e.guardRule);
+            p.setString(i++, e.guardRule);
+            setInt(p, i++, e.outputTokens);
+            setInt(p, i++, e.cacheReadTokens);
+            setInt(p, i++, e.cacheCreationTokens);
+            p.setString(i++, e.agentName);
+            p.setString(i, e.skillName);
             return p.executeUpdate() == 1;
         }
     }
@@ -353,6 +369,22 @@ public final class UsageDb implements AutoCloseable {
         }
     }
 
+    /** Every stored event in time order, git details rehydrated. Intended for tests and small exports. */
+    public List<UsageEvent> allEvents() {
+        List<UsageEvent> out = new ArrayList<>();
+        try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery("SELECT * FROM events ORDER BY ts, rowid")) {
+            while (rs.next()) {
+                out.add(readEvent(rs));
+            }
+            for (UsageEvent e : out) {
+                loadGitRows(e);
+            }
+            return out;
+        } catch (SQLException ex) {
+            throw wrap("read all events", ex);
+        }
+    }
+
     public long countEvents() {
         return scalarLong("SELECT COUNT(*) FROM events");
     }
@@ -441,6 +473,11 @@ public final class UsageDb implements AutoCloseable {
         e.command = rs.getString("command");
         e.slashCommand = rs.getString("slash_command");
         e.guardRule = rs.getString("guard_rule");
+        e.outputTokens = getInt(rs, "output_tokens");
+        e.cacheReadTokens = getInt(rs, "cache_read_tokens");
+        e.cacheCreationTokens = getInt(rs, "cache_creation_tokens");
+        e.agentName = rs.getString("agent_name");
+        e.skillName = rs.getString("skill_name");
         return e;
     }
 
