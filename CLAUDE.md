@@ -56,11 +56,11 @@ Plain Java 21 fat jar: `java -jar agentic-skills-hooks.jar <hookType>`. Fresh JV
 | `subagent` | `subagent_start`/`_stop` | sub-agent start/stop |
 | `guard`, `verify`, `context` (opt-in) | `guard_block`, `verify_*` | `PreToolUse` / `Stop` / `SessionStart` |
 
-`ProviderDetector` guesses the provider from payload shape (Gemini, Cursor, Codex; else Claude).
+`ProviderDetector` guesses the provider from payload shape; shims set it; `agy` = Antigravity adapter.
 
 ### Evals (`evals/agentic-skills-evals`)
 
-Behavioral evals: **real, billed model calls; run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
+Behavioral evals: **real, billed calls; run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
 
 ### Extension patterns
 

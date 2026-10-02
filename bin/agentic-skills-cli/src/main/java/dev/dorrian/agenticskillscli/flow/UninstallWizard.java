@@ -223,8 +223,12 @@ public final class UninstallWizard {
 
         // Hooks — registered by every install for a tool with hook support, so they are offered here
         // whenever such a tool is selected and ours are present.
-        List<String> hookTools = selectedTools.stream()
-            .filter(HookToolSupport::supports).filter(HooksInstaller::isInstalledForTool).toList();
+        List<String> hookTools = new java.util.ArrayList<>(selectedTools.stream()
+            .filter(HookToolSupport::supports).filter(HooksInstaller::isInstalledForTool).toList());
+        // Antigravity is not a selectable tool (we install no skills for it), so its hooks are offered whenever present.
+        if (!hookTools.contains("antigravity") && HooksInstaller.isInstalledForTool("antigravity")) {
+            hookTools.add("antigravity");
+        }
         boolean removeHooks = !hookTools.isEmpty()
             && prompter.confirm("Remove the usage hooks from " + String.join(", ", hookTools) + "? "
                 + Ansi.dim("(your usage database is kept)"), true);

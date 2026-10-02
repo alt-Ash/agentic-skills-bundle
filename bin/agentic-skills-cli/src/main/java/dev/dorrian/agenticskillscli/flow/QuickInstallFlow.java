@@ -70,7 +70,10 @@ public final class QuickInstallFlow {
             quickTools.add(ToolChoiceBuilder.keyForLabel(labelsByKey, label));
         }
 
-        HookInstallOptions hookOptions = HookOptionsPrompt.ask(prompter, quickTools);
+        boolean antigravity = HookOptionsPrompt.askAntigravity(prompter);
+        List<String> hookTools = new ArrayList<>(quickTools);
+        if (antigravity) hookTools.add("antigravity");
+        HookInstallOptions hookOptions = HookOptionsPrompt.ask(prompter, hookTools);
 
         List<AzureOrg> azureOrgs = CredentialPrompts.collectAzureOrgs(prompter);
         List<GithubAccount> githubAccounts = CredentialPrompts.collectGithubAccounts(prompter);
@@ -126,6 +129,10 @@ public final class QuickInstallFlow {
                     System.out.println(Ansi.yellow("  Hooks not registered for " + tool.name() + ": " + e.getMessage()));
                 }
             }
+        }
+
+        if (antigravity) {
+            HookOptionsPrompt.installAntigravity(hookOptions);
         }
 
         try {

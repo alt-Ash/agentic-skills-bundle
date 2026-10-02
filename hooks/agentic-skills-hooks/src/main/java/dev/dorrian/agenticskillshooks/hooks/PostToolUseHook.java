@@ -65,6 +65,8 @@ public final class PostToolUseHook {
             cacheCreationTokens = e.cacheCreationTokens;
             }
             if (input.model() != null) model = input.model();
+        } else if ("antigravity".equals(provider)) {
+            model = input.model(); // from the payload's modelName; token usage is not read from its transcript
         } else if ("cursor".equals(provider)) {
             model = input.model();
             // tokens intentionally left null — Cursor hooks do not expose them.

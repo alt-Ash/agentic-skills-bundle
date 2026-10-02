@@ -38,4 +38,13 @@ class HookOptionsPromptTest {
         assertFalse(a.verifyAndContext());
         assertTrue(HookOptionsPrompt.applicable(List.of("gemini", "claude")).verifyAndContext());
     }
+
+    @Test
+    void antigravityGetsTheVerifyGateAndContextButNoGuard() {
+        HookOptionsPrompt.Applicable a = HookOptionsPrompt.applicable(List.of("antigravity"));
+        assertFalse(a.guard(), "Antigravity's PreToolUse has no 'no opinion' answer, so there is no guard for it");
+        assertTrue(a.verifyAndContext());
+        // alongside OpenCode the guard question is still asked, for OpenCode's sake
+        assertTrue(HookOptionsPrompt.applicable(List.of("opencode", "antigravity")).guard());
+    }
 }

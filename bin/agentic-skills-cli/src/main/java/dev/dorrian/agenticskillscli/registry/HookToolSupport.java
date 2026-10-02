@@ -6,7 +6,7 @@ import java.util.List;
 public final class HookToolSupport {
 
     /** Tool keys with hook support, in install order. */
-    public static final List<String> TOOLS = List.of("claude", "gemini", "opencode");
+    public static final List<String> TOOLS = List.of("claude", "opencode", "antigravity");
 
     private HookToolSupport() {
     }

@@ -166,7 +166,10 @@ public final class FullInstallFlow {
                 "Install required MCP servers for selected agents? (" + String.join(", ", agentMcpPreview) + ")", true);
         }
 
-        HookInstallOptions hookOptions = HookOptionsPrompt.ask(prompter, selectedTools);
+        boolean antigravity = HookOptionsPrompt.askAntigravity(prompter);
+        List<String> hookTools = new ArrayList<>(selectedTools);
+        if (antigravity) hookTools.add("antigravity");
+        HookInstallOptions hookOptions = HookOptionsPrompt.ask(prompter, hookTools);
 
         printReadySummary(selectedTools, selectedSkills, skillsInstallTarget, projectPath, installCommands, availableCommands,
             selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, installObTickets, installSecurityScanner,
@@ -189,6 +192,10 @@ public final class FullInstallFlow {
                 selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, globalTools,
                 installObTickets, azureOrgs, githubAccounts, installSecurityScanner, hookOptions
             ));
+        }
+
+        if (antigravity) {
+            HookOptionsPrompt.installAntigravity(hookOptions);
         }
 
         SummaryPrinter.printInstallSummary(resultsByTool);

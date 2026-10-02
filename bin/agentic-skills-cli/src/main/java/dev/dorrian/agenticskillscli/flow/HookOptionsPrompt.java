@@ -1,9 +1,12 @@
 package dev.dorrian.agenticskillscli.flow;
 
+import dev.dorrian.agenticskillscli.HomeDir;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
 import dev.dorrian.agenticskillscli.ui.Prompter;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collection;
 
 /**
@@ -13,7 +16,7 @@ import java.util.Collection;
  * the answers: pressing Enter must not silently remove a hook the user enabled earlier.
  *
  * <p>Only questions that do something for the selected tools are asked: the guard works for Claude Code and
- * OpenCode; the verification gate and the context hook are Claude Code only.
+ * OpenCode; the verification gate and the context hook for Claude Code and Antigravity.
  */
 final class HookOptionsPrompt {
 
@@ -29,7 +32,9 @@ final class HookOptionsPrompt {
 
     static Applicable applicable(Collection<String> selectedTools) {
         boolean claude = selectedTools.contains("claude");
-        return new Applicable(claude || selectedTools.contains("opencode"), claude);
+        // The guard needs a tool whose hooks can block by exit code or throw (Claude Code, OpenCode). Antigravity
+        // gets the verify gate and context but no guard.
+        return new Applicable(claude || selectedTools.contains("opencode"), claude || selectedTools.contains("antigravity"));
     }
 
     static HookInstallOptions ask(Prompter prompter, Collection<String> selectedTools) {
@@ -56,6 +61,36 @@ final class HookOptionsPrompt {
                 current.context());
         }
         return new HookInstallOptions(guard, verify, context);
+    }
+
+    /**
+     * Antigravity CLI is not a tool the installer installs skills for, so its hooks are a separate question, asked
+     * only if Antigravity looks installed (its config directories exist) or our hooks are already registered there.
+     * Defaults to yes in both cases, like the other tools' analytics hooks.
+     */
+    static boolean askAntigravity(Prompter prompter) {
+        boolean registered = HooksInstaller.isInstalledForTool("antigravity");
+        if (!registered && !antigravityPresent()) {
+            return false;
+        }
+        return prompter.confirm("Also register usage hooks with Antigravity CLI (~/.gemini/config/hooks.json)?"
+            + enabledNote(registered), true);
+    }
+
+    static boolean antigravityPresent() {
+        Path gemini = HomeDir.resolve().resolve(".gemini");
+        return Files.isDirectory(gemini.resolve("antigravity-cli")) || Files.isDirectory(gemini.resolve("antigravity"))
+            || Files.isDirectory(gemini.resolve("config"));
+    }
+
+    /** Registers the hooks with Antigravity and says what happened; a failure never aborts the install. */
+    static void installAntigravity(HookInstallOptions options) {
+        try {
+            HooksInstaller.installForTool("antigravity", options);
+            System.out.println("  Hooks registered with Antigravity CLI.");
+        } catch (RuntimeException e) {
+            System.out.println("  Hooks not registered for Antigravity CLI: " + e.getMessage());
+        }
     }
 
     private static String enabledNote(boolean enabled) {

@@ -51,7 +51,14 @@ public final class HookJarHarness {
     }
 
     public static Result run(Path workDir, String hookType, Object payload, Map<String, String> extraEnv) throws Exception {
-        ProcessBuilder pb = new ProcessBuilder("java", "-Duser.home=" + homeFor(workDir), "-jar", jar().toString(), hookType).directory(workDir.toFile());
+        return runArgs(workDir, java.util.List.of(hookType), payload, extraEnv);
+    }
+
+    /** Like {@link #run} for hooks that take several arguments, e.g. {@code agy stop --verify}. */
+    public static Result runArgs(Path workDir, java.util.List<String> args, Object payload, Map<String, String> extraEnv) throws Exception {
+        java.util.List<String> cmd = new java.util.ArrayList<>(java.util.List.of("java", "-Duser.home=" + homeFor(workDir), "-jar", jar().toString()));
+        cmd.addAll(args);
+        ProcessBuilder pb = new ProcessBuilder(cmd).directory(workDir.toFile());
         pb.environment().remove("ANALYTICS_SERVICE_URL");
         pb.environment().put(UsageDb.ENV_DB_PATH, dbFor(workDir).toString());
         pb.environment().putAll(extraEnv);
@@ -63,7 +70,7 @@ public final class HookJarHarness {
             try (OutputStream stdin = process.getOutputStream()) {
                 JSON.writeValue(stdin, payload);
             }
-            assertTrue(process.waitFor(60, TimeUnit.SECONDS), "hook process timed out: " + hookType);
+            assertTrue(process.waitFor(60, TimeUnit.SECONDS), "hook process timed out: " + args);
             return new Result(process.exitValue(), Files.readString(out, StandardCharsets.UTF_8),
                 Files.readString(err, StandardCharsets.UTF_8));
         } finally {

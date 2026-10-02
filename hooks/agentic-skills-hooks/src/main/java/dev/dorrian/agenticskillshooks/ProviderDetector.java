@@ -8,7 +8,7 @@ import java.util.Set;
  * conversation_id), then Codex (any model), else Claude (never carries `model` at all).
  */
 public final class ProviderDetector {
-    private static final Set<String> VALID = Set.of("claude", "gemini", "cursor", "codex", "copilot", "opencode");
+    private static final Set<String> VALID = Set.of("claude", "gemini", "cursor", "codex", "copilot", "opencode", "antigravity");
 
     private ProviderDetector() {
     }
