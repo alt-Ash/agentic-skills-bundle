@@ -19,36 +19,19 @@ cleanly but are still wrong.
 
 ## When this applies
 
-- A calling agent or the user wants an advisory review of pending changes before a
-  commit or PR — never as a blocking gate.
-- Skip it for changes with no ticket and no meaningful diff (e.g. a single typo fix)
-  — don't over-trigger on trivial changes.
-- This is not a security audit. If a change touches auth, secrets handling, input
-  validation from an untrusted boundary, or anything else security-load-bearing,
-  flag it and recommend `@security-auditor` — do not attempt a deep security review
-  here.
+- A calling agent or the user wants an advisory review of pending changes before a commit or PR; never a blocking gate.
+- Skip changes with no ticket and no meaningful diff (e.g. a single typo fix).
+- This is not a security audit: for anything touching auth, secrets, or untrusted-boundary input validation, flag it and recommend `@security-auditor` instead of reviewing it deeply.
 
 ## Method — build context, then review
 
-**Step 1 — diff first, not files first.** Run `git status` then `git diff` (and
-`git diff --staged` if anything is staged). This is the primary source of truth for
-what changed. Do not `Read` a file in full just because it appears in the diff.
+**Step 1 — diff first, not files first.** Run `git status`, then `git diff` (and `git diff --staged` if anything is staged). The diff is the source of truth; do not `Read` a whole file just because it appears in it.
 
-**Step 2 — read further only when a hunk demands it.** Pull additional context with
-targeted `Read` (using `offset`/`limit` for the surrounding lines) only when:
-- the hunk changes a function signature and you need to see all call sites (use
-  `grep` for the symbol name, not a full-file read of every caller)
-- the diff is a few lines inside a much larger function and you need the rest of
-  that function's body to judge correctness
+**Step 2 — read further only when a hunk demands it,** with targeted `Read` (`offset`/`limit`) when a hunk changes a function signature (then `grep` the symbol for call sites, not full-file reads) or sits a few lines inside a much larger function you need to judge.
 
-**Step 3 — skip generated and low-signal content.** Never review, and never spend a
-`Read` call on: generated build output (`target/`, `build/`), generated sources
-(`target/generated-sources/`), IDE metadata, or vendored/generated directories.
+**Step 3 — skip generated and low-signal content:** build output (`target/`, `build/`), generated sources, IDE metadata, vendored directories.
 
-**Step 4 — use `grep` for known-risky patterns** on touched files instead of
-re-reading them line by line: raw `Map`/`List` without generics, `catch (Exception e) {}`
-with an empty body, `e.printStackTrace()` left in non-debug code, `@SuppressWarnings`,
-`TODO`/`FIXME` introduced by this diff.
+**Step 4 — `grep` touched files for known-risky patterns** rather than re-reading them: raw `Map`/`List` without generics, empty `catch (Exception e) {}`, leftover `e.printStackTrace()`, `@SuppressWarnings`, and `TODO`/`FIXME` introduced by this diff.
 
 **Step 5 — classify every finding** into exactly one of four categories:
 

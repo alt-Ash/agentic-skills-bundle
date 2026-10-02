@@ -39,37 +39,23 @@ Running `agentic-skills` opens a menu with four modes:
 
 ## Supported AI tools
 
-| Agent | Global skills path | Project skills folder |
-|---|---|---|
-| OpenCode | `~/.config/opencode/skills` | `.opencode/skills` |
-| Claude Code | `~/.claude/skills` | `.claude/skills` |
-| Cursor | `~/.cursor/rules` | `.cursor/rules` |
-| Gemini CLI | `~/.gemini/skills` | `.gemini/skills` |
-| OpenAI Codex CLI | `~/.agents/skills` | `.agents/skills` |
-| VS Code (GitHub Copilot) | `~/.vscode/skills` | `.vscode/skills` |
-| Devin Desktop (Windsurf) | `~/.codeium/windsurf/skills` | `.windsurf/skills` |
-| Zed AI | `~/.config/zed/skills` | `.zed/skills` |
+Each path is `global` / `project`. A dash means the tool doesn't support that item.
 
-Agents install into a parallel set of paths and support the same global/project split for tools that support sub-agents:
-
-| Agent Tool | Global agent path | Project agent folder |
-|---|---|---|
-| OpenCode | `~/.config/opencode/agents` | `.opencode/agents` |
-| Claude Code | `~/.claude/agents` | `.claude/agents` |
-| Cursor | `~/.cursor/agents` | `.cursor/agents` |
-| Gemini CLI | `~/.gemini/agents` | `.gemini/agents` |
-| OpenAI Codex CLI | `~/.codex/agents` (`.toml`) | `.codex/agents` (`.toml`) |
-| VS Code (GitHub Copilot) | `~/.copilot/agents` | — (global only) |
+| Tool | Skills | Agents | Commands |
+|---|---|---|---|
+| OpenCode | `~/.config/opencode/skills` / `.opencode/skills` | `~/.config/opencode/agents` / `.opencode/agents` | `~/.config/opencode/commands` / `.opencode/commands` |
+| Claude Code | `~/.claude/skills` / `.claude/skills` | `~/.claude/agents` / `.claude/agents` | `~/.claude/commands` / `.claude/commands` |
+| Cursor | `~/.cursor/rules` / `.cursor/rules` | `~/.cursor/agents` / `.cursor/agents` | — |
+| Gemini CLI | `~/.gemini/skills` / `.gemini/skills` | `~/.gemini/agents` / `.gemini/agents` | — |
+| OpenAI Codex CLI | `~/.agents/skills` / `.agents/skills` | `~/.codex/agents` / `.codex/agents` (`.toml`) | — |
+| VS Code (GitHub Copilot) | `~/.vscode/skills` / `.vscode/skills` | `~/.copilot/agents` / — (global only) | — |
+| Devin Desktop (Windsurf) | `~/.codeium/windsurf/skills` / `.windsurf/skills` | — | — |
+| Zed AI | `~/.config/zed/skills` / `.zed/skills` | — | — |
 
 > [!NOTE]
-> For Claude Code, choosing a project target for both skills and agents places everything under the same scope (`.claude/skills` and `.claude/agents`). For Codex CLI, agents are written as standalone custom-agent TOML files (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`) into `.codex/agents`; keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope. Gemini CLI agents get Gemini subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes what older versions wrote to `~/.codex/skills` and `~/.codex/agents/*.md`.
+> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`, which Codex reads by directory scope. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes what older versions wrote to `~/.codex/skills` and `~/.codex/agents/*.md`.
 
-Some skills and agents also ship a companion slash command (see each skill's **Companion command** line below). Commands are only installed for tools that support them:
-
-| Command Tool | Global command path | Project command folder |
-|---|---|---|
-| OpenCode | `~/.config/opencode/commands` | `.opencode/commands` |
-| Claude Code | `~/.claude/commands` | `.claude/commands` |
+Some skills and agents ship a companion slash command (see each entry's **Companion command** line); commands install only for tools that support them.
 
 ## Available skills
 

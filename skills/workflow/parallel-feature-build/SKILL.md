@@ -14,27 +14,13 @@ description:
 
 # Parallel Feature Build
 
-A single feature that splits cleanly into independent pieces — a new REST
-endpoint plus its service/repository layer, three unrelated components in the
-same PR, a config migration touching disjoint files — doesn't need to be built
-one slice after another. Each slice is handed to the **best-fit worker**
-(a named specialist where one exists, `general-purpose` otherwise), briefed on
-its own slice only, and all of them run at the same time. This skill defines
-that mechanic: how to decide a decomposition is actually safe to parallelize,
-how to pick each slice's worker, how to brief it so it needs nothing else, and
-how to merge and validate the result exactly once.
+A feature that splits cleanly into independent pieces (an endpoint plus its service/repository layer, three unrelated components, a config migration touching disjoint files) need not be built one slice after another. Each slice goes to its **best-fit worker** (a named specialist where one exists, `general-purpose` otherwise), briefed on its own slice only, and all run at once. This skill covers deciding a decomposition is safe, picking and briefing each worker, and merging and validating once.
 
 ## When this applies
 
-- The user's feature/ticket (or its OpenSpec task list, if one was produced)
-  already reads as ≥2 distinct chunks of work.
-- Load this skill **before** delegating implementation — it gates whether
-  parallel mode is safe; if it isn't, implementation proceeds sequentially as
-  normal (e.g. via `@issue-implementer`, one slice at a time).
-- Do not use this skill for a task that is one specialist's whole job (a
-  security audit, a UX audit, a browser-observable bug) — route it straight to
-  that specialist. Such a task may still be *one slice* of a larger parallel
-  feature.
+- The feature/ticket (or its OpenSpec task list) already reads as ≥2 distinct chunks of work.
+- Load this skill **before** delegating implementation: it gates whether parallel mode is safe; if not, implement sequentially as normal (e.g. via `@issue-implementer`, one slice at a time).
+- A task that is one specialist's whole job (security audit, UX audit, browser-observable bug) goes straight to that specialist, though it may still be *one slice* of a larger parallel feature.
 
 ## Phase 0 — Decomposition safety gate
 
@@ -48,16 +34,11 @@ A decomposition is safe to parallelize only if **all** of the following hold:
    `pom.xml` / `build.gradle(.kts)`, a shared types file, a shared config — even if the rest of
    their file lists are disjoint.
 
-Compute the file list per slice up front and diff every pair. **Any overlap on
-any of the three checks → reject parallel mode entirely** and fall back to
-implementing the slices sequentially, one at a time, each still routed to its
-best-fit worker per "Worker selection" below.
+Compute each slice's file list up front and diff every pair. **Any overlap on any check → reject parallel mode entirely** and implement the slices sequentially, each still routed per "Worker selection".
 
 ## Worker selection
 
-Pick a worker **per slice** from the agents actually available in this
-environment (the agent list the host tool shows you — never name an agent that
-is not on it):
+Pick a worker **per slice** from the agents actually available in this environment (the host's agent list; never name an agent that is not on it):
 
 | Slice is mostly… | Worker |
 |---|---|
@@ -67,71 +48,38 @@ is not on it):
 | Anything else, **or** the matching specialist is not available | `general-purpose` |
 
 Rules:
-- **Specialist when one fits, generic when not.** A slice with no matching
-  specialist (documentation, a CI workflow, a data file, a language no
-  specialist covers) goes to `general-purpose`. This is a normal outcome, not
-  an error.
-- **Missing specialist → `general-purpose`, never a refusal.** If the row's
-  specialist is not installed, use `general-purpose`, still in parallel, and
-  say so in the HANDOFF BLOCK. Do not drop the slice and do not fall back to
-  sequential work just because a specialist is absent.
-- **One worker per slice**, chosen independently — one feature commonly mixes
-  specialists and generic workers.
+- **Specialist when one fits, generic when not.** A slice no specialist covers (documentation, a CI workflow, a data file) goes to `general-purpose`; that is a normal outcome.
+- **Missing specialist → `general-purpose`, never a refusal.** Use it, still in parallel, and note the fallback in the HANDOFF BLOCK. Do not drop the slice or go sequential just because a specialist is absent.
+- **One worker per slice**, chosen independently; one feature often mixes specialists and generic workers.
 
 ## Worker briefing
 
 Each worker's prompt is self-contained:
 
-- Its own slice of the spec — only the part relevant to its files, and an
-  explicit statement of the complete list of files it may create or edit.
-- The CONTEXT BLOCK already produced upstream (reuse the standard CONTEXT BLOCK
-  format verbatim — see the block at the end of this file — do not invent a
-  new context format).
-- An instruction to follow the project's existing conventions (a specialist
-  also applies its own expertise; a `general-purpose` worker has no other
-  guide).
-- An instruction to **commit its finished work** on its worktree branch, so the
-  merge step has something to merge.
+- Its own slice of the spec, with the complete list of files it may create or edit.
+- The upstream CONTEXT BLOCK in the standard format (see the block at the end of this file); do not invent a new one.
+- An instruction to follow the project's existing conventions (a specialist also applies its own expertise).
+- An instruction to **commit its finished work** on its worktree branch, so the merge has something to merge.
 
-Each worker returns a HANDOFF BLOCK (reuse the standard HANDOFF BLOCK format
-verbatim — see the block at the end of this file).
-A worker returning `Status: blocked` only holds up its own slice — the other
-workers' results still land, and the blocked slice alone gets retried or
-escalated.
+Each worker returns a HANDOFF BLOCK in the standard format (end of this file). A `Status: blocked` worker holds up only its own slice; the others' results still land and the blocked slice alone is retried or escalated.
 
 ## Worktree mechanics
 
 Each worker edits in its own git worktree so parallel edits cannot collide.
 **Who creates the worktree depends on the host — never do both.**
 
-**Claude Code (has a worktree-isolation primitive).** Spawn each worker with
-the `Agent` tool, `isolation: "worktree"`, and the `subagent_type` chosen in
-"Worker selection" — one call per slice, **all in the same assistant turn** so
-they run concurrently (the `Workflow` tool's `parallel()` helper is the right
-fit once there are more than a couple of slices). Claude Code creates, names
-and cleans up the worktree itself:
-- Do **not** run `git worktree add` yourself — that makes a second, unused
-  worktree and an empty branch to merge.
-- Do not tell a worker a worktree path or branch name; it does not control them.
-- A worker that made changes returns `worktreePath` and `worktreeBranch` in its
-  result. Record these per slice; they are what you merge.
-- Worktrees branch from the repository's default branch unless the
-  `worktree.baseRef` setting is `"head"`. If the feature builds on unpushed or
-  non-default-branch work, confirm `baseRef` is `"head"` first, or the workers
-  will not see that work.
+**Claude Code (has a worktree-isolation primitive).** Spawn each worker with the `Agent` tool, `isolation: "worktree"`, and the `subagent_type` from "Worker selection": one call per slice, **all in the same assistant turn** so they run concurrently. Claude Code creates, names and cleans up the worktree itself:
+- Do **not** run `git worktree add` yourself (it makes a second, unused worktree and an empty branch to merge), and do not tell a worker a path or branch name.
+- A worker that made changes returns `worktreePath` and `worktreeBranch`; record these per slice, since they are what you merge.
+- Worktrees branch from the default branch unless the `worktree.baseRef` setting is `"head"`; if the feature builds on unpushed or non-default-branch work, confirm `baseRef` is `"head"` first.
 
-**Hosts without a worktree-isolation primitive.** The orchestrator creates the
-worktrees before spawning, one per slice, numbered in Phase 0 declaration order
-(`<feature-slug>` is kebab-case, taken from upstream context or the first few
-words of the feature description):
+**Hosts without a worktree-isolation primitive.** Create one worktree per slice before spawning, numbered in Phase 0 order (`<feature-slug>` is kebab-case from upstream context or the first words of the feature description):
 
 ```bash
 git worktree add .worktrees/<feature-slug>/slice-<n> -b feature/<feature-slug>/slice-<n>
 ```
 
-Brief each worker with its absolute worktree path as its required working
-directory, alongside the CONTEXT BLOCK. Without true concurrency the contract
-is otherwise identical.
+Brief each worker with its absolute worktree path as its required working directory. Otherwise the contract is identical, minus true concurrency.
 
 **Merge.** Once every worker returns `Status: completed`, merge in
 slice-declared order into one integration branch, using the branch each worker
@@ -144,30 +92,16 @@ git merge --no-ff <slice-2-branch>
 # ...one merge per slice, in order
 ```
 
-Because Phase 0 already guarantees every slice's files are disjoint, each
-merge should be conflict-free by construction. **If a merge still reports a
-conflict, that is a Phase 0 false negative, not a normal merge conflict** —
-stop, do not auto-resolve, surface the conflicting files to the user as a
-decomposition-safety failure that needs re-diagnosis.
+Phase 0 guarantees disjoint files, so each merge should be conflict-free. **A conflict is a Phase 0 false negative, not a normal merge conflict**: stop, do not auto-resolve, and surface the conflicting files to the user as a decomposition-safety failure needing re-diagnosis.
 
-**Cleanup.** Only after the merged-tree validation below reports `completed`,
-remove each slice's worktree and branch (`git worktree remove <path>`,
-`git branch -d <branch>`). If validation fails and a fix is still needed,
-leave the relevant worktree/branch alive for the retry — do not clean up
-mid-loop.
+**Cleanup.** Only after the merged-tree validation below reports `completed`, remove each slice's worktree and branch (`git worktree remove <path>`, `git branch -d <branch>`). If a fix is still needed, keep the relevant worktree/branch for the retry.
 
 ## Merge and validation
 
-Never validate per-worker — a single slice can pass its own build while
-still breaking the integration. After merging:
+Never validate per-worker: a slice can pass its own build and still break the integration. After merging:
 
-1. Diff each worker's HANDOFF BLOCK "Artifacts produced" list against the
-   others. Any two workers touching the same file despite a clean Phase 0
-   check is a real conflict — surface it to the user to resolve manually,
-   never auto-merge it.
-2. Load the `validation-loop` skill against the integration branch, exactly
-   once, for the combined build/test/lint pass — not described inline here a
-   second time.
+1. Diff each worker's HANDOFF BLOCK "Artifacts produced" list against the others. Two workers touching the same file despite a clean Phase 0 is a real conflict; surface it to the user, never auto-merge.
+2. Load the `validation-loop` skill against the integration branch, exactly once, for the combined build/test/lint pass.
 3. Any remaining validation/security/PR steps in the calling orchestration
    (e.g. `dev-orchestrator`'s Phase 5/5b/6) run once, against the merged result,
    exactly as they would for a single sequential implementation.
