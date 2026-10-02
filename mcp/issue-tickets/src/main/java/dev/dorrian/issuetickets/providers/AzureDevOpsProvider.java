@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.dorrian.issuetickets.HttpTimeoutProperties;
 import dev.dorrian.issuetickets.credentials.AzureAccount;
 import dev.dorrian.issuetickets.credentials.AzureAccountsResolver;
 import dev.dorrian.issuetickets.model.CreateIssueParams;
@@ -21,6 +22,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -40,16 +42,19 @@ public class AzureDevOpsProvider implements TicketProvider {
 
     private final AzureAccountsResolver accountsResolver;
     private final HttpClient httpClient;
+    private final Duration requestTimeout;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Autowired
-    public AzureDevOpsProvider(AzureAccountsResolver accountsResolver) {
-        this(accountsResolver, HttpClient.newHttpClient());
+    public AzureDevOpsProvider(AzureAccountsResolver accountsResolver, HttpTimeoutProperties timeouts) {
+        this(accountsResolver, HttpClient.newBuilder().connectTimeout(timeouts.connectTimeout()).build(),
+            timeouts.requestTimeout());
     }
 
-    AzureDevOpsProvider(AzureAccountsResolver accountsResolver, HttpClient httpClient) {
+    AzureDevOpsProvider(AzureAccountsResolver accountsResolver, HttpClient httpClient, Duration requestTimeout) {
         this.accountsResolver = accountsResolver;
         this.httpClient = httpClient;
+        this.requestTimeout = requestTimeout;
     }
 
     public List<NormalizedTicket> pullTicket(PullTicketParams params) {
@@ -219,6 +224,7 @@ public class AzureDevOpsProvider implements TicketProvider {
         try {
             String auth = Base64.getEncoder().encodeToString(("PAT:" + account.token()).getBytes(StandardCharsets.UTF_8));
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .timeout(requestTimeout)
                 .header("Authorization", "Basic " + auth)
                 .header("X-TFS-FedAuthRedirect", "Suppress")
                 .header("Accept", "application/json");

@@ -9,6 +9,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.IntUnaryOperator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -22,12 +23,49 @@ import org.junit.jupiter.api.Test;
 class DefaultScanSessionTest {
 
     private HttpServer server;
+    private HttpServer otherServer;
 
     @AfterEach
     void stopServer() {
         if (server != null) {
             server.stop(0);
         }
+        if (otherServer != null) {
+            otherServer.stop(0);
+        }
+    }
+
+    /** Starts a second server counting its hits; returns its {@code localhost:port} authority. */
+    private String startOtherServer(AtomicInteger hits) throws IOException {
+        otherServer = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        otherServer.createContext("/", exchange -> {
+            hits.incrementAndGet();
+            byte[] body = "other".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        otherServer.start();
+        return "localhost:" + otherServer.getAddress().getPort();
+    }
+
+    /** Starts the scan target; {@code /r} redirects to {@code location}, {@code /loop} to itself. */
+    private String startRedirectingServer(String location, AtomicInteger loopHits) throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/r", exchange -> {
+            exchange.getResponseHeaders().add("Location", location);
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        server.createContext("/loop", exchange -> {
+            loopHits.incrementAndGet();
+            exchange.getResponseHeaders().add("Location", "/loop");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        server.start();
+        return "localhost:" + server.getAddress().getPort();
     }
 
     /** Starts a server whose Nth request (0-indexed) returns {@code statusForCall.apply(n)} after {@code delayForCall.apply(n)} ms. */
@@ -160,5 +198,60 @@ class DefaultScanSessionTest {
         assertThat(response).isNotNull();
         assertThat(response.status()).isEqualTo(302);
         assertThat(response.headers().get("location")).isEqualTo("http://example.com/elsewhere");
+    }
+
+    @Test
+    void doesNotFollowARedirectToAHostOutsideThePolicy() throws IOException {
+        AtomicInteger otherHits = new AtomicInteger();
+        String other = startOtherServer(otherHits);
+        String target = startRedirectingServer("http://" + other + "/secret", new AtomicInteger());
+
+        var session = new DefaultScanSession(ScanSessionOptions.forTarget(target));
+        var response = session.request("/r");
+
+        assertThat(otherHits.get()).isZero();
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo(302);
+    }
+
+    @Test
+    void followsARedirectToAHostThePolicyAllows() throws IOException {
+        AtomicInteger otherHits = new AtomicInteger();
+        String other = startOtherServer(otherHits);
+        String target = startRedirectingServer("http://" + other + "/ok", new AtomicInteger());
+        Predicate<String> allowTargetAndOther = host -> host.equals(target) || host.equals(other);
+
+        var session = new DefaultScanSession(ScanSessionOptions.forTarget(target, allowTargetAndOther));
+        var response = session.request("/r");
+
+        assertThat(otherHits.get()).isEqualTo(1);
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("other");
+    }
+
+    @Test
+    void boundsTheNumberOfRedirectHopsFollowedOnTheSameHost() throws IOException {
+        AtomicInteger loopHits = new AtomicInteger();
+        String target = startRedirectingServer("/loop", loopHits);
+
+        var session = new DefaultScanSession(ScanSessionOptions.forTarget(target));
+        var response = session.request("/loop");
+
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo(302);
+        assertThat(loopHits.get()).isEqualTo(6);
+    }
+
+    @Test
+    void refusesAnAbsoluteUrlOutsideThePolicy() throws IOException {
+        AtomicInteger otherHits = new AtomicInteger();
+        String other = startOtherServer(otherHits);
+        String target = startRedirectingServer("/loop", new AtomicInteger());
+
+        var session = new DefaultScanSession(ScanSessionOptions.forTarget(target));
+
+        assertThat(session.request("http://" + other + "/")).isNull();
+        assertThat(otherHits.get()).isZero();
     }
 }
