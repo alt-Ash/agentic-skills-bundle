@@ -47,9 +47,19 @@ public final class HooksInstaller {
     }
 
     public static Path installAndRegister(Path bundledJar, Path targetJar, Path settingsFile, HookInstallOptions options) {
-        Path installed = HooksJarLocation.installFrom(bundledJar, targetJar);
+        // Replacing a jar that a running hook may have open is the risky part: leave an identical
+        // jar untouched, and otherwise rely on installFrom's temp-sibling + move (never half-written).
+        Path installed = sameContent(bundledJar, targetJar) ? targetJar : HooksJarLocation.installFrom(bundledJar, targetJar);
         HookRegistrar.registerAll(settingsFile, installed, options);
         return installed;
+    }
+
+    private static boolean sameContent(Path a, Path b) {
+        try {
+            return Files.isRegularFile(a) && Files.isRegularFile(b) && Files.mismatch(a, b) == -1L;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     // ─── per tool ───────────────────────────────────────────────────────────
