@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AgenticSkillsJarIT {
 
     private static final Path JAR = Path.of(System.getProperty("agentic.skills.jar", "target/agentic-skills.jar"));
-    private static final String VERSION = System.getProperty("agentic.skills.version", "3.0.0");
+    private static final String VERSION = System.getProperty("agentic.skills.version", "3.1.0");
 
     private record Run(int exitCode, String output) {
     }
