@@ -50,3 +50,6 @@ skills-lock.json
 .flattened-pom.xml
 # JReleaser local output
 out/
+
+# Local SDKMAN! JDK pin (per-developer)
+.sdkmanrc
