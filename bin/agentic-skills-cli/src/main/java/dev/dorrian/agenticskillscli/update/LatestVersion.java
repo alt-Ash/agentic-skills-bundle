@@ -33,6 +33,7 @@ public final class LatestVersion {
     static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
     static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(3);
     static final Duration CACHE_TTL = Duration.ofHours(24);
+    static final Duration FAILURE_TTL = Duration.ofHours(1);
     static final String CACHE_FILE_NAME = "update-check.json";
 
     private static final Pattern SEMVER = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)(-.+)?$");
@@ -63,7 +64,8 @@ public final class LatestVersion {
     }
 
     public static String notice(String latest) {
-        return "A newer agentic-skills (" + latest + ") is available. Upgrade with: brew upgrade agentic-skills";
+        return "A newer agentic-skills (" + latest + ") is available. Update it with your installer"
+            + " (e.g. brew upgrade agentic-skills), then run: agentic-skills upgrade";
     }
 
     /** True when {@code latest} is a strictly higher X.Y.Z than {@code running}; X.Y.Z-suffix sorts before X.Y.Z. */
@@ -84,7 +86,8 @@ public final class LatestVersion {
     Optional<String> check(String running) {
         try {
             String disabled = env.get(DISABLE_ENV_VAR);
-            if (disabled != null && !disabled.isEmpty()) {
+            if (disabled != null && !disabled.isEmpty()
+                && !"0".equals(disabled) && !"false".equalsIgnoreCase(disabled)) {
                 return Optional.empty();
             }
             if (parse(running) == null) {
@@ -92,13 +95,19 @@ public final class LatestVersion {
             }
             String latest = readFreshCache();
             if (latest == null) {
-                latest = extractVersion(fetcher.fetch());
+                try {
+                    latest = extractVersion(fetcher.fetch());
+                } catch (Exception e) {
+                    latest = null;
+                }
+                // A failed lookup is remembered too, so an offline or rate-limited machine does not
+                // block every run on the network timeout.
+                writeCache(latest);
                 if (latest == null) {
                     return Optional.empty();
                 }
-                writeCache(latest);
             }
-            return isNewer(running, latest) ? Optional.of(latest) : Optional.empty();
+            return latest.isEmpty() || !isNewer(running, latest) ? Optional.empty() : Optional.of(latest);
         } catch (Exception e) {
             return Optional.empty();
         }
@@ -138,23 +147,30 @@ public final class LatestVersion {
         try {
             JsonNode node = MAPPER.readTree(Files.readString(cacheFile, StandardCharsets.UTF_8));
             long checkedAt = node.path("checkedAt").asLong(-1);
-            String latest = node.path("latest").asText(null);
-            if (checkedAt < 0 || latest == null || parse(latest) == null) {
+            boolean failed = node.path("failed").asBoolean(false);
+            String latest = failed ? "" : node.path("latest").asText(null);
+            if (checkedAt < 0 || latest == null || (!failed && parse(latest) == null)) {
                 return null;
             }
             long age = clock.millis() - checkedAt;
-            return age >= 0 && age < CACHE_TTL.toMillis() ? latest : null;
+            Duration ttl = failed ? FAILURE_TTL : CACHE_TTL;
+            return age >= 0 && age < ttl.toMillis() ? latest : null;
         } catch (Exception e) {
             return null;
         }
     }
 
+    /** {@code latest} null records a failed lookup. */
     private void writeCache(String latest) {
         try {
             Files.createDirectories(cacheFile.getParent());
             ObjectNode node = MAPPER.createObjectNode();
             node.put("checkedAt", clock.millis());
-            node.put("latest", latest);
+            if (latest == null) {
+                node.put("failed", true);
+            } else {
+                node.put("latest", latest);
+            }
             Files.writeString(cacheFile, MAPPER.writeValueAsString(node), StandardCharsets.UTF_8);
         } catch (Exception ignored) {
             // cache is best-effort

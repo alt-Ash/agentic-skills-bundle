@@ -96,6 +96,14 @@ public final class HooksInstaller {
         }
     }
 
+    /** True only if our hooks are registered in this tool's own config (the shared jar alone does not count). */
+    public static boolean isRegisteredForTool(String toolKey) {
+        return switch (toolKey) {
+            case "claude" -> HookRegistrar.isRegistered(claudeSettings());
+            default -> ToolHooksInstallers.forTool(toolKey).map(ToolHooksInstaller::isRegistered).orElse(false);
+        };
+    }
+
     /** True if our hooks are registered for this tool, or (Claude) the jar is still installed. */
     public static boolean isInstalledForTool(String toolKey) {
         return switch (toolKey) {

@@ -71,7 +71,7 @@ public record UpgradeEnvironment(
             }
 
             @Override public boolean isInstalled(String toolKey) {
-                return HooksInstaller.isInstalledForTool(toolKey);
+                return HooksInstaller.isRegisteredForTool(toolKey);
             }
 
             @Override public HookInstallOptions currentOptions(String toolKey) {
@@ -84,10 +84,10 @@ public record UpgradeEnvironment(
         };
         List<McpJar> mcps = List.of(
             new McpJar("issue-tickets", PackageRoot.issueTicketsMcpJar(),
-                IssueTicketsMcpInstaller.DEFAULT_INSTALL_DIR, "issue-tickets.jar",
+                IssueTicketsMcpInstaller.DEFAULT_INSTALL_DIR, IssueTicketsMcpInstaller.JAR_NAME,
                 IssueTicketsMcpInstaller::install),
             new McpJar("security-scanner", PackageRoot.securityScannerMcpJar(),
-                SecurityScannerMcpInstaller.DEFAULT_INSTALL_DIR, "security-scanner.jar",
+                SecurityScannerMcpInstaller.DEFAULT_INSTALL_DIR, SecurityScannerMcpInstaller.JAR_NAME,
                 SecurityScannerMcpInstaller::install));
         return new UpgradeEnvironment(AgentToolRegistry.ALL, detected, PackageRoot.skillsDir(),
             PackageRoot.agentsDir(), PackageRoot.commandsDir(), PackageRoot.templatesDir(), hooks, mcps);

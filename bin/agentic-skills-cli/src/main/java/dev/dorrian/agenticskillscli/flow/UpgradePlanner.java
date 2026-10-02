@@ -1,6 +1,5 @@
 package dev.dorrian.agenticskillscli.flow;
 
-import dev.dorrian.agenticskillscli.config.JsonConfigStore;
 import dev.dorrian.agenticskillscli.config.OperationResult;
 import dev.dorrian.agenticskillscli.detect.InstalledAgentDetector;
 import dev.dorrian.agenticskillscli.detect.InstalledCommandDetector;
@@ -43,21 +42,22 @@ public final class UpgradePlanner {
         List<CommandDescriptor> commands = candidateCommands(env.commandsDir());
 
         List<UpgradeOp> ops = new ArrayList<>();
+        Set<String> seen = new java.util.HashSet<>();
         for (AgentToolDef tool : env.tools().values()) {
             if (!env.detectedTools().contains(tool.key())) continue;
             addContent(ops, env, tool, "", skills, agents, commands,
-                tool.globalPath(), tool.agentsGlobalPath(), tool.commandsGlobalPath(), true);
+                tool.globalPath(), tool.agentsGlobalPath(), tool.commandsGlobalPath(), seen);
             addTemplates(ops, env, tool);
             addHooks(ops, env, tool);
         }
         for (Path project : projects) {
             for (AgentToolDef tool : env.tools().values()) {
-                String agentsFolder = tool.agentsProjectFolder() != null ? tool.agentsProjectFolder() : "agents";
                 addContent(ops, env, tool, " [project " + project + "]", skills, agents, commands,
                     tool.projectFolder() == null ? null : project.resolve(tool.projectFolder()),
-                    tool.supportsAgents() ? project.resolve(agentsFolder) : null,
+                    tool.supportsAgents() && tool.agentsProjectFolder() != null
+                        ? project.resolve(tool.agentsProjectFolder()) : null,
                     tool.commandsProjectFolder() == null ? null : project.resolve(tool.commandsProjectFolder()),
-                    false);
+                    seen);
             }
         }
         addMcps(ops, env);
@@ -67,11 +67,13 @@ public final class UpgradePlanner {
     private static void addContent(List<UpgradeOp> ops, UpgradeEnvironment env, AgentToolDef tool, String suffix,
                                    List<SkillDescriptor> skills, List<AgentDescriptor> agents,
                                    List<CommandDescriptor> commands,
-                                   Path skillsPath, Path agentsPath, Path commandsPath, boolean global) {
+                                   Path skillsPath, Path agentsPath, Path commandsPath, Set<String> seen) {
         String key = tool.key();
         Set<String> installedSkills = InstalledSkillDetector.detect(skills, skillsPath);
         for (SkillDescriptor skill : skills) {
-            if (!installedSkills.contains(skill.name())) continue;
+            // Legacy-only copies are not refreshed: that would leave a duplicate beside the stale one.
+            if (!installedSkills.contains(skill.name()) || !Files.exists(skillsPath.resolve(skill.name()))) continue;
+            if (!seen.add("skill:" + skillsPath.resolve(skill.name()))) continue;
             ops.add(new UpgradeOp("refresh skill " + skill.name() + " for " + key + suffix,
                 () -> check(SkillInstaller.install(List.of(skill), skillsPath))));
         }
@@ -80,17 +82,10 @@ public final class UpgradePlanner {
             Set<String> installedAgents = InstalledAgentDetector.detect(agents, agentsPath, key);
             for (AgentDescriptor agent : agents) {
                 if (!installedAgents.contains(agent.name())) continue;
-                ops.add(new UpgradeOp("refresh agent " + agent.name() + " for " + key + suffix, () -> {
-                    check(AgentInstaller.install(List.of(agent), agentsPath, key, env.agentsDir()));
-                    if (global) {
-                        // Idempotent: a well-formed existing entry is left as is; a malformed one is repaired.
-                        JsonConfigStore.registerAgentInConfig(tool, agent.name(), agent.frontmatter())
-                            .filter(r -> !r.success())
-                            .ifPresent(r -> {
-                                throw new IllegalStateException(r.error());
-                            });
-                    }
-                }));
+                if (!seen.add("agent:" + key + ":" + agentsPath.resolve(agent.name()))) continue;
+                // Only the agent file is refreshed; config entries (opencode.json) are never re-registered.
+                ops.add(new UpgradeOp("refresh agent " + agent.name() + " for " + key + suffix,
+                    () -> check(AgentInstaller.install(List.of(agent), agentsPath, key, env.agentsDir()))));
             }
         }
 
@@ -99,6 +94,7 @@ public final class UpgradePlanner {
                 commands.stream().map(CommandDescriptor::name).toList(), commandsPath);
             for (CommandDescriptor command : commands) {
                 if (!installedCommands.contains(command.name())) continue;
+                if (!seen.add("command:" + commandsPath.resolve(command.name() + ".md"))) continue;
                 ops.add(new UpgradeOp("refresh command " + command.name() + " for " + key + suffix,
                     () -> check(CommandInstaller.install(List.of(command), commandsPath))));
             }

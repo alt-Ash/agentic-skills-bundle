@@ -25,7 +25,7 @@ public final class IssueTicketsMcpInstaller {
 
     public static final Path DEFAULT_INSTALL_DIR =
         HomeDir.resolve().resolve(".config").resolve("opencode").resolve("mcp").resolve("issue-tickets");
-    private static final String JAR_NAME = "issue-tickets.jar";
+    public static final String JAR_NAME = "issue-tickets.jar";
 
     private IssueTicketsMcpInstaller() {
     }

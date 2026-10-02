@@ -72,7 +72,8 @@ class LatestVersionTest {
 
     @Test
     void noticeIsTheOneLineUpgradeMessage() {
-        assertEquals("A newer agentic-skills (3.1.0) is available. Upgrade with: brew upgrade agentic-skills",
+        assertEquals("A newer agentic-skills (3.1.0) is available. Update it with your installer"
+            + " (e.g. brew upgrade agentic-skills), then run: agentic-skills upgrade",
             LatestVersion.notice("3.1.0"));
     }
 
@@ -156,5 +157,25 @@ class LatestVersionTest {
     void emptyEnvVarDoesNotDisable() {
         Map<String, String> env = Map.of(LatestVersion.DISABLE_ENV_VAR, "");
         assertEquals(Optional.of("3.1.0"), sut(counting(BODY), NOW, env).check("3.0.0"));
+    }
+
+    @Test
+    void failedLookupIsCachedSoOfflineRunsDoNotRetryEveryTime() {
+        LatestVersion.Fetcher failing = () -> {
+            calls.incrementAndGet();
+            throw new java.io.IOException("offline");
+        };
+        assertEquals(Optional.empty(), sut(failing, NOW, Map.of()).check("3.0.0"));
+        assertEquals(Optional.empty(), sut(failing, NOW.plusSeconds(60), Map.of()).check("3.0.0"));
+        assertEquals(1, calls.get());
+        // after the (shorter) failure TTL it tries again
+        assertEquals(Optional.empty(), sut(failing, NOW.plus(LatestVersion.FAILURE_TTL).plusSeconds(1), Map.of()).check("3.0.0"));
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void zeroOrFalseEnvValueDoesNotDisable() {
+        assertEquals(Optional.of("3.1.0"), sut(counting(BODY), NOW, Map.of(LatestVersion.DISABLE_ENV_VAR, "0")).check("3.0.0"));
+        assertEquals(Optional.of("3.1.0"), sut(counting(BODY), NOW, Map.of(LatestVersion.DISABLE_ENV_VAR, "false")).check("3.0.0"));
     }
 }
