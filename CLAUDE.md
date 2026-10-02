@@ -29,7 +29,7 @@ Run one test class: `-Dtest=<Class> -Dsurefire.failIfNoSpecifiedTests=false`.
 
 ### Installer (`bin/agentic-skills-cli`)
 
-Plain Java 21 (no Spring Boot: a one-shot wizard needs no DI). One jar, `target/agentic-skills.jar`, carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the hooks jar and both MCP jars under `bundle/`. Without `--package-root`, `BundleExtractor` unpacks `bundle/` once per version to `~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`. `--uninstall` jumps to the uninstall wizard; `data <path|import|prune>` and `dashboard` (read-only, localhost) skip the bundle. Released via JReleaser on a `v*` tag (Homebrew/JBang/GitHub).
+Plain Java 21 (no Spring Boot, no DI). One jar, `target/agentic-skills.jar`, carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the hooks jar and both MCP jars under `bundle/`. Without `--package-root`, `BundleExtractor` unpacks `bundle/` once per version to `~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`. `--uninstall` jumps to the uninstall wizard; `upgrade` refreshes installs; `data <path|import|prune>` and `dashboard` (read-only, localhost) skip the bundle. Released via JReleaser on `v*` tags.
 
 Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 

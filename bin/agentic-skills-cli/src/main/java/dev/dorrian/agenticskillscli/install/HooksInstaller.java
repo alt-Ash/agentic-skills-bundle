@@ -77,10 +77,20 @@ public final class HooksInstaller {
         };
     }
 
-    /** The opt-in hooks currently registered for this tool (only Claude Code has per-hook opt-ins we can read back). */
+    /**
+     * The opt-in hooks currently registered for this tool, read back from its own config (Claude
+     * settings, OpenCode plugin file, Antigravity hooks.json). Unknown, missing or unreadable gives NONE.
+     */
     public static HookInstallOptions currentOptionsForTool(String toolKey) {
         try {
-            return "claude".equals(toolKey) ? HookRegistrar.registeredOptIns(claudeSettings()) : HookInstallOptions.NONE;
+            return switch (toolKey) {
+                case "claude" -> HookRegistrar.registeredOptIns(claudeSettings());
+                default -> switch (ToolHooksInstallers.forTool(toolKey).orElse(null)) {
+                    case OpenCodeHooksInstaller o -> o.currentOptions();
+                    case AntigravityHooksInstaller a -> a.currentOptions();
+                    case null, default -> HookInstallOptions.NONE;
+                };
+            };
         } catch (RuntimeException e) {
             return HookInstallOptions.NONE;
         }

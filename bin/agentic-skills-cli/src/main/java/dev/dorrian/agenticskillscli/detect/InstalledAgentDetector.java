@@ -40,4 +40,18 @@ public final class InstalledAgentDetector {
         }
         return installed;
     }
+
+    /** Agents present under one explicit agents directory for {@code toolKey}, incl. legacy file names. */
+    public static Set<String> detect(List<AgentDescriptor> agents, Path agentsPath, String toolKey) {
+        Set<String> installed = new LinkedHashSet<>();
+        if (agentsPath == null) return installed;
+        for (AgentDescriptor agent : agents) {
+            String destFile = AgentFileNaming.fileName(agent.name(), toolKey);
+            boolean found = Files.exists(agentsPath.resolve(destFile))
+                || AgentFileNaming.legacyFileNames(agent.name(), toolKey).stream()
+                    .anyMatch(f -> Files.exists(agentsPath.resolve(f)));
+            if (found) installed.add(agent.name());
+        }
+        return installed;
+    }
 }

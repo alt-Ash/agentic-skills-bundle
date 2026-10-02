@@ -35,6 +35,11 @@ public final class AntigravityHooksInstaller implements ToolHooksInstaller {
         return installed;
     }
 
+    /** The opt-ins currently registered in the hooks file; {@link HookInstallOptions#NONE} if unreadable. */
+    HookInstallOptions currentOptions() {
+        return AntigravityHookRegistrar.registeredOptIns(hooksFile.get());
+    }
+
     @Override
     public int uninstall() {
         return AntigravityHookRegistrar.unregister(hooksFile.get());

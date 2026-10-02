@@ -69,4 +69,26 @@ class AntigravityHooksInstallerTest {
             () -> installer.install(HookInstallOptions.NONE));
         assertEquals("{ not json", Files.readString(hooksFile));
     }
+
+    @Test
+    void currentOptionsRoundTripForEveryCombinationAndReinstallIsIdempotent() throws Exception {
+        for (int i = 0; i < 8; i++) {
+            HookInstallOptions x = new HookInstallOptions((i & 1) != 0, (i & 2) != 0, (i & 4) != 0);
+            installer.install(x);
+            assertEquals(x, installer.currentOptions());
+            String before = Files.readString(hooksFile);
+            installer.install(installer.currentOptions());
+            assertEquals(before, Files.readString(hooksFile));
+        }
+    }
+
+    @Test
+    void currentOptionsAreNoneWhenMissingOrUnparsable() throws Exception {
+        assertEquals(HookInstallOptions.NONE, installer.currentOptions());
+        Files.createDirectories(hooksFile.getParent());
+        Files.writeString(hooksFile, "{ not json");
+        assertEquals(HookInstallOptions.NONE, installer.currentOptions());
+        Files.writeString(hooksFile, "{\"other\": {}}");
+        assertEquals(HookInstallOptions.NONE, installer.currentOptions());
+    }
 }

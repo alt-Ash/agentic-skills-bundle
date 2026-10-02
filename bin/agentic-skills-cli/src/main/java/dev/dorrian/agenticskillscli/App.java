@@ -57,6 +57,10 @@ public final class App {
                 dev.dorrian.usagestore.UsageDb.defaultPath(), System.out, System.err));
         }
         PackageRoot.initFromArgs(args);
+        if (args.length > 0 && "upgrade".equals(args[0])) {
+            System.exit(dev.dorrian.agenticskillscli.flow.UpgradeCommand.runDefault(
+                java.util.List.of(args).subList(1, args.length)));
+        }
 
         boolean uninstallRequested = containsFlag(args, "--uninstall");
 

@@ -3,6 +3,7 @@ package dev.dorrian.agenticskillscli.config;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.dorrian.agenticskillscli.HomeDir;
+import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -81,6 +82,24 @@ public final class AntigravityHookRegistrar {
             return read(file).get(HOOK_NAME) instanceof Map<?, ?>;
         } catch (UncheckedIOException e) {
             return false;
+        }
+    }
+
+    /**
+     * The opt-ins our entry currently has: guard = a {@code PreToolUse} hook, verify = the {@code Stop} handler
+     * runs with {@code --verify}, context = a {@code PreInvocation} hook. A missing, unparsable or unrecognisable
+     * file yields {@link HookInstallOptions#NONE}; this never throws.
+     */
+    public static HookInstallOptions registeredOptIns(Path file) {
+        try {
+            if (!(read(file).get(HOOK_NAME) instanceof Map<?, ?> entry)) return HookInstallOptions.NONE;
+            boolean guard = entry.get("PreToolUse") != null;
+            boolean context = entry.get("PreInvocation") != null;
+            boolean verify = entry.get("Stop") != null
+                && MAPPER.writeValueAsString(entry.get("Stop")).contains(" agy stop --verify");
+            return new HookInstallOptions(guard, verify, context);
+        } catch (IOException | RuntimeException e) {
+            return HookInstallOptions.NONE;
         }
     }
 

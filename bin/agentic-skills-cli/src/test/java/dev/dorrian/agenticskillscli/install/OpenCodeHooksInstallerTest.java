@@ -83,4 +83,26 @@ class OpenCodeHooksInstallerTest {
         assertEquals(0, installer.uninstall());
         assertTrue(Files.exists(mine));
     }
+
+    @Test
+    void currentOptionsRoundTripAndReinstallIsIdempotent() throws Exception {
+        for (boolean guard : new boolean[] {true, false}) {
+            HookInstallOptions x = new HookInstallOptions(guard, false, false);
+            installer.install(x);
+            assertEquals(x, installer.currentOptions());
+            String before = plugin();
+            installer.install(installer.currentOptions());
+            assertEquals(before, plugin());
+        }
+    }
+
+    @Test
+    void currentOptionsAreNoneWhenMissingOrUnrecognisable() throws Exception {
+        assertEquals(HookInstallOptions.NONE, installer.currentOptions());
+        Files.createDirectories(plugins);
+        Files.writeString(plugins.resolve("agentic-skills-hooks.js"), "const GUARD = true\n");
+        assertEquals(HookInstallOptions.NONE, installer.currentOptions());
+        Files.writeString(plugins.resolve("agentic-skills-hooks.js"), "// agentic-skills-hooks plugin\nconst GUARD = maybe\n");
+        assertEquals(HookInstallOptions.NONE, installer.currentOptions());
+    }
 }
