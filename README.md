@@ -276,12 +276,12 @@ A shared circuit breaker aborts the rest of a scan the moment the target's error
 
 Installing for **Claude Code** (analytics also for **Gemini CLI**; an OpenCode plugin) copies a small hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
 
-- **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master` and `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass; `context` adds project context at session start. Re-running the installer refreshes our entries.
+- **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master`, `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass (approve per project: `agentic-skills verify trust`); `context` adds session context. Re-running the installer refreshes our entries.
 - `agentic-skills dashboard` serves a read-only localhost dashboard: usage, tools, installed-vs-used skills and agents, sessions, guard blocks.
 - `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune --older-than 90d`.
 - `--uninstall` removes our hooks (not yours); the database is kept.
 
-Formats, token semantics, limits: [docs/hooks.md](docs/hooks.md).
+Formats and limits: [docs/hooks.md](docs/hooks.md).
 
 ## Development
 

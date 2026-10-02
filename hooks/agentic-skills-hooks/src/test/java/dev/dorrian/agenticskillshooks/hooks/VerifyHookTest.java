@@ -142,4 +142,67 @@ class VerifyHookTest {
         assertTrue(f.output().contains("hi"));
         assertTrue(CommandRunner.run("sleep 30", project.toFile(), 1).timedOut());
     }
+
+    // ─── trust: a verify.json in a repo is untrusted input ───────────────────────
+
+    @Test
+    void anUnapprovedConfigNeverRunsAndIsNotedOncePerSession() throws Exception {
+        config("{\"commands\":[\"rm -rf everything\"]}");
+        List<UsageEvent> out = new ArrayList<>();
+        List<String> ran = new ArrayList<>();
+        VerifyHook.Runner runner = (c, d, t) -> {
+            ran.add(c);
+            return res(1);
+        };
+
+        Optional<String> first = VerifyHook.evaluate(input(false), s -> List.of(), runner, out::add, (p, b) -> false);
+        assertTrue(first.isEmpty(), "an untrusted config must allow the stop");
+        assertTrue(ran.isEmpty(), "and must not run anything");
+        assertEquals(1, out.size());
+        assertEquals("verify_error", out.get(0).event);
+        assertEquals("untrusted_config", out.get(0).reason);
+        assertTrue(out.get(0).error.contains("agentic-skills verify trust"));
+
+        // the second stop in the same session does not repeat the note
+        UsageEvent noted = ev("verify_error");
+        noted.reason = "untrusted_config";
+        VerifyHook.evaluate(input(false), s -> List.of(noted), runner, out::add, (p, b) -> false);
+        assertEquals(1, out.size());
+        assertTrue(ran.isEmpty());
+    }
+
+    @Test
+    void anApprovedConfigRunsAndTheTrustCheckSeesTheExactBytes() throws Exception {
+        config("{\"commands\":[\"ok\"]}");
+        List<UsageEvent> out = new ArrayList<>();
+        List<byte[]> seen = new ArrayList<>();
+        Optional<String> r = VerifyHook.evaluate(input(false), s -> List.of(), (c, d, t) -> res(0), out::add, (p, b) -> {
+            seen.add(b);
+            return true;
+        });
+        assertTrue(r.isEmpty());
+        assertEquals("verify_pass", out.get(0).event);
+        assertEquals("{\"commands\":[\"ok\"]}", new String(seen.get(0), java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    // ─── total time budget ───────────────────────────────────────────────────────
+
+    @Test
+    void allCommandsTogetherAreHeldToTheTotalBudgetSoTheHostNeverKillsTheGate() throws Exception {
+        config("{\"commands\":[\"a\",\"b\",\"c\"],\"timeoutSeconds\":540}");
+        List<UsageEvent> out = new ArrayList<>();
+        List<Integer> limits = new ArrayList<>();
+        // each command "takes" 300s
+        VerifyHook.Runner runner = (c, d, t) -> {
+            limits.add(t);
+            return new CommandRunner.Result(0, "", false, false, 300_000);
+        };
+        Optional<String> r = VerifyHook.evaluate(input(false), s -> List.of(), runner, out::add);
+
+        assertTrue(r.isEmpty(), "running out of budget must fail open");
+        assertEquals(List.of(540, 240), limits, "second command only gets what is left; the third never runs");
+        assertEquals("verify_error", out.get(0).event);
+        assertEquals("budget", out.get(0).reason);
+        assertEquals("c", out.get(0).command);
+    }
 }

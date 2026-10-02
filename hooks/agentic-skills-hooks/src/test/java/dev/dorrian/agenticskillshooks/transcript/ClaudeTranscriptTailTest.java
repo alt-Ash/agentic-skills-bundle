@@ -39,6 +39,19 @@ class ClaudeTranscriptTailTest {
     }
 
     @Test
+    void aSyntheticPlaceholderMessageDoesNotReplaceTheRealLastMessage() throws Exception {
+        // Claude Code writes "<synthetic>" assistant records (e.g. after an API error) with zero usage.
+        Path p = write(
+            assistant("real-model", "{\"input_tokens\":10,\"output_tokens\":99,\"cache_read_input_tokens\":500}"),
+            assistant("<synthetic>", "{\"input_tokens\":0,\"output_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}"));
+        var e = ClaudeTranscriptParser.extract(p.toString());
+        assertEquals("real-model", e.model);
+        assertEquals(10, e.inputTokens);
+        assertEquals(99, e.outputTokens);
+        assertEquals(500, e.cacheReadTokens);
+    }
+
+    @Test
     void missingFieldsStayNullNotZero() throws Exception {
         Path p = write(assistant("m1", "{\"input_tokens\":7}"));
         var e = ClaudeTranscriptParser.extract(p.toString());

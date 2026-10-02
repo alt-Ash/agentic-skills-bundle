@@ -6,13 +6,18 @@ import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
 import dev.dorrian.usagestore.SecretRedactor;
 import dev.dorrian.usagestore.UsageEvent;
+import dev.dorrian.usagestore.VerifyTrust;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -33,7 +38,9 @@ public final class VerifyHook {
     /** Returns the reason to keep Claude working, or empty to let it stop. */
     public static Optional<String> evaluate(HookInput input) {
         try {
-            return evaluate(input, EventLog::sessionEvents, CommandRunner::run, EventLog::recordEvent);
+            Path home = Path.of(System.getProperty("user.home"));
+            return evaluate(input, EventLog::sessionEvents, CommandRunner::run, EventLog::recordEvent,
+                (project, configBytes) -> VerifyTrust.isTrusted(home, project, configBytes));
         } catch (Exception e) {
             return Optional.empty();
         }
@@ -43,13 +50,40 @@ public final class VerifyHook {
         CommandRunner.Result run(String command, File dir, int timeoutSeconds);
     }
 
+    /** Test seam: every project is trusted. Production goes through {@link #evaluate(HookInput)}. */
     static Optional<String> evaluate(HookInput input, Function<String, List<UsageEvent>> history,
                                      Runner runner, Consumer<UsageEvent> sink) {
+        return evaluate(input, history, runner, sink, (project, bytes) -> true);
+    }
+
+    static Optional<String> evaluate(HookInput input, Function<String, List<UsageEvent>> history,
+                                     Runner runner, Consumer<UsageEvent> sink,
+                                     BiPredicate<Path, byte[]> trusted) {
         String cwd = input.cwd() != null && !input.cwd().isBlank() ? input.cwd() : System.getProperty("user.dir");
         Path project = Path.of(cwd);
-        Optional<VerifyConfig> maybe = VerifyConfig.load(project);
+        Path file = project.resolve(".agentic-skills").resolve("verify.json");
+        byte[] configBytes;
+        try {
+            if (!Files.isRegularFile(file)) return Optional.empty();
+            configBytes = Files.readAllBytes(file);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+        Optional<VerifyConfig> maybe = VerifyConfig.parse(new String(configBytes, StandardCharsets.UTF_8));
         if (maybe.isEmpty()) return Optional.empty();
         VerifyConfig config = maybe.get();
+
+        // The commands come from a file in the repository, so they only run once the user approved this exact
+        // content for this project (`agentic-skills verify trust`). Otherwise: allow, and say why once per session.
+        if (!trusted.test(project, configBytes)) {
+            String sid = input.sessionId();
+            boolean alreadyNoted = sid != null && history.apply(sid).stream().anyMatch(e -> "untrusted_config".equals(e.reason));
+            if (!alreadyNoted) {
+                sink.accept(event(input, "verify_error", null, 0L,
+                    "verify.json is not approved for this project; run `agentic-skills verify trust` there", "untrusted_config"));
+            }
+            return Optional.empty();
+        }
 
         String sessionId = input.sessionId();
         boolean active = Boolean.TRUE.equals(input.stopHookActive());
@@ -64,12 +98,22 @@ public final class VerifyHook {
 
         String last = null;
         long total = 0;
+        long budgetMs = VerifyConfig.MAX_TOTAL_SECONDS * 1000L;
         for (String command : config.commands()) {
             last = command;
-            CommandRunner.Result r = runner.run(command, project.toFile(), config.timeoutSeconds());
+            // A per-command limit alone could let several commands outlive the host's own hook timeout, which
+            // would kill us before we could block. Every command gets the smaller of its limit and what is left.
+            long remainingMs = budgetMs - total;
+            if (remainingMs < 1000) {
+                sink.accept(event(input, "verify_error", command, total,
+                    "total time budget of " + VerifyConfig.MAX_TOTAL_SECONDS + "s used up before this command ran", "budget"));
+                return Optional.empty(); // fail open
+            }
+            int limitSeconds = (int) Math.min(config.timeoutSeconds(), remainingMs / 1000);
+            CommandRunner.Result r = runner.run(command, project.toFile(), limitSeconds);
             total += r.durationMs();
             if (r.timedOut() || r.startFailed()) {
-                String why = r.timedOut() ? "timed out after " + config.timeoutSeconds() + "s" : "could not start";
+                String why = r.timedOut() ? "timed out after " + limitSeconds + "s" : "could not start";
                 sink.accept(event(input, "verify_error", command, total, why + ": " + tail(r.output()),
                     r.timedOut() ? "timeout" : "start_failed"));
                 return Optional.empty(); // fail open

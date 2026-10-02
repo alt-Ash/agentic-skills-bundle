@@ -78,7 +78,7 @@ public final class GeminiHookRegistrar {
     }
 
     public static boolean isRegistered(Path settingsFile) {
-        if (!(readJsonObject(settingsFile).get(HOOKS_KEY) instanceof Map<?, ?> hooksSection)) {
+        if (!(readJsonObjectOrEmpty(settingsFile).get(HOOKS_KEY) instanceof Map<?, ?> hooksSection)) {
             return false;
         }
         for (Object eventEntries : hooksSection.values()) {
@@ -99,7 +99,12 @@ public final class GeminiHookRegistrar {
         if (!Files.exists(settingsFile)) {
             return 0;
         }
-        Map<String, Object> config = readJsonObject(settingsFile);
+        Map<String, Object> config;
+        try {
+            config = readJsonObject(settingsFile);
+        } catch (UncheckedIOException e) {
+            return 0; // unparsable: leave it exactly as it is
+        }
         if (!(config.get(HOOKS_KEY) instanceof Map<?, ?> raw)) {
             return 0;
         }
@@ -161,6 +166,12 @@ public final class GeminiHookRegistrar {
         return s.substring(s.lastIndexOf(' ') + 1);
     }
 
+    /**
+     * Reads the settings file for a read-modify-write. A file that exists but cannot be parsed is an
+     * error, never an empty map: Gemini CLI settings files commonly contain comments or trailing commas,
+     * and treating one as empty would make us rewrite it with only our entries, destroying the user's
+     * model, theme and MCP settings.
+     */
     private static Map<String, Object> readJsonObject(Path file) {
         if (!Files.exists(file)) {
             return new LinkedHashMap<>();
@@ -168,6 +179,17 @@ public final class GeminiHookRegistrar {
         try {
             return MAPPER.readValue(file.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
         } catch (IOException e) {
+            String message = e.getMessage() == null ? "invalid JSON" : e.getMessage().split("\n", 2)[0];
+            throw new UncheckedIOException("Cannot parse " + file + " (" + message
+                + "). It was left untouched: fix or remove the syntax error and run the installer again.", e);
+        }
+    }
+
+    /** Read-only callers (detection) treat an unparsable file as "nothing registered". */
+    private static Map<String, Object> readJsonObjectOrEmpty(Path file) {
+        try {
+            return readJsonObject(file);
+        } catch (UncheckedIOException e) {
             return new LinkedHashMap<>();
         }
     }

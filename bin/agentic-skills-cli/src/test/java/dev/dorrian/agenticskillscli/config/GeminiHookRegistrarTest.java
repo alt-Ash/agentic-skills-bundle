@@ -1,5 +1,6 @@
 package dev.dorrian.agenticskillscli.config;
 
+import java.io.IOException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -107,5 +108,21 @@ class GeminiHookRegistrarTest {
         assertFalse(GeminiHookRegistrar.isRegistered(settings));
         GeminiHookRegistrar.register(settings, Path.of("/h/agentic-skills-hooks.jar"));
         assertEquals(2, read(settings).get("hooks").get("AfterAgent").size());
+    }
+
+    @Test
+    void anUnparsableSettingsFileIsNeverRewrittenOrWiped(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("settings.json");
+        Path jar = tempDir.resolve("agentic-skills-hooks.jar");
+        // Typical hand-edited settings: a comment and a trailing comma make this invalid strict JSON.
+        String original = "{\n  // my theme\n  \"theme\": \"dark\",\n  \"mcpServers\": { \"x\": {} },\n}\n";
+        Files.writeString(file, original);
+
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.UncheckedIOException.class, () -> GeminiHookRegistrar.register(file, jar));
+        assertEquals(original, Files.readString(file), "register must leave an unparsable file exactly as it was");
+
+        assertEquals(0, GeminiHookRegistrar.unregister(file), "unregister must not touch an unparsable file");
+        assertEquals(original, Files.readString(file));
+        org.junit.jupiter.api.Assertions.assertFalse(GeminiHookRegistrar.isRegistered(file));
     }
 }

@@ -43,4 +43,17 @@ class ContextHookTest {
         assertFalse(secret.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"));
         assertEquals(0, ContextHook.build(P, "m", "s", "", null, null).lines().filter(l -> l.contains("Notes")).count());
     }
+
+    @Test
+    void anUnknownGitStatusOmitsTheLineInsteadOfClaimingACleanTree() {
+        // null = git failed or timed out (e.g. a huge repo); a clean tree still prints the "## branch" header
+        String unknown = ContextHook.build(P, "main", "x", null, null, "startup");
+        assertFalse(unknown.contains("Uncommitted changes"), unknown);
+
+        String clean = ContextHook.build(P, "main", "x", "## main...origin/main\n", null, "startup");
+        assertTrue(clean.contains("Uncommitted changes: 0"), clean);
+
+        String dirty = ContextHook.build(P, "main", "x", "## main\n M a.txt\n?? b.txt\n", null, "startup");
+        assertTrue(dirty.contains("Uncommitted changes: 2"), dirty);
+    }
 }

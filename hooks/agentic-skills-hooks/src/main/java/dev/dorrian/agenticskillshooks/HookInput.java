@@ -83,6 +83,11 @@ public final class HookInput {
         return textOrNull("prompt_id");
     }
 
+    /** A top-level string field of the payload, or null. For tool-specific extras that have no dedicated accessor. */
+    public String stringField(String key) {
+        return textOrNull(key);
+    }
+
     public String toolName() {
         return textOrNull("tool_name");
     }

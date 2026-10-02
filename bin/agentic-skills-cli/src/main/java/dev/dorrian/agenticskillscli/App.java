@@ -2,6 +2,7 @@ package dev.dorrian.agenticskillscli;
 
 import dev.dorrian.agenticskillscli.dashboard.DashboardCommand;
 import dev.dorrian.agenticskillscli.data.DataCommands;
+import dev.dorrian.agenticskillscli.data.VerifyCommands;
 import dev.dorrian.agenticskillscli.detect.InstalledToolDetector;
 import dev.dorrian.agenticskillscli.discovery.AgentDescriptor;
 import dev.dorrian.agenticskillscli.discovery.AgentDiscovery;
@@ -47,6 +48,9 @@ public final class App {
         if (args.length > 0 && "data".equals(args[0])) {
             // Non-interactive and independent of the bundle: no extraction, no prompts.
             System.exit(DataCommands.runDefault(java.util.List.of(args).subList(1, args.length)));
+        }
+        if (args.length > 0 && "verify".equals(args[0])) {
+            System.exit(VerifyCommands.runDefault(java.util.List.of(args).subList(1, args.length)));
         }
         if (args.length > 0 && "dashboard".equals(args[0])) {
             System.exit(DashboardCommand.run(java.util.List.of(args).subList(1, args.length),

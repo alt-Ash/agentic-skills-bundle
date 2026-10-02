@@ -77,6 +77,15 @@ public final class HooksInstaller {
         };
     }
 
+    /** The opt-in hooks currently registered for this tool (only Claude Code has per-hook opt-ins we can read back). */
+    public static HookInstallOptions currentOptionsForTool(String toolKey) {
+        try {
+            return "claude".equals(toolKey) ? HookRegistrar.registeredOptIns(claudeSettings()) : HookInstallOptions.NONE;
+        } catch (RuntimeException e) {
+            return HookInstallOptions.NONE;
+        }
+    }
+
     /** True if our hooks are registered for this tool, or (Claude) the jar is still installed. */
     public static boolean isInstalledForTool(String toolKey) {
         return switch (toolKey) {

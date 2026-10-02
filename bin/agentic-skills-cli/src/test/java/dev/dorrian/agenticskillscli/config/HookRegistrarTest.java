@@ -263,4 +263,39 @@ class HookRegistrarTest {
         Map<String, Object> hooks = (Map<String, Object>) written.get("hooks");
         assertEquals(2, ((List<?>) hooks.get("Stop")).size()); // theirs + ours
     }
+
+    @Test
+    void anUnparsableSettingsFileIsNeverRewrittenOrWiped(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("settings.json");
+        Path jar = tempDir.resolve("agentic-skills-hooks.jar");
+        // Typical hand-edited settings: a comment and a trailing comma make this invalid strict JSON.
+        String original = "{\n  // my theme\n  \"theme\": \"dark\",\n  \"mcpServers\": { \"x\": {} },\n}\n";
+        Files.writeString(file, original);
+
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.UncheckedIOException.class, () -> HookRegistrar.registerAll(file, jar));
+        assertEquals(original, Files.readString(file), "register must leave an unparsable file exactly as it was");
+
+        assertEquals(0, HookRegistrar.unregisterAll(file), "unregister must not touch an unparsable file");
+        assertEquals(original, Files.readString(file));
+        org.junit.jupiter.api.Assertions.assertFalse(HookRegistrar.isRegistered(file));
+    }
+
+    @Test
+    void registeredOptInsReportsWhatIsCurrentlyInstalledSoARerunCanKeepIt(@TempDir Path tempDir) throws IOException {
+        Path jar = tempDir.resolve("agentic-skills-hooks.jar");
+        Path file = tempDir.resolve("settings.json");
+
+        assertEquals(dev.dorrian.agenticskillscli.registry.HookInstallOptions.NONE, HookRegistrar.registeredOptIns(file));
+
+        HookRegistrar.registerAll(file, jar, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, false, true));
+        assertEquals(new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, false, true), HookRegistrar.registeredOptIns(file));
+
+        HookRegistrar.registerAll(file, jar, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(false, true, false));
+        assertEquals(new dev.dorrian.agenticskillscli.registry.HookInstallOptions(false, true, false), HookRegistrar.registeredOptIns(file));
+
+        // an unparsable file reports nothing and is not rewritten
+        Files.writeString(file, "{ // broken");
+        assertEquals(dev.dorrian.agenticskillscli.registry.HookInstallOptions.NONE, HookRegistrar.registeredOptIns(file));
+        assertEquals("{ // broken", Files.readString(file));
+    }
 }

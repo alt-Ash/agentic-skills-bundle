@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VerifyHookIT {
@@ -23,8 +24,10 @@ class VerifyHookIT {
         return p;
     }
 
+    /** Writes verify.json and approves it (in the hook JVM's private home), like `agentic-skills verify trust` would. */
     private void config(Path p, String json) throws Exception {
         Files.writeString(p.resolve(".agentic-skills/verify.json"), json);
+        dev.dorrian.usagestore.VerifyTrust.trust(HookJarHarness.homeFor(p), p, Files.readAllBytes(p.resolve(".agentic-skills/verify.json")));
     }
 
     private HookJarHarness.Result stop(Path p, boolean active) throws Exception {
@@ -84,5 +87,36 @@ class VerifyHookIT {
         config(p, "{\"commands\":[\"sleep 30\"],\"timeoutSeconds\":1}");
         assertEquals(0, stop(p, false).exitCode());
         assertEquals(List.of("verify_error"), kinds(HookJarHarness.events(p)));
+    }
+
+    @Test
+    void anUnapprovedConfigIsNeverExecutedByTheRealJar() throws Exception {
+        Path p = project();
+        Path marker = p.resolve("MUST-NOT-EXIST");
+        // written WITHOUT approval, like a cloned repo (or the model) dropping the file in
+        Files.writeString(p.resolve(".agentic-skills/verify.json"), "{\"commands\":[\"touch MUST-NOT-EXIST; exit 1\"]}");
+
+        HookJarHarness.Result r = stop(p, false);
+
+        assertEquals(0, r.exitCode(), "an untrusted config must allow the stop");
+        assertFalse(Files.exists(marker), "and must not run its commands");
+        List<UsageEvent> evs = HookJarHarness.events(p);
+        assertEquals(List.of("verify_error"), kinds(evs));
+        assertEquals("untrusted_config", evs.get(0).reason);
+    }
+
+    @Test
+    void changingAnApprovedConfigRevokesTheApproval() throws Exception {
+        Path p = project();
+        Path marker = p.resolve("INJECTED");
+        config(p, "{\"commands\":[\"true\"]}");
+        assertEquals(0, stop(p, false).exitCode());
+
+        // a later edit (a pull, or the model writing the file) is not covered by the earlier approval
+        Files.writeString(p.resolve(".agentic-skills/verify.json"), "{\"commands\":[\"touch INJECTED; exit 1\"]}");
+        HookJarHarness.Result r = stop(p, false);
+
+        assertEquals(0, r.exitCode());
+        assertFalse(Files.exists(marker));
     }
 }

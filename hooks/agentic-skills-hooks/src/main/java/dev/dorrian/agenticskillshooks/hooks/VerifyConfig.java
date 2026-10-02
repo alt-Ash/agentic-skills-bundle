@@ -15,6 +15,8 @@ record VerifyConfig(List<String> commands, int timeoutSeconds, int maxConsecutiv
     static final int DEFAULT_TIMEOUT_SECONDS = 300;
     /** Per-command cap; the registered host timeout (HooksRegistry.VERIFY) is deliberately higher. */
     static final int MAX_TIMEOUT_SECONDS = 540;
+    /** Cap on ALL commands together, so the host timeout (HooksRegistry.VERIFY, 600s) is never outlived by a long list. */
+    static final int MAX_TOTAL_SECONDS = 540;
     static final int DEFAULT_MAX_BLOCKS = 3;
 
     /** Empty when the file is missing, unparsable or lists no commands. Never throws. */

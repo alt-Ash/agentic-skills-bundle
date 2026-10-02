@@ -28,7 +28,7 @@ public final class ContextHook {
             Path project = Path.of(cwd).toAbsolutePath();
             String branch = GitProcess.runGit("-C", cwd, "rev-parse", "--abbrev-ref", "HEAD");
             String subject = GitProcess.runGit("-C", cwd, "log", "-1", "--format=%s");
-            String status = GitProcess.runGit("-C", cwd, "status", "--porcelain");
+            String status = GitProcess.runGit("-C", cwd, "status", "--porcelain", "--branch");
             return Optional.of(build(project, branch, subject, status, readNotes(project), input.source()));
         } catch (Exception e) {
             return Optional.empty();
@@ -41,8 +41,10 @@ public final class ContextHook {
         sb.append("Project: ").append(name == null ? project : name).append('\n');
         if (branch != null) sb.append("Git branch: ").append(branch).append('\n');
         if (subject != null) sb.append("Last commit: ").append(subject).append('\n');
-        if (branch != null) {
-            long changes = porcelain == null ? 0 : porcelain.lines().filter(l -> !l.isBlank()).count();
+        // `status --porcelain --branch` always prints a "## branch" header on success, so null here means git
+        // failed or timed out: say nothing rather than claim a clean tree.
+        if (porcelain != null) {
+            long changes = porcelain.lines().filter(l -> !l.isBlank() && !l.startsWith("##")).count();
             sb.append("Uncommitted changes: ").append(changes).append('\n');
         }
         if ("compact".equals(source)) {

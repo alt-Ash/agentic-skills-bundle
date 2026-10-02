@@ -72,4 +72,16 @@ class ProviderDetectorTest {
     void claudeSessionEventsWithoutTimestampStayClaude() {
         assertEquals("claude", ProviderDetector.detect(HookInput.parse("{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}")));
     }
+
+    @Test
+    void anExplicitProviderDeclaredByOurOpenCodeShimWins() {
+        HookInput input = HookInput.parse("{\"hook_event_name\":\"SessionStart\",\"agentic_skills_provider\":\"opencode\"}");
+        assertEquals("opencode", ProviderDetector.detect(input));
+    }
+
+    @Test
+    void anUnknownDeclaredProviderIsIgnored() {
+        HookInput input = HookInput.parse("{\"agentic_skills_provider\":\"made-up\"}");
+        assertEquals("claude", ProviderDetector.detect(input));
+    }
 }

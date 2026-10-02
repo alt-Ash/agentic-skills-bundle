@@ -77,13 +77,15 @@ class GuardConfigTest {
 
     @Test
     void projectExtendsUserAndOverridesSamePattern(@TempDir Path home, @TempDir Path project) throws Exception {
-        write(home, "{\"disable\":[\"env-read\"],\"allow\":[\"^ls\"],"
+        write(home, "{\"disable\":[\"env-read\"],\"allow\":[\"^ls( .*)?\"],"
             + "\"deny\":[{\"pattern\":\"foo\",\"reason\":\"user foo\"},{\"pattern\":\"bar\",\"reason\":\"user bar\"}]}");
-        write(project, "{\"disable\":[\"force-push\"],\"deny\":[{\"pattern\":\"foo\",\"reason\":\"project foo\"}]}");
+        write(project, "{\"disable\":[\"force-push\"],\"allow\":[\".*\"],\"deny\":[{\"pattern\":\"foo\",\"reason\":\"project foo\"}]}");
         GuardConfig c = GuardConfig.load(home, project);
 
         assertTrue(c.isDisabled("env-read"));
-        assertTrue(c.isDisabled("force-push"));
+        // the project file is repository-controlled: its disable/allow are ignored, only deny is honored
+        assertFalse(c.isDisabled("force-push"));
+        assertFalse(c.isAllowed("anything at all"));
         assertFalse(c.isDisabled("recursive-delete"));
         assertTrue(c.isAllowed("ls -la"));
         assertEquals("custom: project foo", bash(c, "foo").orElseThrow().rule());
@@ -117,9 +119,9 @@ class GuardConfigTest {
     @Test
     void oversizedFileIsIgnored(@TempDir Path home, @TempDir Path project) throws Exception {
         String pad = " ".repeat((int) GuardConfig.MAX_FILE_BYTES);
-        write(project, "{\"disable\":[\"recursive-delete\"]" + pad + "}");
+        write(home, "{\"disable\":[\"recursive-delete\"]" + pad + "}");
         assertTrue(bash(GuardConfig.load(home, project), "rm -rf /").isPresent());
-        write(project, "{\"disable\":[\"recursive-delete\"]}");
+        write(home, "{\"disable\":[\"recursive-delete\"]}");
         assertTrue(bash(GuardConfig.load(home, project), "rm -rf /").isEmpty());
     }
 
@@ -139,5 +141,22 @@ class GuardConfigTest {
         String big = "a".repeat(200_000);
         assertTrue(BoundedMatcher.clip(big).length() <= BoundedMatcher.MAX_INPUT_CHARS + 1);
         assertTrue(BoundedMatcher.find(Pattern.compile("^a+$"), "a".repeat(10)));
+    }
+
+    @Test
+    void allowMustMatchTheWholeSubjectNotJustPartOfIt() {
+        GuardConfig c = GuardConfig.parse("{\"allow\":[\"git push --force-with-lease origin \\\\S+\"]}");
+
+        assertTrue(c.isAllowed("git push --force-with-lease origin main"));
+        // a match inside a compound command must not exempt the rest of it
+        assertFalse(c.isAllowed("git push --force-with-lease origin main && rm -rf /"));
+        assertFalse(c.isAllowed("echo hi; git push --force-with-lease origin main"));
+    }
+
+    @Test
+    void aSubjectTooLongToMatchWholeIsNeverAllowed() {
+        GuardConfig c = GuardConfig.parse("{\"allow\":[\".*\"]}");
+        assertTrue(c.isAllowed("ls"));
+        assertFalse(c.isAllowed("x".repeat(BoundedMatcher.MAX_INPUT_CHARS + 1)));
     }
 }

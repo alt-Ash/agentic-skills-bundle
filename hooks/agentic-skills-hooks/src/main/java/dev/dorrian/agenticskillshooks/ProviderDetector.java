@@ -4,11 +4,11 @@ import java.util.Set;
 
 /**
  * Java port of hooks/lib/event-log.ts's detectProvider. Order matters: env override first,
- * then Gemini (event name), then Cursor (model + user_email key-presence or truthy
+ * then an explicit `agentic_skills_provider` field (OpenCode plugin), then Gemini (event name), then Cursor (model + user_email key-presence or truthy
  * conversation_id), then Codex (any model), else Claude (never carries `model` at all).
  */
 public final class ProviderDetector {
-    private static final Set<String> VALID = Set.of("claude", "gemini", "cursor", "codex", "copilot");
+    private static final Set<String> VALID = Set.of("claude", "gemini", "cursor", "codex", "copilot", "opencode");
 
     private ProviderDetector() {
     }
@@ -18,6 +18,10 @@ public final class ProviderDetector {
         if (envProvider != null && VALID.contains(envProvider)) {
             return envProvider;
         }
+
+        // Tools we forward events for through our own shim (the OpenCode plugin) say so explicitly.
+        String declared = input.stringField("agentic_skills_provider");
+        if (declared != null && VALID.contains(declared)) return declared;
 
         if (isGeminiEvent(input)) return "gemini";
 

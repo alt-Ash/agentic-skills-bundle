@@ -46,6 +46,9 @@ public final class ClaudeTranscriptParser {
             if (message == null || !message.isObject()) continue;
 
             String model = textOrNull(message, "model");
+            // Claude Code writes placeholder messages (e.g. for an API error) with model "<synthetic>" and
+            // zero usage; they are not model output and must not replace the real last message's numbers.
+            if ("<synthetic>".equals(model)) continue;
             if (model != null) out.model = model;
 
             JsonNode usage = message.get("usage");

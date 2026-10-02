@@ -17,10 +17,11 @@ import java.util.regex.PatternSyntaxException;
 /**
  * Optional guard tuning, merged from {@code ~/.agentic-skills/guard.json} (user) and
  * {@code <cwd>/.agentic-skills/guard.json} (project):
- * <pre>{"disable": ["env-read"], "allow": ["^git push --force-with-lease"],
+ * <pre>{"disable": ["env-read"], "allow": ["git push --force-with-lease origin \\S+"],
  *  "deny": [{"pattern": "terraform\\s+destroy", "reason": "no destroys", "tools": ["Bash"]}]}</pre>
- * Merge: {@code disable} and {@code allow} are unioned; {@code deny} entries are unioned and a project
- * entry with the same pattern replaces the user's. Every problem (missing/oversized/invalid file,
+ * Merge: only the USER file can {@code disable} rules or {@code allow} commands (an {@code allow} regex must match
+ * the whole command); the project file can only add {@code deny} rules, because it is repository-controlled.
+ * {@code deny} entries are unioned and a project entry with the same pattern replaces the user's. Every problem (missing/oversized/invalid file,
  * bad or catastrophic regex) is ignored, never thrown: the result is always usable.
  */
 public final class GuardConfig {
@@ -76,10 +77,11 @@ public final class GuardConfig {
     }
 
     static GuardConfig merge(GuardConfig user, GuardConfig project) {
+        // The project file lives in the repository, so a cloned repo (or the model, which can write files) could
+        // use it to switch the guard off. It may therefore only make the guard STRICTER: its `disable` and
+        // `allow` are ignored, only the user-level file can loosen anything.
         Set<String> disabled = new LinkedHashSet<>(user.disabled);
-        disabled.addAll(project.disabled);
         List<Pattern> allow = new ArrayList<>(user.allow);
-        allow.addAll(project.allow);
         Map<String, DenyRule> deny = new LinkedHashMap<>();
         for (DenyRule r : user.deny) deny.put(r.pattern().pattern(), r);
         for (DenyRule r : project.deny) deny.put(r.pattern().pattern(), r);
@@ -153,10 +155,14 @@ public final class GuardConfig {
         return disabled.contains(ruleId);
     }
 
-    /** True when a user {@code allow} regex matches the subject (matching is time-bounded). */
+    /**
+     * True when a user {@code allow} regex matches the WHOLE subject (time-bounded). Whole-match, not
+     * find: otherwise {@code ^git push --force-with-lease} would also exempt
+     * {@code git push --force-with-lease && rm -rf /}.
+     */
     public boolean isAllowed(String subject) {
         for (Pattern p : allow) {
-            if (BoundedMatcher.find(p, subject)) return true;
+            if (BoundedMatcher.matches(p, subject)) return true;
         }
         return false;
     }

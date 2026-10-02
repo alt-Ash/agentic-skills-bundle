@@ -27,6 +27,20 @@ final class BoundedMatcher {
         }
     }
 
+    /**
+     * True only if the pattern matches the WHOLE input (time-bounded). Used for {@code allow} rules: a regex
+     * found somewhere inside a compound command must not exempt the rest of it. Input too long to match
+     * whole is never matched, so an allow rule cannot be satisfied by a clipped view of a huge command.
+     */
+    static boolean matches(Pattern pattern, String input) {
+        if (input == null || input.length() > MAX_INPUT_CHARS) return false;
+        try {
+            return pattern.matcher(new Deadline(input, System.nanoTime() + BUDGET_NANOS)).matches();
+        } catch (Timeout | StackOverflowError e) {
+            return false;
+        }
+    }
+
     /** Over-long input keeps its head and tail so a dangerous suffix cannot hide behind padding. */
     static String clip(String input) {
         if (input.length() <= MAX_INPUT_CHARS) return input;

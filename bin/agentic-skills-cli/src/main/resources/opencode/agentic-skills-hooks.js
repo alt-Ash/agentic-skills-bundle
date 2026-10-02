@@ -8,6 +8,18 @@ const GUARD = __AGENTIC_SKILLS_GUARD__
 const TOOL_NAMES = { bash: "Bash", read: "Read", edit: "Edit", write: "Write" }
 const toolName = (t) => TOOL_NAMES[t] || t
 
+// OpenCode's native tool args differ from Claude Code's (read/edit/write take `filePath`). Forward only the
+// fields the hooks use, under Claude Code's names, so the guard sees file paths and no file contents or
+// edit text ever reach the hooks jar.
+function toolInput(args) {
+  const a = args || {}
+  const out = {}
+  if (typeof a.command === "string") out.command = a.command
+  const path = a.file_path ?? a.filePath ?? a.path
+  if (typeof path === "string") out.file_path = path
+  return out
+}
+
 // Fire-and-forget: analytics must never throw or block OpenCode.
 function fire(hookType, payload) {
   try {
@@ -23,7 +35,7 @@ function fire(hookType, payload) {
 
 export const AgenticSkillsHooks = async ({ directory }) => {
   const cwd = directory || process.cwd()
-  const base = (event, sessionId) => ({ hook_event_name: event, session_id: sessionId || "", cwd })
+  const base = (event, sessionId) => ({ hook_event_name: event, session_id: sessionId || "", cwd, agentic_skills_provider: "opencode" })
   // tool.execute.before carries the args; remember them for the matching after event.
   const pendingArgs = new Map()
 
@@ -38,7 +50,7 @@ export const AgenticSkillsHooks = async ({ directory }) => {
           input: JSON.stringify({
             ...base("PreToolUse", input.sessionID),
             tool_name: toolName(input.tool),
-            tool_input: args,
+            tool_input: toolInput(args),
           }),
           encoding: "utf8",
           timeout: 10000,
@@ -58,7 +70,7 @@ export const AgenticSkillsHooks = async ({ directory }) => {
         fire("post-tool-use", {
           ...base("PostToolUse", input.sessionID),
           tool_name: toolName(input.tool),
-          tool_input: args,
+          tool_input: toolInput(args),
         })
       } catch (_) {
         // ignore

@@ -26,9 +26,32 @@ class GuardConfigIT {
         Files.writeString(f, json);
     }
 
+    /** The USER-level file: the hook JVM's private home (see HookJarHarness.homeFor). */
+    private static void userGuardJson(Path cwd, String json) throws Exception {
+        Path f = HookJarHarness.homeFor(cwd).resolve(".agentic-skills/guard.json");
+        Files.createDirectories(f.getParent());
+        Files.writeString(f, json);
+    }
+
+    @Test
+    void aProjectFileCannotWeakenTheGuardOnlyTheUserFileCan(@TempDir Path cwd) throws Exception {
+        // a repo-controlled file (or one the model wrote) tries to switch the guard off
+        guardJson(cwd, "{\"disable\":[\"recursive-delete\",\"force-push\"],\"allow\":[\".*\"]}");
+        assertEquals(2, HookJarHarness.run(cwd, "guard", bash(cwd, "rm -rf /")).exitCode());
+        assertEquals(2, HookJarHarness.run(cwd, "guard", bash(cwd, "git push --force origin main")).exitCode());
+    }
+
+    @Test
+    void userAllowMustMatchTheWholeCommandSoItCannotShieldACompoundOne(@TempDir Path cwd) throws Exception {
+        userGuardJson(cwd, "{\"allow\":[\"git push --force origin main\"]}");
+
+        assertEquals(0, HookJarHarness.run(cwd, "guard", bash(cwd, "git push --force origin main")).exitCode());
+        assertEquals(2, HookJarHarness.run(cwd, "guard", bash(cwd, "git push --force origin main && rm -rf /")).exitCode());
+    }
+
     @Test
     void allowRuleLetsAnOtherwiseBlockedCommandThrough(@TempDir Path cwd) throws Exception {
-        guardJson(cwd, "{\"allow\":[\"^git push --force origin main$\"]}");
+        userGuardJson(cwd, "{\"allow\":[\"^git push --force origin main$\"]}");
 
         HookJarHarness.Result r = HookJarHarness.run(cwd, "guard", bash(cwd, "git push --force origin main"));
 

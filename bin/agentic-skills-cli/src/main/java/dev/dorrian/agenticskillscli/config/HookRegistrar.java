@@ -173,9 +173,38 @@ public final class HookRegistrar {
         return false;
     }
 
+    /**
+     * Which opt-in hooks (guard, verify, context) are currently registered by us in this settings file. An
+     * unparsable or missing file reports none. Lets the installer default its questions to the current state
+     * instead of silently dropping an opt-in the user enabled earlier.
+     */
+    public static HookInstallOptions registeredOptIns(Path settingsFile) {
+        if (!(readJsonObjectOrEmpty(settingsFile).get(HOOKS_KEY) instanceof Map<?, ?> hooksSection)) {
+            return HookInstallOptions.NONE;
+        }
+        return new HookInstallOptions(
+            hasHookType(hooksSection, HooksRegistry.GUARD),
+            hasHookType(hooksSection, HooksRegistry.VERIFY),
+            hasHookType(hooksSection, HooksRegistry.CONTEXT));
+    }
+
+    private static boolean hasHookType(Map<?, ?> hooksSection, HookDescriptor descriptor) {
+        for (String event : descriptor.claudeEventNames()) {
+            if (hooksSection.get(event) instanceof List<?> entries && alreadyRegistered(castList(entries), descriptor.hookType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> castList(List<?> list) {
+        return (List<Object>) list;
+    }
+
     /** True if {@code settings.json} contains at least one of our hook commands. */
     public static boolean isRegistered(Path settingsFile) {
-        if (!(readJsonObject(settingsFile).get(HOOKS_KEY) instanceof Map<?, ?> hooksSection)) {
+        if (!(readJsonObjectOrEmpty(settingsFile).get(HOOKS_KEY) instanceof Map<?, ?> hooksSection)) {
             return false;
         }
         for (Object eventEntries : hooksSection.values()) {
@@ -201,7 +230,12 @@ public final class HookRegistrar {
         if (!Files.exists(settingsFile)) {
             return 0;
         }
-        Map<String, Object> config = readJsonObject(settingsFile);
+        Map<String, Object> config;
+        try {
+            config = readJsonObject(settingsFile);
+        } catch (UncheckedIOException e) {
+            return 0; // unparsable: leave it exactly as it is
+        }
         if (!(config.get(HOOKS_KEY) instanceof Map<?, ?> rawHooks)) {
             return 0;
         }
@@ -258,6 +292,12 @@ public final class HookRegistrar {
         return null;
     }
 
+    /**
+     * Reads the settings file for a read-modify-write. A file that exists but cannot be parsed is an
+     * error, never an empty map: treating it as empty would make the caller rewrite the file with only
+     * our entries and silently destroy the user's other settings (comments and trailing commas in a
+     * tool's settings file make this likely).
+     */
     private static Map<String, Object> readJsonObject(Path file) {
         if (!Files.exists(file)) {
             return new LinkedHashMap<>();
@@ -265,6 +305,22 @@ public final class HookRegistrar {
         try {
             return MAPPER.readValue(file.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
         } catch (IOException e) {
+            throw new UncheckedIOException("Cannot parse " + file + " (" + firstLine(e.getMessage())
+                + "). It was left untouched: fix or remove the syntax error and run the installer again.", e);
+        }
+    }
+
+    private static String firstLine(String message) {
+        if (message == null) return "invalid JSON";
+        int nl = message.indexOf('\n');
+        return nl < 0 ? message : message.substring(0, nl);
+    }
+
+    /** Read-only callers (detection) treat an unparsable file as "nothing registered". */
+    private static Map<String, Object> readJsonObjectOrEmpty(Path file) {
+        try {
+            return readJsonObject(file);
+        } catch (UncheckedIOException e) {
             return new LinkedHashMap<>();
         }
     }
