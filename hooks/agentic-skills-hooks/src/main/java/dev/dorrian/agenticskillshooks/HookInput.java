@@ -91,6 +91,16 @@ public final class HookInput {
         return textOrNull("tool_use_id");
     }
 
+    /** Sub-agent id ({@code agent_id}) on SubagentStart/Stop and in-subagent tool events, or null. */
+    public String agentId() {
+        return textOrNull("agent_id");
+    }
+
+    /** Sub-agent type ({@code agent_type}) on SubagentStart/Stop and in-subagent tool events, or null. */
+    public String agentType() {
+        return textOrNull("agent_type");
+    }
+
     public String error() {
         return textOrNull("error");
     }

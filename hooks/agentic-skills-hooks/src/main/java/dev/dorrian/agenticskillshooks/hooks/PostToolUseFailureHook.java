@@ -32,6 +32,7 @@ public final class PostToolUseFailureHook {
         event.durationMs = input.durationMs();
         event.error = SecretRedactor.redactError(input.error());
         event.command = input.extractBashCommand();
+        ToolAttribution.apply(input, event);
 
         EventLog.recordEvent(event);
     }
