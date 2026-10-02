@@ -5,7 +5,8 @@ import dev.dorrian.agenticskillshooks.HookInput;
 import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
 import dev.dorrian.agenticskillshooks.SlashCommandExtractor;
-import dev.dorrian.agenticskillshooks.UsageEvent;
+import dev.dorrian.agenticskillshooks.transcript.ClaudeTranscriptParser;
+import dev.dorrian.usagestore.UsageEvent;
 
 import java.time.Instant;
 
@@ -38,10 +39,14 @@ public final class UserPromptSubmitHook {
         event.permissionMode = input.permissionMode();
         event.promptId = input.promptId();
         event.slashCommand = SlashCommandExtractor.extract(prompt);
+        event.model = input.model() != null ? input.model() : EventLog.sessionModel(input.sessionId());
+        if ("claude".equals(provider) && input.transcriptPath() != null) {
+            event.isInterrupt = ClaudeTranscriptParser.previousTurnInterrupted(input.transcriptPath());
+        }
         return event;
     }
 
     public static void run(HookInput input) {
-        EventLog.recordEvent("user-prompt-submit", buildEvent(input));
+        EventLog.recordEvent(buildEvent(input));
     }
 }

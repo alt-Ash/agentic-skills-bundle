@@ -4,7 +4,7 @@ import dev.dorrian.agenticskillshooks.EventLog;
 import dev.dorrian.agenticskillshooks.HookInput;
 import dev.dorrian.agenticskillshooks.IdentityResolver;
 import dev.dorrian.agenticskillshooks.ProviderDetector;
-import dev.dorrian.agenticskillshooks.UsageEvent;
+import dev.dorrian.usagestore.UsageEvent;
 
 import java.time.Instant;
 
@@ -36,7 +36,24 @@ public final class StopHook {
         event.lastMessageCharLength = msgLength;
         event.estimatedOutputTokens = Math.round(msgLength / 4.0f);
         event.backgroundTaskCount = input.backgroundTaskCount();
+        applyUsage(input, event);
 
-        EventLog.recordEvent("stop", event);
+        EventLog.recordEvent(event);
+    }
+
+    /** Copies real model/token usage from the transcript onto the event; any failure leaves it untouched. */
+    static void applyUsage(HookInput input, UsageEvent event) {
+        try {
+            PostToolUseHook.UsageRecord r = PostToolUseHook.buildRecord(input);
+            if (!"unavailable".equals(r.model)) event.model = r.model;
+            event.inputTokens = r.inputTokens;
+            // The turn's total across all its API messages; falls back to the last message's number.
+            event.outputTokens = r.turnOutputTokens != null ? r.turnOutputTokens : r.outputTokens;
+            event.cacheReadTokens = r.cacheReadTokens;
+            event.cacheCreationTokens = r.cacheCreationTokens;
+            event.cachedTokens = r.cachedTokens;
+        } catch (RuntimeException ignored) {
+            // fail open: the turn_stop event is still recorded without usage
+        }
     }
 }

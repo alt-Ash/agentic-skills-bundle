@@ -7,6 +7,8 @@ import dev.dorrian.agenticskillscli.install.AgentInstaller;
 import dev.dorrian.agenticskillscli.install.CommandDescriptor;
 import dev.dorrian.agenticskillscli.install.CommandInstaller;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
+import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
+import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
@@ -68,6 +70,8 @@ public final class QuickInstallFlow {
             quickTools.add(ToolChoiceBuilder.keyForLabel(labelsByKey, label));
         }
 
+        HookInstallOptions hookOptions = HookOptionsPrompt.ask(prompter, quickTools);
+
         List<AzureOrg> azureOrgs = CredentialPrompts.collectAzureOrgs(prompter);
         List<GithubAccount> githubAccounts = CredentialPrompts.collectGithubAccounts(prompter);
 
@@ -114,15 +118,13 @@ public final class QuickInstallFlow {
                 JsonConfigStore.installMcpServers(linkedMcps, toolKey);
             }
 
-            if ("claude".equals(toolKey)) {
-                McpConfigRegistry.get("claude").ifPresent(cfg -> {
-                    try {
-                        HooksInstaller.installAndRegister(cfg.globalFile());
-                        System.out.println(Ansi.dim("  Analytics hooks installed and registered."));
-                    } catch (RuntimeException e) {
-                        System.out.println(Ansi.yellow("  Analytics hooks not registered: " + e.getMessage()));
-                    }
-                });
+            if (HookToolSupport.supports(toolKey)) {
+                try {
+                    HooksInstaller.installForTool(toolKey, hookOptions);
+                    System.out.println(Ansi.dim("  Hooks installed and registered for " + tool.name() + "."));
+                } catch (RuntimeException e) {
+                    System.out.println(Ansi.yellow("  Hooks not registered for " + tool.name() + ": " + e.getMessage()));
+                }
             }
         }
 

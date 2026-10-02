@@ -13,7 +13,7 @@ class McpConfigRegistryTest {
     @Test
     void hasExactlyEightTools() {
         assertEquals(8, McpConfigRegistry.ALL.size());
-        assertTrue(McpConfigRegistry.ALL.containsKey("gemini"));
+        assertTrue(McpConfigRegistry.ALL.containsKey("antigravity"));
         assertTrue(McpConfigRegistry.ALL.containsKey("codex"));
         assertTrue(McpConfigRegistry.ALL.containsKey("opencode"));
         assertTrue(McpConfigRegistry.ALL.containsKey("claude"));
@@ -24,10 +24,10 @@ class McpConfigRegistryTest {
     }
 
     @Test
-    void geminiUsesSettingsJsonMcpServers() {
-        McpConfigDef gemini = McpConfigRegistry.get("gemini").orElseThrow();
-        assertTrue(gemini.globalFile().endsWith(java.nio.file.Path.of(".gemini", "settings.json")));
-        assertEquals("mcpServers", gemini.mcpKey());
+    void antigravityUsesTheSharedMcpConfigJson() {
+        McpConfigDef agy = McpConfigRegistry.get("antigravity").orElseThrow();
+        assertTrue(agy.globalFile().endsWith(java.nio.file.Path.of(".gemini", "config", "mcp_config.json")));
+        assertEquals("mcpServers", agy.mcpKey());
     }
 
     @Test

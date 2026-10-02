@@ -25,8 +25,27 @@ public final class HooksRegistry {
         new HookDescriptor("post-tool-use-failure", List.of("PostToolUseFailure")),
         new HookDescriptor("user-prompt-submit", List.of("UserPromptSubmit")),
         new HookDescriptor("stop", List.of("Stop")),
-        new HookDescriptor("session", List.of("SessionStart", "SessionEnd"))
+        new HookDescriptor("session", List.of("SessionStart", "SessionEnd")),
+        new HookDescriptor("subagent", List.of("SubagentStart", "SubagentStop"))
     );
+
+    /**
+     * Opt-in guardrail: the only hook that can block (exit 2). Kept out of {@link #ALL} so a
+     * plain install stays observation-only; registered only when the user asks for it.
+     */
+    public static final HookDescriptor GUARD = new HookDescriptor(
+        "guard", List.of("PreToolUse"), "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+
+    /**
+     * Opt-in {@code Stop} gate: blocks stopping while the project's configured checks fail. The host timeout
+     * (600s) must stay above the gate's own per-command cap ({@code VerifyConfig.MAX_TIMEOUT_SECONDS}), or the
+     * host would kill the hook before it could block.
+     */
+    public static final HookDescriptor VERIFY = new HookDescriptor("verify", List.of("Stop"), "", 600);
+
+    /** Opt-in context injector at session start, resume and after compaction. */
+    public static final HookDescriptor CONTEXT = new HookDescriptor(
+        "context", List.of("SessionStart"), "startup|resume|compact", 10);
 
     private HooksRegistry() {
     }

@@ -13,9 +13,9 @@ import java.util.Optional;
  * Per-tool MCP config file locations — originally a port of {@code bin/install.js}'s
  * {@code MCP_CONFIG} object, now covering all 8 tools:
  * <ul>
- *   <li>gemini: {@code ~/.gemini/settings.json} → {@code mcpServers} (stdio {@code
- *       {command,args,env}} with {@code $VAR} expansion in {@code env}, remote {@code
- *       {httpUrl,headers}}) — github.com/google-gemini/gemini-cli docs/tools/mcp-server.md</li>
+ *   <li>antigravity: {@code ~/.gemini/config/mcp_config.json} → {@code mcpServers} (stdio {@code
+ *       {command,args,env}}, remote {@code {serverUrl,headers}}; shared by the CLI and the desktop IDE;
+ *       shape verified with {@code agy mcp add})</li>
  *   <li>codex: {@code ~/.codex/config.toml} → {@code [mcp_servers.<name>]} tables, edited
  *       text-level by {@link dev.dorrian.agenticskillscli.config.TomlMcpConfigStore}
  *       (serverFormat {@code "toml"}) — learn.chatgpt.com/docs/extend/mcp</li>
@@ -56,8 +56,10 @@ public final class McpConfigRegistry {
         m.put("cursor", new McpConfigDef(
             "cursor", home(".cursor", "mcp.json"), "mcpServers", "stdio"
         ));
-        m.put("gemini", new McpConfigDef(
-            "gemini", home(".gemini", "settings.json"), "mcpServers", "stdio"
+        // Antigravity keeps MCP servers in a standalone mcp_config.json (verified with `agy mcp add`), shared by the
+        // CLI and the desktop IDE. Remote servers use serverUrl; see GlobalMcpConfigRegistry.
+        m.put("antigravity", new McpConfigDef(
+            "antigravity", home(".gemini", "config", "mcp_config.json"), "mcpServers", "stdio"
         ));
         m.put("codex", new McpConfigDef(
             "codex", home(".codex", "config.toml"), "mcp_servers", "toml"

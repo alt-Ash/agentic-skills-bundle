@@ -42,6 +42,12 @@
       <version>4.4.6</version>
     </dependency>
     <dependency>
+      <groupId>dev.dorrian.usagestore</groupId>
+      <artifactId>agentic-skills-usage-store</artifactId>
+      <version>${revision}</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>6.1.3</version>

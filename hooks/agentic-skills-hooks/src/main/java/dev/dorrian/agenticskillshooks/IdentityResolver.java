@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillshooks;
 
+import dev.dorrian.usagestore.UsageDb;
+
 import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -7,7 +9,7 @@ import java.util.regex.Pattern;
 /**
  * Java port of hooks/lib/event-log.ts's resolveIdentity/resolveUser/resolveProject/
  * gitClientName/gitRepoName. Resolves user/project/client once per session, preferring the
- * tiny session-baseline cache over re-shelling to git on every hook invocation.
+ * stored session row over re-shelling to git on every hook invocation.
  */
 public final class IdentityResolver {
     private static final Pattern REMOTE_URL = Pattern.compile("[/:]([^/:]+)/([^/]+)$");
@@ -89,13 +91,13 @@ public final class IdentityResolver {
     }
 
     public static ResolvedIdentity resolveIdentity(HookInput input, String provider) {
-        SessionBaselineStore.SessionBaseline baseline = SessionBaselineStore.read(input.sessionId());
+        UsageDb.SessionRow stored = EventLog.session(input.sessionId());
         // client is intentionally not checked for truthiness — null is a legitimate value
         // (no origin remote). user/project are checked as a guard against a corrupted record.
-        if (baseline != null
-                && baseline.user != null && !baseline.user.isEmpty()
-                && baseline.project != null && !baseline.project.isEmpty()) {
-            return new ResolvedIdentity(baseline.user, baseline.project, baseline.client);
+        if (stored != null
+                && stored.user() != null && !stored.user().isEmpty()
+                && stored.project() != null && !stored.project().isEmpty()) {
+            return new ResolvedIdentity(stored.user(), stored.project(), stored.client());
         }
 
         ParsedRemote remoteInfo = gitRemoteOriginInfo();

@@ -99,33 +99,19 @@ evals/
 
 ---
 
-## 3. The npm scripts
+## 3. Running evals
 
-| Script | Command | What it does |
-|---|---|---|
-| `npm test` | `mvn test -f bin/agentic-skills-cli/pom.xml -Dtest=...` | Static checks on agent/skill/command `.md` files (lives alongside the installer, not here — see `bin/agentic-skills-cli`'s `content/` package). No model calls. Unaffected by this harness. |
-| `npm run eval` | `mvn -f evals/agentic-skills-evals/pom.xml test` | Runs **all** behavioral evals once, for real. |
-| `npm run eval:select` | builds the jar, then `EvalCli select` | Interactive checkbox picker (agent → scenario tree, built on `org.jline:jline`). |
-| `npm run report` | builds the jar, then `EvalCli report` | Build `REPORT.md` + `report.json` from history. |
-| `npm run eval:baseline` | builds the jar, then `EvalCli report --save-baseline` | Same as report, plus pin current window to `baselines.json`. |
+All Maven; there is no npm. Billed classes (`*EvalTest`) are excluded from a plain `verify`; opt in with `-Pbilled-evals`.
 
-A single agent/scenario battery can also be run directly without going through npm:
-`java -cp evals/agentic-skills-evals/target/agentic-skills-evals.jar dev.dorrian.agenticskillsevals.cli.EvalCli check <agent-name>`
-(the jar must already be built — `mvn -q -DskipTests package -f evals/agentic-skills-evals/pom.xml`).
-Note: the JUnit Platform Launcher can't precisely select one `@TestFactory`-generated
-scenario before its containing test class runs, so `check <agent> <scenario>` runs every
-scenario for that agent and prints a note telling you to scan the output for the one you
-named — this is a real JUnit limitation, not a bug.
+| Goal | Command |
+|---|---|
+| Static checks on agent/skill/command `.md` (no model calls; lives in `bin/agentic-skills-cli`'s `content/` package) | `./mvnw -pl bin/agentic-skills-cli -am test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest,TokenBudgetTest -Dsurefire.failIfNoSpecifiedTests=false` |
+| One agent's evals, for real | `./mvnw -pl evals/agentic-skills-evals -Pbilled-evals test -Dtest=TddEngineerEvalTest` |
+| Interactive picker / report / baseline | build the jar (`./mvnw -q -DskipTests -pl evals/agentic-skills-evals package`), then `java -cp evals/agentic-skills-evals/target/agentic-skills-evals.jar dev.dorrian.agenticskillsevals.cli.EvalCli select \| report [--save-baseline] \| check <agent>` |
 
-Override the model for any behavioral run with `EVAL_MODEL=<model>` (default
-`claude-haiku-4-5-20251001`).
+`check <agent> <scenario>` runs every scenario for that agent: the JUnit Platform Launcher cannot select one `@TestFactory`-generated scenario before its class runs (a JUnit limitation, not a bug). Override the model with `EVAL_MODEL=<model>` (default `claude-haiku-4-5-20251001`).
 
-There's also a `/eval-agent` slash command (`.opencode/commands/eval-agent.md`) for repo
-contributors to run a quick check against an agent right after editing it, without
-remembering the Maven/CLI invocation. It is **deliberately not installed for end users** —
-it's absent from every installer registry (`CommandRegistry` etc. in `bin/agentic-skills-cli`)
-because it requires a locally-built jar and a `claude login` session, neither of which
-should be a prerequisite for consumers of this npm package.
+`/eval-agent` (`.opencode/commands/eval-agent.md`) is a contributor shortcut for a quick check after editing an agent. It is **deliberately not installed for end users**: it is absent from every installer registry because it needs a locally-built jar and a `claude login` session.
 
 ---
 
@@ -346,7 +332,7 @@ Each run writes its own history record, which is exactly what the report needs t
 
 ---
 
-## 10. Token-efficiency report (`EvalCli report` / `npm run report`)
+## 10. Token-efficiency report (`EvalCli report`)
 
 This is the workflow for "did my prompt change make the agent cheaper without making it worse".
 
@@ -371,10 +357,10 @@ scenario just gets no delta computed).
 ### 10.2 The token-efficiency loop (the actual workflow)
 
 ```
-1. npm run eval:select -- --runs=10      # ≥10 runs → a current window of history
-2. npm run report                        # snapshot current token/quality stats
+1. run the agent's evals ≥10×            # builds a current window of history
+2. EvalCli report                        # snapshot current token/quality stats
 3. trim the agent prompt in agents/<agent>.md
-4. re-run 10×, then npm run report       # new window becomes "current", old becomes "previous"
+4. re-run ≥10×, then EvalCli report      # new window is "current", old becomes "previous"
 5. read the alerts:
      EFFICIENCY WIN      → keep the edit
      QUALITY REGRESSION  → revert/iterate (even if it was cheaper)
@@ -426,12 +412,3 @@ touching it. Summary:
 
 **Mark a held-out case:** put `holdout` in the scenario name. Refine against non-holdout
 cases; validate on holdout ones to avoid overfitting. The report tags them automatically.
-
----
-
-## 13. Diversity & coverage (course alignment)
-
-Good eval sets are representative + diverse: happy path, edge cases, adversarial input, and
-empty/near-empty input. `issue-architect` currently covers full-flow (happy), ambiguous (edge),
-empty, and prompt-injection (adversarial, held-out). The same pattern extends to the other
-agents (`tdd-engineer`, `security-auditor`, `security-implementor`) as bulk cases are added.

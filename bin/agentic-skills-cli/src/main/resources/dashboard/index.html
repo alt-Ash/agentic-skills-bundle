@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agentic Skills Usage</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header>
+    <h1>Agentic Skills usage</h1>
+    <form id="filters" aria-label="Filters">
+      <label>From <input type="date" name="from"></label>
+      <label>To <input type="date" name="to"></label>
+      <label>Project <select name="project"><option value="">All</option></select></label>
+      <label>Model <select name="model"><option value="">All</option></select></label>
+      <label class="chk" title="Keep only sessions with at least 2 prompts or 1 tool call, so one-shot and eval runs do not skew averages"><input type="checkbox" name="interactive" value="1"> Substantive sessions only</label>
+      <label class="chk" title="Needs both From and To. Compares with the window of equal length right before it"><input type="checkbox" name="compare" value="prev" disabled> Compare to previous period</label>
+      <button type="button" id="reset">Reset</button>
+    </form>
+    <div class="exports">Export CSV: <a id="exp-sessions" href="/api/export/sessions.csv" download>sessions</a> <a id="exp-events" href="/api/export/events.csv" download>events</a></div>
+  </header>
+  <nav id="tabs" role="tablist" aria-label="Views"></nav>
+  <main id="view" tabindex="-1"></main>
+  <footer id="foot"></footer>
+  <script src="/vendor/chart.umd.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

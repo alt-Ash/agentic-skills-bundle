@@ -37,6 +37,7 @@
   </properties>
 
   <modules>
+    <module>data/agentic-skills-usage-store</module>
     <module>hooks/agentic-skills-hooks</module>
     <module>mcp/security-scanner</module>
     <module>mcp/issue-tickets</module>

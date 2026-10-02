@@ -15,6 +15,9 @@ public final class CodexTranscriptParser {
         public String model;
         public Integer inputTokens;
         public Integer cachedTokens;
+        public Integer outputTokens;
+        public Integer cacheReadTokens;
+        public Integer cacheCreationTokens;
     }
 
     public static Extracted extract(String path) {
@@ -42,6 +45,10 @@ public final class CodexTranscriptParser {
                     out.inputTokens = usage.get("input_tokens").asInt();
                     out.cachedTokens = (usage.has("cached_input_tokens") && usage.get("cached_input_tokens").isNumber())
                             ? usage.get("cached_input_tokens").asInt()
+                            : null;
+                    out.cacheReadTokens = out.cachedTokens;
+                    out.outputTokens = (usage.has("output_tokens") && usage.get("output_tokens").isNumber())
+                            ? usage.get("output_tokens").asInt()
                             : null;
                 }
             }

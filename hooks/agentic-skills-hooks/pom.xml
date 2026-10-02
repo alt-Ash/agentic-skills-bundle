@@ -33,6 +33,12 @@
 
   <dependencies>
     <dependency>
+      <groupId>dev.dorrian.usagestore</groupId>
+      <artifactId>agentic-skills-usage-store</artifactId>
+      <version>${revision}</version>
+    </dependency>
+
+    <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>${jackson.version}</version>

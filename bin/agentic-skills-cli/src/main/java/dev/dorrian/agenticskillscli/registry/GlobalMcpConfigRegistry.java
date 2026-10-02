@@ -29,8 +29,8 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.of;
  *       {@code ~/.config/devin/mcp_config.json} (see {@link McpConfigRegistry})</li>
  *   <li>zed: {@code {url, headers?}} under {@code context_servers} — zed.dev/docs/ai/mcp
  *       (Zed starts the MCP OAuth flow when no Authorization header is set)</li>
- *   <li>gemini: {@code {httpUrl, headers?}} (streamable HTTP), stdio {@code {command, args}};
- *       no {@code type} key — context7 /google-gemini/gemini-cli docs/tools/mcp-server.md</li>
+ *   <li>antigravity: {@code {serverUrl, headers?}} (url/httpUrl are rejected), stdio {@code {command, args}};
+ *       no {@code type} key — verified with {@code agy mcp add}, antigravity.google/docs/cli/mcp</li>
  *   <li>codex: {@code url} + {@code http_headers} inline table, stdio {@code command}/{@code args}
  *       — context7 /llmstxt/learn_chatgpt_llms-full_txt (learn.chatgpt.com/docs/extend/mcp)</li>
  * </ul>
@@ -40,7 +40,7 @@ public final class GlobalMcpConfigRegistry {
     /** Shown by the install flows: figma needs no token any more, but setup differs per tool. */
     public static final String FIGMA_SETUP_NOTE =
         "sign in via OAuth on first use (Claude Code, Cursor, VS Code; Codex: run `codex mcp login figma-mcp`); "
-            + "OpenCode/Devin Desktop/Zed/Gemini CLI use the Figma desktop app's Dev Mode server";
+            + "OpenCode/Devin Desktop/Zed/Antigravity use the Figma desktop app's Dev Mode server";
 
     /** Context7 hosted endpoint — github.com/upstash/context7 docs/resources/all-clients.mdx. */
     static final String CONTEXT7_URL = "https://mcp.context7.com/mcp";
@@ -57,8 +57,8 @@ public final class GlobalMcpConfigRegistry {
     /**
      * Figma desktop app's local server (Dev Mode) — no auth, not client-gated
      * (developers.figma.com/docs/figma-mcp-server/local-server-installation).
-     * Used for opencode/windsurf/zed/gemini: Zed is catalogued as local-server-only,
-     * and opencode/windsurf/Gemini CLI are absent from the catalog entirely, so the
+     * Used for opencode/windsurf/zed/antigravity: Zed is catalogued as local-server-only,
+     * and opencode/windsurf/Antigravity are absent from the catalog entirely, so the
      * hosted server's OAuth would reject them. The previous npx fallback
      * ({@code @figma/mcp}) is not an option: that package 404s on npm.
      */
@@ -75,7 +75,7 @@ public final class GlobalMcpConfigRegistry {
         if ("zed".equals(toolKey)) {
             return of("source", "custom", "command", "engram", "args", list("mcp"));
         }
-        if ("gemini".equals(toolKey) || "codex".equals(toolKey)) {
+        if ("antigravity".equals(toolKey) || "codex".equals(toolKey)) {
             return of("command", "engram", "args", list("mcp"));
         }
         return of("type", "stdio", "command", "engram", "args", list("mcp"));
@@ -114,8 +114,7 @@ public final class GlobalMcpConfigRegistry {
                 cfg.put("type", "http");
                 cfg.put("url", url);
             }
-            case "windsurf" -> cfg.put("serverUrl", url);
-            case "gemini" -> cfg.put("httpUrl", url);
+            case "windsurf", "antigravity" -> cfg.put("serverUrl", url); // Antigravity rejects url/httpUrl
             // cursor, zed, codex, and any future tool: plain {url}
             default -> cfg.put("url", url);
         }

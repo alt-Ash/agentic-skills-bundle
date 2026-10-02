@@ -1,5 +1,7 @@
 package dev.dorrian.agenticskillshooks;
 
+import dev.dorrian.usagestore.SecretRedactor;
+
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
@@ -81,12 +83,27 @@ public final class HookInput {
         return textOrNull("prompt_id");
     }
 
+    /** A top-level string field of the payload, or null. For tool-specific extras that have no dedicated accessor. */
+    public String stringField(String key) {
+        return textOrNull(key);
+    }
+
     public String toolName() {
         return textOrNull("tool_name");
     }
 
     public String toolUseId() {
         return textOrNull("tool_use_id");
+    }
+
+    /** Sub-agent id ({@code agent_id}) on SubagentStart/Stop and in-subagent tool events, or null. */
+    public String agentId() {
+        return textOrNull("agent_id");
+    }
+
+    /** Sub-agent type ({@code agent_type}) on SubagentStart/Stop and in-subagent tool events, or null. */
+    public String agentType() {
+        return textOrNull("agent_type");
     }
 
     public String error() {
@@ -101,6 +118,14 @@ public final class HookInput {
     public String sessionId() {
         String sid = textOrNull("session_id");
         return sid != null ? sid : conversationId();
+    }
+
+    /** A string field of {@code tool_input} (e.g. {@code file_path}, {@code command}), or null. */
+    public String toolInputText(String key) {
+        JsonNode toolInput = raw.get("tool_input");
+        if (toolInput == null || !toolInput.isObject()) return null;
+        JsonNode value = toolInput.get(key);
+        return (value != null && value.isTextual()) ? value.asText() : null;
     }
 
     private String toolInputCommand() {

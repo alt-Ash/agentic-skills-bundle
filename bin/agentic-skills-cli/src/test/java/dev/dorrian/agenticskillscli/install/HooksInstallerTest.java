@@ -78,7 +78,7 @@ class HooksInstallerTest {
 
         int removed = HooksInstaller.uninstall(targetJar, settings);
 
-        assertEquals(6, removed);
+        assertEquals(8, removed);
         assertFalse(Files.exists(targetJar));
         assertFalse(Files.exists(targetJar.getParent()), "empty hooks dir should be removed");
         assertFalse(new ObjectMapper().readTree(settings.toFile()).has("hooks"));

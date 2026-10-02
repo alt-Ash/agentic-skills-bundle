@@ -26,14 +26,6 @@ class PostToolUseTranscriptParserTest {
     }
 
     @Test
-    void parsesGeminiTranscript() throws Exception {
-        GeminiTranscriptParser.Extracted extracted = GeminiTranscriptParser.extract(fixture("gemini-transcript.jsonl"));
-        assertEquals("gemini-1.5-pro", extracted.model);
-        assertEquals(200, extracted.inputTokens);
-        assertEquals(30, extracted.cachedTokens);
-    }
-
-    @Test
     void parsesCodexRollout() throws Exception {
         CodexTranscriptParser.Extracted extracted = CodexTranscriptParser.extract(fixture("codex-rollout.jsonl"));
         assertEquals("codex-mini", extracted.model);

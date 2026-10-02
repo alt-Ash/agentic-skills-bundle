@@ -13,12 +13,6 @@ class ProviderDetectorTest {
     }
 
     @Test
-    void detectsGeminiByEventName() {
-        HookInput input = HookInput.parse("{\"hook_event_name\":\"AfterTool\"}");
-        assertEquals("gemini", ProviderDetector.detect(input));
-    }
-
-    @Test
     void detectsCursorWhenModelAndUserEmailKeyPresentEvenIfNull() {
         HookInput input = HookInput.parse("{\"model\":\"gpt-4\",\"user_email\":null}");
         assertEquals("cursor", ProviderDetector.detect(input));
@@ -49,8 +43,19 @@ class ProviderDetectorTest {
     }
 
     @Test
-    void hookEventNameWinsOverModelForGeminiDetection() {
-        HookInput input = HookInput.parse("{\"hook_event_name\":\"AfterTool\",\"model\":\"gemini-pro\"}");
-        assertEquals("gemini", ProviderDetector.detect(input));
+    void claudeSessionEventsWithoutTimestampStayClaude() {
+        assertEquals("claude", ProviderDetector.detect(HookInput.parse("{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}")));
+    }
+
+    @Test
+    void anExplicitProviderDeclaredByOurOpenCodeShimWins() {
+        HookInput input = HookInput.parse("{\"hook_event_name\":\"SessionStart\",\"agentic_skills_provider\":\"opencode\"}");
+        assertEquals("opencode", ProviderDetector.detect(input));
+    }
+
+    @Test
+    void anUnknownDeclaredProviderIsIgnored() {
+        HookInput input = HookInput.parse("{\"agentic_skills_provider\":\"made-up\"}");
+        assertEquals("claude", ProviderDetector.detect(input));
     }
 }

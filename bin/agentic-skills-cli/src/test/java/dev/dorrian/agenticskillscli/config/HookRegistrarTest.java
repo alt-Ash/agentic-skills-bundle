@@ -43,8 +43,78 @@ class HookRegistrarTest {
         assertCommandArgsEndWith(hooks, "SessionEnd", "session");
     }
 
+    @Test
+    void subagentAnalyticsAreAlwaysRegisteredButVerifyAndContextOnlyWhenOptedIn(@TempDir Path tempDir) throws IOException {
+        Path jarPath = tempDir.resolve("agentic-skills-hooks.jar");
+        Path plain = tempDir.resolve("plain.json");
+        Path all = tempDir.resolve("all.json");
+
+        HookRegistrar.registerAll(plain, jarPath);
+        HookRegistrar.registerAll(all, jarPath, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, true, true));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plainHooks = (Map<String, Object>) MAPPER.readValue(plain.toFile(),
+            new TypeReference<LinkedHashMap<String, Object>>() {}).get("hooks");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> allHooks = (Map<String, Object>) MAPPER.readValue(all.toFile(),
+            new TypeReference<LinkedHashMap<String, Object>>() {}).get("hooks");
+
+        assertTrue(plainHooks.containsKey("SubagentStart"));
+        assertTrue(plainHooks.containsKey("SubagentStop"));
+        assertFalse(plainHooks.containsKey("PreToolUse"));
+        assertEquals(1, ((List<?>) plainHooks.get("Stop")).size());
+        assertEquals(1, ((List<?>) plainHooks.get("SessionStart")).size());
+
+        // Opt-ins share the Stop and SessionStart events with the analytics hooks as separate entries.
+        assertEquals(2, ((List<?>) allHooks.get("Stop")).size());
+        assertEquals(2, ((List<?>) allHooks.get("SessionStart")).size());
+        assertCommandArgsEndWith(allHooks, "PreToolUse", "guard", "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> verifyEntry = (Map<String, Object>) ((List<?>) allHooks.get("Stop")).get(1);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> verifyCommand = (Map<String, Object>) ((List<?>) verifyEntry.get("hooks")).get(0);
+        assertEquals(600, verifyCommand.get("timeout"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> contextEntry = (Map<String, Object>) ((List<?>) allHooks.get("SessionStart")).get(1);
+        assertEquals("startup|resume|compact", contextEntry.get("matcher"));
+
+        // Registering again changes nothing.
+        String before = Files.readString(all);
+        HookRegistrar.registerAll(all, jarPath, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, true, true));
+        assertEquals(before, Files.readString(all));
+    }
+
+    @Test
+    void guardHookIsRegisteredOnlyWhenOptedIn(@TempDir Path tempDir) throws IOException {
+        Path jarPath = tempDir.resolve("agentic-skills-hooks.jar");
+        Path plain = tempDir.resolve("plain.json");
+        Path guarded = tempDir.resolve("guarded.json");
+
+        HookRegistrar.registerAll(plain, jarPath);
+        HookRegistrar.registerAll(guarded, jarPath, true);
+
+        Map<String, Object> plainHooks = MAPPER.readValue(plain.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+        Map<String, Object> guardedHooks = MAPPER.readValue(guarded.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plainSection = (Map<String, Object>) plainHooks.get("hooks");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> guardedSection = (Map<String, Object>) guardedHooks.get("hooks");
+
+        assertFalse(plainSection.containsKey("PreToolUse"));
+        assertCommandArgsEndWith(guardedSection, "PreToolUse", "guard", "Bash|Read|Edit|Write|MultiEdit|NotebookEdit", 10);
+
+        HookRegistrar.unregisterAll(guarded);
+        assertFalse(guarded.toFile().length() > 0 && MAPPER.readTree(guarded.toFile()).has("hooks"));
+    }
+
     @SuppressWarnings("unchecked")
     private static void assertCommandArgsEndWith(Map<String, Object> hooks, String event, String expectedHookType) {
+        assertCommandArgsEndWith(hooks, event, expectedHookType, "", 30);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void assertCommandArgsEndWith(Map<String, Object> hooks, String event, String expectedHookType,
+                                                 String expectedMatcher, int expectedTimeout) {
         List<Object> entries = (List<Object>) hooks.get(event);
         Map<String, Object> entry = (Map<String, Object>) entries.get(0);
         List<Object> commands = (List<Object>) entry.get("hooks");
@@ -53,6 +123,8 @@ class HookRegistrarTest {
         assertEquals(expectedHookType, args.get(args.size() - 1));
         assertEquals("java", command.get("command"));
         assertEquals("command", command.get("type"));
+        assertEquals(expectedTimeout, command.get("timeout"));
+        assertEquals(expectedMatcher, entry.get("matcher"));
     }
 
     @Test
@@ -121,7 +193,7 @@ class HookRegistrarTest {
 
         int removed = HookRegistrar.unregisterAll(settingsFile);
 
-        assertEquals(6, removed); // one per Claude event across the 5 hook types
+        assertEquals(8, removed); // one per Claude event across the 6 analytics hook types
         assertFalse(HookRegistrar.isRegistered(settingsFile));
         Map<String, Object> written = MAPPER.readValue(settingsFile.toFile(), new TypeReference<LinkedHashMap<String, Object>>() {});
         assertEquals("opus", written.get("model"));
@@ -190,5 +262,40 @@ class HookRegistrarTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> hooks = (Map<String, Object>) written.get("hooks");
         assertEquals(2, ((List<?>) hooks.get("Stop")).size()); // theirs + ours
+    }
+
+    @Test
+    void anUnparsableSettingsFileIsNeverRewrittenOrWiped(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("settings.json");
+        Path jar = tempDir.resolve("agentic-skills-hooks.jar");
+        // Typical hand-edited settings: a comment and a trailing comma make this invalid strict JSON.
+        String original = "{\n  // my theme\n  \"theme\": \"dark\",\n  \"mcpServers\": { \"x\": {} },\n}\n";
+        Files.writeString(file, original);
+
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.UncheckedIOException.class, () -> HookRegistrar.registerAll(file, jar));
+        assertEquals(original, Files.readString(file), "register must leave an unparsable file exactly as it was");
+
+        assertEquals(0, HookRegistrar.unregisterAll(file), "unregister must not touch an unparsable file");
+        assertEquals(original, Files.readString(file));
+        org.junit.jupiter.api.Assertions.assertFalse(HookRegistrar.isRegistered(file));
+    }
+
+    @Test
+    void registeredOptInsReportsWhatIsCurrentlyInstalledSoARerunCanKeepIt(@TempDir Path tempDir) throws IOException {
+        Path jar = tempDir.resolve("agentic-skills-hooks.jar");
+        Path file = tempDir.resolve("settings.json");
+
+        assertEquals(dev.dorrian.agenticskillscli.registry.HookInstallOptions.NONE, HookRegistrar.registeredOptIns(file));
+
+        HookRegistrar.registerAll(file, jar, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, false, true));
+        assertEquals(new dev.dorrian.agenticskillscli.registry.HookInstallOptions(true, false, true), HookRegistrar.registeredOptIns(file));
+
+        HookRegistrar.registerAll(file, jar, new dev.dorrian.agenticskillscli.registry.HookInstallOptions(false, true, false));
+        assertEquals(new dev.dorrian.agenticskillscli.registry.HookInstallOptions(false, true, false), HookRegistrar.registeredOptIns(file));
+
+        // an unparsable file reports nothing and is not rewritten
+        Files.writeString(file, "{ // broken");
+        assertEquals(dev.dorrian.agenticskillscli.registry.HookInstallOptions.NONE, HookRegistrar.registeredOptIns(file));
+        assertEquals("{ // broken", Files.readString(file));
     }
 }

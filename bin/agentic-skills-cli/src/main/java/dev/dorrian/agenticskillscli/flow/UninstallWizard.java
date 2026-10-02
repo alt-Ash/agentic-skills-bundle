@@ -13,6 +13,7 @@ import dev.dorrian.agenticskillscli.install.AgentInstaller;
 import dev.dorrian.agenticskillscli.install.CommandDescriptor;
 import dev.dorrian.agenticskillscli.install.CommandInstaller;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
+import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
@@ -220,14 +221,13 @@ public final class UninstallWizard {
             }
         }
 
-        // Analytics hooks — registered in Claude Code's settings.json by every Claude install,
-        // so they're offered here whenever Claude Code is selected and they're present.
-        Path claudeSettings = selectedTools.contains("claude")
-            ? McpConfigRegistry.get("claude").map(McpConfigDef::globalFile).orElse(null)
-            : null;
-        boolean removeHooks = claudeSettings != null && HooksInstaller.isInstalled(claudeSettings)
-            && prompter.confirm("Remove the analytics hooks from Claude Code? "
-                + Ansi.dim("(event files already written in your projects are kept)"), true);
+        // Hooks — registered by every install for a tool with hook support, so they are offered here
+        // whenever such a tool is selected and ours are present.
+        List<String> hookTools = selectedTools.stream()
+            .filter(HookToolSupport::supports).filter(HooksInstaller::isInstalledForTool).toList();
+        boolean removeHooks = !hookTools.isEmpty()
+            && prompter.confirm("Remove the usage hooks from " + String.join(", ", hookTools) + "? "
+                + Ansi.dim("(your usage database is kept)"), true);
 
         if (selectedSkills.isEmpty() && selectedAgentFiles.isEmpty() && !removeCommands
             && !removeSkillMcps && !removeAgentMcps && globalMcpsToRemove.isEmpty() && !removeHooks) {
@@ -271,14 +271,18 @@ public final class UninstallWizard {
         SummaryPrinter.printUninstallSummary(resultsByTool);
 
         if (removeHooks) {
-            try {
-                int removed = HooksInstaller.uninstall(claudeSettings);
-                System.out.println("  " + Ansi.green("Analytics hooks removed")
-                    + Ansi.dim(" (" + removed + " hook entries from " + claudeSettings + ")"));
-            } catch (RuntimeException e) {
-                System.out.println("  " + Ansi.yellow("Analytics hooks: could not remove — " + e.getMessage()));
-                System.out.println("  " + Ansi.dim("Remove the agentic-skills-hooks.jar entries from " + claudeSettings + " manually."));
+            for (String toolKey : hookTools) {
+                try {
+                    int removed = HooksInstaller.uninstallForTool(toolKey);
+                    System.out.println("  " + Ansi.green("Hooks removed for " + toolKey)
+                        + Ansi.dim(" (" + removed + " hook entries)"));
+                } catch (RuntimeException e) {
+                    System.out.println("  " + Ansi.yellow("Hooks for " + toolKey + ": could not remove — " + e.getMessage()));
+                    System.out.println("  " + Ansi.dim("Remove the agentic-skills-hooks.jar entries from that tool's settings manually."));
+                }
             }
+            System.out.println("  " + Ansi.dim("Usage data kept at " + dev.dorrian.usagestore.UsageDb.defaultPath()
+                + " — delete that file if you no longer want it."));
             System.out.println();
         }
     }
