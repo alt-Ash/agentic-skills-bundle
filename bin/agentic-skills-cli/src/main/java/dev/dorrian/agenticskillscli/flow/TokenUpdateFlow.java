@@ -45,7 +45,7 @@ public final class TokenUpdateFlow {
 
         if (azureOrgs.isEmpty() && githubAccounts.isEmpty()) {
             System.out.println("  " + Ansi.yellow("No issue-tickets credentials found in your shell profile."));
-            System.out.println("  " + Ansi.dim("Run Install / Quick install first to configure issue-tickets."));
+            System.out.println("  " + Ansi.dim("Run Install first to configure issue-tickets."));
             System.out.println();
             return;
         }

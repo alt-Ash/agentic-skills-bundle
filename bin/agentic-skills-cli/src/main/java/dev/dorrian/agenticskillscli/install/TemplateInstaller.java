@@ -3,6 +3,9 @@ package dev.dorrian.agenticskillscli.install;
 import dev.dorrian.agenticskillscli.PackageRoot;
 import dev.dorrian.agenticskillscli.config.OperationResult;
 import dev.dorrian.agenticskillscli.registry.TemplateRegistry;
+import dev.dorrian.agenticskillscli.state.ContentHash;
+import dev.dorrian.agenticskillscli.state.InstallRecorder;
+import dev.dorrian.agenticskillscli.state.ItemKind;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,10 +31,18 @@ public final class TemplateInstaller {
     }
 
     public static List<OperationResult> install(Path agentsGlobalPath) {
-        return install(agentsGlobalPath, PackageRoot.templatesDir());
+        return install(agentsGlobalPath, PackageRoot.templatesDir(), InstallRecorder.NOOP);
+    }
+
+    public static List<OperationResult> install(Path agentsGlobalPath, InstallRecorder recorder) {
+        return install(agentsGlobalPath, PackageRoot.templatesDir(), recorder);
     }
 
     public static List<OperationResult> install(Path agentsGlobalPath, Path projectTemplatesDir) {
+        return install(agentsGlobalPath, projectTemplatesDir, InstallRecorder.NOOP);
+    }
+
+    public static List<OperationResult> install(Path agentsGlobalPath, Path projectTemplatesDir, InstallRecorder recorder) {
         Path templatesDir = agentsGlobalPath.resolve("templates");
         ensureDir(templatesDir);
 
@@ -44,6 +55,15 @@ public final class TemplateInstaller {
                 results.add(OperationResult.ok(file, false, null));
             } catch (IOException e) {
                 results.add(OperationResult.failed(file, null, e.getMessage()));
+            }
+        }
+        boolean allOk = results.stream().noneMatch(r -> r.error() != null);
+        if (allOk) {
+            try {
+                recorder.record(ItemKind.TEMPLATE, "templates", ContentHash.ofTreeLimitedTo(templatesDir, projectTemplatesDir),
+                    ContentHash.treeFiles(projectTemplatesDir));
+            } catch (IOException | RuntimeException ignored) {
+                // recording must never fail an install
             }
         }
         return results;

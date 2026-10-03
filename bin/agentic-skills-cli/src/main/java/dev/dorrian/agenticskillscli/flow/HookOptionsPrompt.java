@@ -7,7 +7,7 @@ import dev.dorrian.agenticskillscli.ui.Prompter;
 import java.util.Collection;
 
 /**
- * The one place the install flows ask about opt-in hooks, so Quick and Full install offer the same choices
+ * The one place the install flows ask about opt-in hooks, so every install path offers the same choices
  * with the same wording. Each of these can change how the AI tool behaves, so a fresh install defaults every
  * answer to no. A re-run defaults each answer to what is already installed, because registering converges to
  * the answers: pressing Enter must not silently remove a hook the user enabled earlier.

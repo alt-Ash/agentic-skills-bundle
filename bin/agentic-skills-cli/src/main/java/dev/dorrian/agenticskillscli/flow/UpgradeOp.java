@@ -1,7 +1,12 @@
 package dev.dorrian.agenticskillscli.flow;
 
-/** One planned upgrade step: a human-readable line plus the action that performs it. */
-public record UpgradeOp(String line, Action action) {
+import dev.dorrian.agenticskillscli.flow.UpgradeReportFormatter.Outcome;
+
+/**
+ * One planned upgrade step. {@code outcome} is what the step will report if it succeeds (REFRESHED
+ * with an action, or UNCHANGED / SKIPPED_MODIFIED with no action).
+ */
+public record UpgradeOp(String tool, String kind, String name, Outcome outcome, Action action) {
 
     @FunctionalInterface
     public interface Action {

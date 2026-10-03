@@ -14,7 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * The hook-install step shared by the Quick and Full install flows: put the
+ * The hook-install step shared by the install flows: put the
  * bundled analytics-hooks jar at {@link HooksJarLocation#jarPath()} first,
  * then register it in Claude Code's {@code settings.json}. Doing both here
  * (and in that order) guarantees no registered hook ever points at a jar that
@@ -102,6 +102,14 @@ public final class HooksInstaller {
             case "claude" -> HookRegistrar.isRegistered(claudeSettings());
             default -> ToolHooksInstallers.forTool(toolKey).map(ToolHooksInstaller::isRegistered).orElse(false);
         };
+    }
+
+    /**
+     * True if the installed hooks jar is byte-identical to the bundled one, so a refresh changes nothing.
+     * Limitation: hook registration entries in tool configs cannot be compared, only the jar.
+     */
+    public static boolean isCurrentForTool(String toolKey) {
+        return sameContent(PackageRoot.hooksJar(), HooksJarLocation.jarPath());
     }
 
     /** True if our hooks are registered for this tool, or (Claude) the jar is still installed. */

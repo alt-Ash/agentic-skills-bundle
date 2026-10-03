@@ -38,9 +38,9 @@ Running `agentic-skills` opens a menu with four modes:
 
 | Mode | What it does |
 |---|---|
-| **Quick install** | Pick your AI tools, then install every skill, agent, and MCP server globally in one pass (prompts for credentials). |
-| **Install** | Pick skills and agents, choose global or project scope. |
-| **Update token** | Rotate an expired Azure DevOps or GitHub PAT used by the `issue-tickets` MCP. |
+| **Upgrade** | Refresh installed items that differ from this version. |
+| **Install** | Pick skills/agents, global or project scope. Per-item status (up to date, update available, modified locally, new), only updates preselected, "Install everything" shortcut, no credential re-prompts for configured MCPs. |
+| **Update token** | Rotate an expired Azure DevOps or GitHub PAT for the `issue-tickets` MCP. |
 | **Uninstall** | Remove previously installed skills, agents, and MCP servers for one or more tools. |
 
 ## Supported AI tools
@@ -59,7 +59,7 @@ Each path is `global` / `project`. A dash means the tool doesn't support that it
 | Zed AI | `~/.config/zed/skills` / `.zed/skills` | — | — |
 
 > [!NOTE]
-> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes older `~/.codex/skills` and `~/.codex/agents/*.md`.
+> For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific rules in `AGENTS.md`. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for non-editing agents). Uninstall also removes older `~/.codex/skills` and `~/.codex/agents/*.md`.
 
 Some skills and agents ship a companion slash command (see each entry's **Companion command** line); commands install only for tools that support them.
 
@@ -220,11 +220,11 @@ If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `
 
 ## Global MCP tools
 
-The CLI can also configure global MCP tools during Install/Quick install, independent of any skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
+The CLI can also configure global MCP tools during Install, independent of any skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place, keeping your comments and settings) are configured too.
 
 MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Antigravity and Codex CLI**.
 
-For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), because Devin's docs give both locations. Uninstall removes them from both files.
+For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` if set; `%APPDATA%\devin` on Windows), as Devin's docs give both. Uninstall clears both.
 
 ### `figma-mcp`
 
@@ -245,7 +245,7 @@ Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to 
 
 ## Local MCP servers
 
-The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers prebuilt inside `agentic-skills.jar`. For Codex CLI the `issue-tickets` credentials are never written into its config: it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
+The CLI installs these into your AI agent config. Both are Java/Spring Boot servers inside `agentic-skills.jar`. For Codex CLI, `issue-tickets` credentials are never written to its config; it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
 
 ### `issue-tickets`
 
@@ -253,7 +253,7 @@ MCP server for ticket/issue management — supports **Azure DevOps and GitHub** 
 
 Tools: `pull_ticket`, `create_issue`, `create_pull_request`
 
-**Source auto-detection:** when `source` is not specified, `issue-tickets` inspects the project root in this order, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>`, `<issueManagement><url>`, project `<url>`). GitHub is recognised by `github.com`, Azure DevOps by `dev.azure.com` or `visualstudio.com`. Failing that, the only provider with credentials is used.
+**Source auto-detection:** without `source`, `issue-tickets` inspects the project root, first match wins: a `.github/` directory, `azure-pipelines.yml` or `.azure/`, the `.git/config` remote host, `package.json`'s `repository` field, then `pom.xml` (`<scm>`, `<issueManagement><url>`, project `<url>`). GitHub is recognised by `github.com`, Azure DevOps by `dev.azure.com` or `visualstudio.com`. Else the only provider with credentials is used.
 
 Credentials come from environment variables. The installer collects one or more accounts per provider and writes them to your shell profile (`~/.zshrc` or `~/.bashrc`) as base64-encoded JSON; for each provider the first variable set wins:
 
@@ -262,7 +262,7 @@ Credentials come from environment variables. The installer collects one or more 
 | Azure DevOps | `AZURE_DEVOPS_ACCOUNTS_B64` (base64 JSON) → `AZURE_DEVOPS_ACCOUNTS` (plain JSON) → legacy single account `AZURE_DEVOPS_ORG_URL` + `AZURE_DEVOPS_TOKEN` | `name`, `orgUrl`, `token` |
 | GitHub | `GITHUB_ACCOUNTS_B64` (base64 JSON) → `GITHUB_ACCOUNTS` (plain JSON) → legacy single account `GITHUB_TOKEN` | `name`, `token` |
 
-The JSON forms are arrays of accounts, e.g. `[{"name":"work","orgUrl":"https://dev.azure.com/myorg","token":"…"}]`. Variables are re-read on every call, so a rotated token takes effect without restarting the server. Only the providers with credentials are active — the rest degrade gracefully. Use **Update token** in the CLI to rotate an expired Azure DevOps or GitHub PAT without reinstalling anything else.
+JSON forms are account arrays, e.g. `[{"name":"work","orgUrl":"https://dev.azure.com/myorg","token":"…"}]`. Variables are re-read on every call, so a rotated token needs no server restart. Only providers with credentials are active. **Update token** rotates an expired Azure DevOps or GitHub PAT.
 
 ### `security-scanner`
 
@@ -276,16 +276,16 @@ Tools:
 - `scan_active({ target, categories?, confirm, authorization })` — reflected XSS, SQL/NoSQL injection, open redirect, path traversal, JWT `alg:none`, bounded IDOR probes, and an SSRF timing signal. `confirm: true` and a non-empty `authorization` (e.g. a ticket reference) are required and stamped into the report as an audit trail.
 - `get_scan_report({ scanId })` — retrieves a previously written report.
 
-A shared circuit breaker aborts the rest of a scan the moment the target's error rate or latency degrades sharply. Reports are written to `security-scans/<host>-<timestamp>.json` and `.md` in the calling process's working directory. See `mcp/security-scanner/README.md` for full development docs.
+A shared circuit breaker aborts the rest of a scan when the target's error rate or latency degrades sharply. Reports are written to `security-scans/<host>-<timestamp>.json` and `.md` in the calling process's working directory. See `mcp/security-scanner/README.md` for full development docs.
 
 ## Hooks and usage data
 
-Installing for **Claude Code** (also **Antigravity** and an OpenCode plugin) copies a hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
+Installing for **Claude Code** (also **Antigravity**, an OpenCode plugin) copies a hooks jar to `~/.agentic-skills/hooks/` and registers it. Hooks record tool use, model and token counts, prompt/response *lengths* (never text), redacted Bash commands, and skills/agents used, into one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set. Analytics hooks always exit 0.
 
-- **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master`, `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass (approve per project: `agentic-skills verify trust`); `context` adds session context. Re-running the installer refreshes our entries.
-- `agentic-skills upgrade [--dry-run] [--project <dir>]...` refreshes installed skills, agents, commands, templates, hooks (opt-ins kept) and local MCP jars; never touches MCP config or deletes files. Project installs aren't tracked, so pass `--project`. Exit 0 ok, 1 a step failed (others ran), 2 bad args. A newer-version notice asks GitHub for the latest release at most once/24h (off: `AGENTIC_SKILLS_NO_UPDATE_CHECK=1`); no self-update.
-- `agentic-skills dashboard` serves a read-only localhost dashboard: usage, tools, installed-vs-used skills and agents, sessions, guard blocks.
-- `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune`.
+- **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master`, `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass (approve per project: `agentic-skills verify trust`); `context` adds session context. Upgrade refreshes our entries, opt-ins kept.
+- `agentic-skills upgrade [--dry-run] [--project <dir>]...` is diff-aware: refreshes only items that differ from the bundled version (hashes in `~/.agentic-skills/state/installed.json`, else content compare), skips and reports items you edited, keeps hook opt-ins, never touches MCP config/credentials, never deletes files; `--dry-run` writes nothing. Prints a per-tool report and summary; new items are listed, not installed (run `agentic-skills`, choose Install). Project installs need `--project`. Exit 0 ok, 1 a step failed (others ran), 2 bad args. A newer-version notice checks GitHub at most once/24h (off: `AGENTIC_SKILLS_NO_UPDATE_CHECK=1`); no self-update.
+- `agentic-skills dashboard` serves a read-only localhost dashboard (usage, tools, installed-vs-used skills/agents, sessions, guard blocks).
+- `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json`; `data prune`.
 - `--uninstall` removes our hooks (not yours); the database is kept.
 
 Formats and limits: [docs/hooks.md](docs/hooks.md).
