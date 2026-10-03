@@ -11,10 +11,8 @@ import java.util.Set;
 
 /**
  * Builds the checkbox choice labels for AI-tool selection prompts, and maps
- * a chosen label back to its tool key. Port of the {@code toolChoices}/
- * {@code toolChoicesQuick} label-building logic duplicated at both call
- * sites in the original ({@code bin/install.js} lines ~2393-2403 and
- * ~2662-2672 — identical logic, just a different local variable name).
+ * a chosen label back to its tool key. Port of the {@code toolChoices}
+ * label-building logic of the original ({@code bin/install.js} lines ~2662-2672).
  */
 public final class ToolChoiceBuilder {
 

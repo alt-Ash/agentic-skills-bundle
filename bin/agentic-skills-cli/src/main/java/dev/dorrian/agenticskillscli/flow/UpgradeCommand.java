@@ -1,5 +1,10 @@
 package dev.dorrian.agenticskillscli.flow;
 
+import dev.dorrian.agenticskillscli.flow.UpgradeReportFormatter.Line;
+import dev.dorrian.agenticskillscli.flow.UpgradeReportFormatter.Outcome;
+import dev.dorrian.agenticskillscli.state.InstallManifest;
+
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,42 +53,65 @@ public final class UpgradeCommand {
             }
         }
 
-        List<UpgradeOp> ops;
+        UpgradeEnvironment environment = env;
+        UpgradePlanner.Plan plan;
         try {
-            ops = UpgradePlanner.plan(env != null ? env : UpgradeEnvironment.defaults(), projects);
+            if (environment == null) environment = UpgradeEnvironment.defaults();
+            plan = UpgradePlanner.plan(environment, projects);
         } catch (RuntimeException e) {
             err.println("upgrade: could not build the plan: " + e.getMessage());
             return 1;
         }
 
-        if (ops.isEmpty()) {
+        if (plan.ops().isEmpty()) {
             out.println("Nothing to upgrade: no installed skills, agents, commands, hooks or MCP jars found.");
             if (projects.isEmpty()) out.println("Project installs are only found with --project <dir>.");
             return 0;
         }
 
-        out.println(dryRun ? "Upgrade plan (dry run, nothing will be written):" : "Upgrading:");
+        List<Line> lines = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
         int failed = 0;
-        for (UpgradeOp op : ops) {
-            if (dryRun) {
-                out.println("  " + op.line());
-                continue;
+        for (UpgradeOp op : plan.ops()) {
+            if (!labels.contains(op.tool())) labels.add(op.tool());
+            Outcome outcome = op.outcome();
+            String detail = null;
+            if (op.action() != null && !dryRun) {
+                try {
+                    op.action().run();
+                } catch (Exception e) {
+                    failed++;
+                    outcome = Outcome.FAILED;
+                    detail = e.getMessage();
+                    err.println("upgrade: " + op.kind() + " " + op.name() + " (" + op.tool() + ") failed: " + detail);
+                }
             }
-            try {
-                op.action().run();
-                out.println("  ok     " + op.line());
-            } catch (Exception e) {
-                failed++;
-                out.println("  FAILED " + op.line() + ": " + e.getMessage());
-                err.println("upgrade: " + op.line() + " failed: " + e.getMessage());
-            }
+            lines.add(new Line(op.tool(), op.kind(), op.name(), outcome, detail));
         }
 
+        InstallManifest manifest = plan.manifest();
+        String from = manifest.bundleVersion() == null ? "unknown" : manifest.bundleVersion();
         if (dryRun) {
-            out.println(ops.size() + " operation(s) planned.");
-            return 0;
+            out.println("Dry run: nothing written; 'refreshed' lines show what would be refreshed.");
         }
-        out.println(ops.size() + " operation(s): " + (ops.size() - failed) + " ok, " + failed + " failed.");
+        out.println(UpgradeReportFormatter.format(from, environment.bundleVersion(), labels, lines, plan.newItems()));
+        if (plan.baselineMissing()) {
+            out.println("No previous install record, so new items cannot be told apart. "
+                + "Run `agentic-skills` and choose Install to see everything not installed.");
+        }
+
+        if (!dryRun && environment.manifestFile() != null) {
+            try {
+                plan.backfills().forEach(Runnable::run);
+                // A failed step keeps the old baseline and version so the next run re-reports it.
+                if (failed == 0) {
+                    manifest.advanceBundle(environment.bundleVersion(), plan.bundleItems(), plan.installedEntries());
+                }
+                manifest.save();
+            } catch (IOException | RuntimeException e) {
+                err.println("upgrade: warning: could not save the install record: " + e.getMessage());
+            }
+        }
         return failed == 0 ? 0 : 1;
     }
 

@@ -2,6 +2,9 @@ package dev.dorrian.agenticskillscli.install;
 
 import dev.dorrian.agenticskillscli.config.OperationResult;
 import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
+import dev.dorrian.agenticskillscli.state.ContentHash;
+import dev.dorrian.agenticskillscli.state.InstallRecorder;
+import dev.dorrian.agenticskillscli.state.ItemKind;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -26,12 +29,22 @@ public final class SkillInstaller {
     }
 
     public static List<OperationResult> install(List<SkillDescriptor> skills, Path targetPath) {
+        return install(skills, targetPath, InstallRecorder.NOOP);
+    }
+
+    public static List<OperationResult> install(List<SkillDescriptor> skills, Path targetPath, InstallRecorder recorder) {
         ensureDir(targetPath);
         List<OperationResult> results = new ArrayList<>();
         for (SkillDescriptor skill : skills) {
             Path dest = targetPath.resolve(skill.name());
             try {
                 copyRecursive(skill.sourcePath(), dest);
+                try {
+                    recorder.record(ItemKind.SKILL, skill.name(), ContentHash.ofTreeLimitedTo(dest, skill.sourcePath()),
+                        ContentHash.treeFiles(skill.sourcePath()));
+                } catch (IOException | RuntimeException ignored) {
+                    // recording must never fail an install
+                }
                 results.add(OperationResult.ok(skill.name(), false, null));
             } catch (IOException e) {
                 results.add(OperationResult.failed(skill.name(), null, e.getMessage()));

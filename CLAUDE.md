@@ -25,7 +25,7 @@ One class: `-Dtest=<Class> -Dsurefire.failIfNoSpecifiedTests=false`.
 
 ## Validation gates
 
-Cheapest first: (1) the structural + token-budget `test` command above, (2) `./mvnw verify`. Never billed evals.
+Cheapest first: (1) structural + token-budget `test` command, (2) `./mvnw verify`. No billed evals.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 | `CommandRegistry` | Maps skill/agent names to companion slash command files |
 | `HooksRegistry` | Maps each hook type to its Claude Code hook-event name(s) |
 
-Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode-format agent → target tool's format), `install/{Agent,Skill,Command}Installer`, and the wizards in `flow/` (`QuickInstallFlow`, `FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`. `config/HookRegistrar` merges the hooks (5 analytics + opt-in `guard`) into Claude Code's `settings.json`, preserving existing `hooks`; Claude via `HookRegistrar`, others via `ToolHooksInstallers`.
+Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode agent → target format), `install/{Agent,Skill,Command}Installer`, and wizards in `flow/` (`FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`; shared `state/{InstallDetector,InstallManifest}`; `UpgradeCommand`/`UpgradePlanner`. `config/HookRegistrar` merges the hooks (5 analytics, opt-in `guard`) into Claude Code's `settings.json`, keeping existing `hooks`; Claude via it, others via `ToolHooksInstallers`.
 
 ### Hooks (`hooks/agentic-skills-hooks`)
 
@@ -62,7 +62,7 @@ Plain Java 21 fat jar: `java -jar agentic-skills-hooks.jar <hookType>`. Fresh JV
 
 ### Evals (`evals/agentic-skills-evals`)
 
-Behavioral evals: **real, billed calls; run sparingly.** They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
+Behavioral evals: **real, billed calls; run sparingly.** They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
 
 ### Extension patterns
 

@@ -140,7 +140,7 @@ public final class UninstallWizard {
         if (anySupportsCommands) {
             List<CommandDescriptor> skillCmds = selectedSkills.isEmpty() ? List.of() : CommandInstaller.resolveForSkills(selectedSkills);
             List<CommandDescriptor> agentCmds = selectedAgentFiles.isEmpty() ? List.of() : CommandInstaller.resolveForAgents(selectedAgentFiles);
-            List<CommandDescriptor> candidates = QuickInstallFlow.dedupedCommands(skillCmds, agentCmds);
+            List<CommandDescriptor> candidates = dev.dorrian.agenticskillscli.install.CommandCatalog.dedupe(skillCmds, agentCmds);
             List<CommandDescriptor> installedCandidates = new ArrayList<>();
             for (CommandDescriptor c : candidates) {
                 if (installedCommandNames.contains(c.name())) installedCandidates.add(c);

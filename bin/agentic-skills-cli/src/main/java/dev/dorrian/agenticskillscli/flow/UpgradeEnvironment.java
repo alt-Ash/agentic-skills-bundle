@@ -1,6 +1,8 @@
 package dev.dorrian.agenticskillscli.flow;
 
+import dev.dorrian.agenticskillscli.BundleExtractor;
 import dev.dorrian.agenticskillscli.PackageRoot;
+import dev.dorrian.agenticskillscli.state.InstallManifest;
 import dev.dorrian.agenticskillscli.detect.InstalledToolDetector;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
@@ -25,6 +27,8 @@ import java.util.stream.Collectors;
  * @param tools          tool definitions keyed by tool key
  * @param detectedTools  keys of tools considered present on this machine
  * @param mcps           local MCP jars; refreshed only if the installed jar already exists
+ * @param manifestFile   install manifest location; null means no manifest
+ * @param bundleVersion  version of the bundle being installed
  */
 public record UpgradeEnvironment(
     Map<String, AgentToolDef> tools,
@@ -34,7 +38,9 @@ public record UpgradeEnvironment(
     Path commandsDir,
     Path templatesDir,
     Hooks hooks,
-    List<McpJar> mcps
+    List<McpJar> mcps,
+    Path manifestFile,
+    String bundleVersion
 ) {
 
     /** Hook operations, abstracted from {@link HooksInstaller}. */
@@ -44,6 +50,9 @@ public record UpgradeEnvironment(
         boolean isInstalled(String toolKey);
 
         HookInstallOptions currentOptions(String toolKey);
+
+        /** The installed hooks jar equals the bundled one, so refreshing would change nothing. */
+        boolean isCurrent(String toolKey);
 
         void install(String toolKey, HookInstallOptions options);
     }
@@ -79,6 +88,10 @@ public record UpgradeEnvironment(
                 return HooksInstaller.currentOptionsForTool(toolKey);
             }
 
+            @Override public boolean isCurrent(String toolKey) {
+                return HooksInstaller.isCurrentForTool(toolKey);
+            }
+
             @Override public void install(String toolKey, HookInstallOptions options) {
                 HooksInstaller.installForTool(toolKey, options);
             }
@@ -94,6 +107,7 @@ public record UpgradeEnvironment(
                 LocalCodegenMcpInstaller.DEFAULT_INSTALL_DIR, LocalCodegenMcpInstaller.JAR_NAME,
                 LocalCodegenMcpInstaller::install));
         return new UpgradeEnvironment(AgentToolRegistry.ALL, detected, PackageRoot.skillsDir(),
-            PackageRoot.agentsDir(), PackageRoot.commandsDir(), PackageRoot.templatesDir(), hooks, mcps);
+            PackageRoot.agentsDir(), PackageRoot.commandsDir(), PackageRoot.templatesDir(), hooks, mcps,
+            InstallManifest.defaultFile(), BundleExtractor.runningVersion());
     }
 }

@@ -59,7 +59,7 @@ class AgenticSkillsJarIT {
 
         assertTrue(run.output().contains("Agentic  Skills Bundle Installer"), run.output());
         assertTrue(run.output().contains("What do you want to do?"), run.output());
-        assertTrue(run.output().contains("Quick install"), run.output());
+        assertTrue(run.output().contains("Upgrade"), run.output());
         assertTrue(run.output().contains("No input received"), run.output());
         assertEquals(1, run.exitCode(), run.output());
 
