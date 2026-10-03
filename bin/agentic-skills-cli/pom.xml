@@ -104,6 +104,18 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <dependency>
+      <groupId>dev.dorrian.localcodegen</groupId>
+      <artifactId>local-codegen</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
 
   <build>
@@ -238,6 +250,12 @@
                   <version>${project.version}</version>
                   <destFileName>security-scanner.jar</destFileName>
                 </artifactItem>
+                <artifactItem>
+                  <groupId>dev.dorrian.localcodegen</groupId>
+                  <artifactId>local-codegen</artifactId>
+                  <version>${project.version}</version>
+                  <destFileName>local-codegen.jar</destFileName>
+                </artifactItem>
               </artifactItems>
             </configuration>
           </execution>
@@ -296,6 +314,7 @@
             <classpathDependencyExclude>dev.dorrian.agenticskillshooks:agentic-skills-hooks</classpathDependencyExclude>
             <classpathDependencyExclude>dev.dorrian.issuetickets:issue-tickets</classpathDependencyExclude>
             <classpathDependencyExclude>dev.dorrian.securityscanner:security-scanner</classpathDependencyExclude>
+            <classpathDependencyExclude>dev.dorrian.localcodegen:local-codegen</classpathDependencyExclude>
           </classpathDependencyExcludes>
         </configuration>
       </plugin>
@@ -323,6 +342,7 @@
             <classpathDependencyExclude>dev.dorrian.agenticskillshooks:agentic-skills-hooks</classpathDependencyExclude>
             <classpathDependencyExclude>dev.dorrian.issuetickets:issue-tickets</classpathDependencyExclude>
             <classpathDependencyExclude>dev.dorrian.securityscanner:security-scanner</classpathDependencyExclude>
+            <classpathDependencyExclude>dev.dorrian.localcodegen:local-codegen</classpathDependencyExclude>
           </classpathDependencyExcludes>
         </configuration>
         <executions>

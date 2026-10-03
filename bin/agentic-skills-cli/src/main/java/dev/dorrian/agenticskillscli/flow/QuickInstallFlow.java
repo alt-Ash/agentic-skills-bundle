@@ -11,6 +11,9 @@ import dev.dorrian.agenticskillscli.registry.HookInstallOptions;
 import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
+import dev.dorrian.agenticskillscli.PackageRoot;
+import dev.dorrian.agenticskillscli.mcp.local.LocalCodegenCapabilityCheck;
+import dev.dorrian.agenticskillscli.mcp.local.LocalCodegenMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
@@ -154,6 +157,18 @@ public final class QuickInstallFlow {
             }
         } catch (RuntimeException e) {
             System.out.println(Ansi.red("  security-scanner install failed: " + e.getMessage()));
+        }
+
+        try {
+            LocalCodegenMcpInstaller.install(PackageRoot.localCodegenMcpJar(), LocalCodegenMcpInstaller.DEFAULT_INSTALL_DIR);
+            System.out.println(Ansi.dim("  local-codegen installed."));
+            for (String toolKey : quickTools) {
+                Map<String, Object> cfg = LocalCodegenMcpInstaller.config(toolKey);
+                JsonConfigStore.installMcpServers(Map.of("local-codegen", cfg), toolKey);
+            }
+            LocalCodegenCapabilityCheck.warning().ifPresent(w -> System.out.println(Ansi.yellow("  " + w)));
+        } catch (RuntimeException e) {
+            System.out.println(Ansi.red("  local-codegen install failed: " + e.getMessage()));
         }
 
         System.out.println();

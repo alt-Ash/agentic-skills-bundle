@@ -14,6 +14,9 @@ import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.install.TemplateInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
+import dev.dorrian.agenticskillscli.PackageRoot;
+import dev.dorrian.agenticskillscli.mcp.local.LocalCodegenCapabilityCheck;
+import dev.dorrian.agenticskillscli.mcp.local.LocalCodegenMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
@@ -130,8 +133,18 @@ public final class FullInstallFlow {
             }
         }
 
+        boolean installLocalCodegen = promptJavaMcpOptIn(
+            prompter,
+            Files.exists(LocalCodegenMcpInstaller.DEFAULT_INSTALL_DIR.resolve(LocalCodegenMcpInstaller.JAR_NAME)),
+            "Install local-codegen MCP?",
+            "— offloads mechanical code generation to a local model (needs llama.cpp or Ollama; see docs/local-codegen.md)"
+        );
+        if (installLocalCodegen) {
+            LocalCodegenCapabilityCheck.warning().ifPresent(w -> System.out.println("  " + Ansi.yellow(w)));
+        }
+
         if (selectedSkills.isEmpty() && selectedAgentFiles.isEmpty() && globalTools.selectedGlobalTools().isEmpty()
-            && !installObTickets && !installSecurityScanner) {
+            && !installObTickets && !installSecurityScanner && !installLocalCodegen) {
             System.out.println();
             System.out.println("  " + Ansi.dim("Nothing selected. Installation cancelled."));
             System.out.println();
@@ -170,7 +183,7 @@ public final class FullInstallFlow {
 
         printReadySummary(selectedTools, selectedSkills, skillsInstallTarget, projectPath, installCommands, availableCommands,
             selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, installObTickets, installSecurityScanner,
-            globalTools.selectedGlobalTools());
+            installLocalCodegen, globalTools.selectedGlobalTools());
 
         if (!prompter.confirm("Proceed with installation?", true)) {
             System.out.println();
@@ -187,7 +200,7 @@ public final class FullInstallFlow {
             resultsByTool.put(toolKey, executeInstallForTool(
                 tool, toolKey, selectedSkills, skillsInstallTarget, finalProjectPath, installCommands, availableCommands,
                 selectedAgentFiles, agentInstallTarget, installSkillMcps, installAgentMcps, globalTools,
-                installObTickets, azureOrgs, githubAccounts, installSecurityScanner, hookOptions
+                installObTickets, azureOrgs, githubAccounts, installSecurityScanner, installLocalCodegen, hookOptions
             ));
         }
 
@@ -206,7 +219,7 @@ public final class FullInstallFlow {
         boolean installCommands, List<CommandDescriptor> availableCommands, List<AgentDescriptor> selectedAgentFiles,
         String agentInstallTarget, boolean installSkillMcps, boolean installAgentMcps, GlobalToolsSelection globalTools,
         boolean installObTickets, List<AzureOrg> azureOrgs, List<GithubAccount> githubAccounts, boolean installSecurityScanner,
-        HookInstallOptions hookOptions
+        boolean installLocalCodegen, HookInstallOptions hookOptions
     ) {
         List<OperationResult> skillResults = List.of();
         String skillsPathStr = null;
@@ -308,6 +321,16 @@ public final class FullInstallFlow {
                 mcpResults.addAll(JsonConfigStore.installMcpServers(Map.of("security-scanner", cfg), toolKey));
             } catch (RuntimeException e) {
                 mcpResults.add(OperationResult.failed("security-scanner", null, e.getMessage()));
+            }
+        }
+
+        if (installLocalCodegen) {
+            try {
+                LocalCodegenMcpInstaller.install(PackageRoot.localCodegenMcpJar(), LocalCodegenMcpInstaller.DEFAULT_INSTALL_DIR);
+                Map<String, Object> cfg = LocalCodegenMcpInstaller.config(toolKey);
+                mcpResults.addAll(JsonConfigStore.installMcpServers(Map.of("local-codegen", cfg), toolKey));
+            } catch (RuntimeException e) {
+                mcpResults.add(OperationResult.failed("local-codegen", null, e.getMessage()));
             }
         }
 
@@ -452,7 +475,7 @@ public final class FullInstallFlow {
         List<String> selectedTools, List<SkillDescriptor> selectedSkills, String skillsInstallTarget, Path projectPath,
         boolean installCommands, List<CommandDescriptor> availableCommands, List<AgentDescriptor> selectedAgentFiles,
         String agentInstallTarget, boolean installSkillMcps, boolean installAgentMcps, boolean installObTickets,
-        boolean installSecurityScanner, List<String> selectedGlobalTools
+        boolean installSecurityScanner, boolean installLocalCodegen, List<String> selectedGlobalTools
     ) {
         System.out.println();
         System.out.println("  " + Ansi.bold("Ready to install"));
@@ -487,6 +510,9 @@ public final class FullInstallFlow {
         }
         if (installSecurityScanner) {
             System.out.println("  " + Ansi.dim("Scanner  :") + " " + Ansi.cyan("security-scanner") + " " + Ansi.dim("[install to ~/.config/opencode/mcp/]"));
+        }
+        if (installLocalCodegen) {
+            System.out.println("  " + Ansi.dim("Codegen  :") + " " + Ansi.cyan("local-codegen") + " " + Ansi.dim("[install to ~/.config/opencode/mcp/]"));
         }
         if (!selectedGlobalTools.isEmpty()) {
             System.out.println("  " + Ansi.dim("Tools    :") + " " + Ansi.cyan(String.join(", ", selectedGlobalTools)) + " " + Ansi.dim("[global MCP]"));

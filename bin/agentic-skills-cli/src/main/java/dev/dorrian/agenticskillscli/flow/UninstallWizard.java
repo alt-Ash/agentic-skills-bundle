@@ -16,6 +16,7 @@ import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.registry.HookToolSupport;
 import dev.dorrian.agenticskillscli.install.SkillInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
+import dev.dorrian.agenticskillscli.mcp.local.LocalCodegenMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
@@ -176,6 +177,8 @@ public final class UninstallWizard {
         boolean obTicketsInstalled = Files.exists(IssueTicketsMcpInstaller.DEFAULT_INSTALL_DIR.resolve("issue-tickets.jar"));
         boolean securityScannerInstalled = Files.exists(SecurityScannerMcpInstaller.DEFAULT_INSTALL_DIR.resolve("security-scanner.jar"));
 
+        boolean localCodegenInstalled = Files.exists(LocalCodegenMcpInstaller.DEFAULT_INSTALL_DIR.resolve(LocalCodegenMcpInstaller.JAR_NAME));
+
         List<String> installedGlobalChoices = new ArrayList<>();
         for (String name : List.of("engram", "context7", "figma-mcp")) {
             boolean anyToolHasIt = false;
@@ -190,10 +193,12 @@ public final class UninstallWizard {
 
         boolean obTicketsMcpConfigInstalled = false;
         boolean securityScannerMcpConfigInstalled = false;
+        boolean localCodegenMcpConfigInstalled = false;
         for (String toolKey : selectedTools) {
             Set<String> installed = installedMcpsByTool.getOrDefault(toolKey, Set.of());
             if (installed.contains("issue-tickets")) obTicketsMcpConfigInstalled = true;
             if (installed.contains("security-scanner")) securityScannerMcpConfigInstalled = true;
+            if (installed.contains("local-codegen")) localCodegenMcpConfigInstalled = true;
         }
 
         List<String> globalMcpsToRemove = new ArrayList<>();
@@ -218,6 +223,12 @@ public final class UninstallWizard {
         if (securityScannerMcpConfigInstalled || securityScannerInstalled) {
             if (prompter.confirm("Remove security-scanner from MCP config? " + Ansi.dim("(installed files kept)"), true)) {
                 globalMcpsToRemove.add("security-scanner");
+            }
+        }
+
+        if (localCodegenMcpConfigInstalled || localCodegenInstalled) {
+            if (prompter.confirm("Remove local-codegen from MCP config? " + Ansi.dim("(installed files kept)"), true)) {
+                globalMcpsToRemove.add("local-codegen");
             }
         }
 

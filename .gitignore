@@ -12,16 +12,14 @@ dependency-reduced-pom.xml
 # OS-generated files
 .DS_Store
 
-docs/
+docs/*
+!docs/local-codegen.md
 
 # Telemetry hook runtime output (written to cwd by the hooks; not source)
 ai-usage-events.json
 post-tool-use-usage.json
 .hooks-data/
 hooks-events.json
-
-# Generated SharePoint export (run: pnpm docs:export)
-docs/
 
 # Local install output directories (not source)
 .claude/
@@ -53,3 +51,6 @@ out/
 
 # Local SDKMAN! JDK pin (per-developer)
 .sdkmanrc
+
+# Parallel-build git worktrees
+.worktrees/

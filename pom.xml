@@ -41,6 +41,7 @@
     <module>hooks/agentic-skills-hooks</module>
     <module>mcp/security-scanner</module>
     <module>mcp/issue-tickets</module>
+    <module>mcp/local-codegen</module>
     <module>evals/agentic-skills-evals</module>
     <module>bin/agentic-skills-cli</module>
   </modules>

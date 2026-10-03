@@ -100,4 +100,9 @@ public final class PackageRoot {
     public static Path securityScannerMcpJar() {
         return root("security-scanner.jar");
     }
+
+    /** Prebuilt (Spring Boot fat jar) local-codegen MCP server. */
+    public static Path localCodegenMcpJar() {
+        return root("local-codegen.jar");
+    }
 }

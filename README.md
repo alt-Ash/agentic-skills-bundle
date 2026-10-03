@@ -1,8 +1,8 @@
 # Agentic Skills Bundle
 
-A curated collection of reusable AI agent skills, sub-agents, and MCP servers for Java/Spring Boot projects — installed via a single guided CLI into any AI coding assistant's config.
+Reusable AI agent skills, sub-agents, and MCP servers for Java/Spring Boot projects, installed via one guided CLI into any AI coding assistant's config.
 
-This repo **produces** skills and agents; it does not consume them. `agentic-skills` copies files from here into your own AI tool configuration (globally or per-project).
+This repo **produces** skills and agents; `agentic-skills` copies them into your AI tool configuration (globally or per-project).
 
 ## Quick start
 
@@ -30,15 +30,15 @@ To remove everything installed:
 agentic-skills --uninstall
 ```
 
-The jar is self-contained: on first run it unpacks its content to `~/.agentic-skills/dist/<version>/`.
+The jar is self-contained; first run unpacks it to `~/.agentic-skills/dist/<version>/`.
 
 ## What it does
 
-Running `agentic-skills` opens a menu with four modes:
+`agentic-skills` opens a menu with four modes:
 
 | Mode | What it does |
 |---|---|
-| **Quick install** | Pick your AI tools, then install every skill, agent, and MCP server globally in one pass (prompts for credentials). |
+| **Quick install** | Pick your AI tools, then install every skill, agent, and MCP server globally (prompts for credentials). |
 | **Install** | Pick skills and agents, choose global or project scope. |
 | **Update token** | Rotate an expired Azure DevOps or GitHub PAT used by the `issue-tickets` MCP. |
 | **Uninstall** | Remove previously installed skills, agents, and MCP servers for one or more tools. |
@@ -61,7 +61,7 @@ Each path is `global` / `project`. A dash means the tool doesn't support that it
 > [!NOTE]
 > For Claude Code, a project target places skills and agents under the same scope (`.claude/skills`, `.claude/agents`). Codex agents are written as standalone custom-agent TOML (`name`, `description`, `developer_instructions`; read-only agents get `sandbox_mode = "read-only"`); keep repo-specific behavior in `AGENTS.md`. Gemini agents get subagent frontmatter (`name`, `description`, `kind: local`, and a read-only `tools` allowlist for agents that cannot edit). Uninstall also removes older `~/.codex/skills` and `~/.codex/agents/*.md`.
 
-Some skills and agents ship a companion slash command (see each entry's **Companion command** line); commands install only for tools that support them.
+Some skills and agents ship a companion slash command (see **Companion command**); it installs only for tools that support commands.
 
 ## Available skills
 
@@ -122,7 +122,7 @@ Bounded iterate-fix-reverify protocol for any caller-supplied gate set — build
 
 #### `parallel-feature-build`
 
-Splits one feature into independent, file-scoped slices and builds them with parallel generic workers, each on its own isolated working tree where the host tool supports it. Falls back to sequential work when slices are not provably independent.
+Splits one feature into independent, file-scoped slices and builds them with parallel workers, each on its own isolated working tree where supported. Falls back to sequential work when slices are not provably independent.
 
 **Use when:** a feature cleanly decomposes into two or more slices with no shared files, migration ordering, or config edits. Used internally by `dev-orchestrator`.
 
@@ -144,7 +144,7 @@ See `templates/SKILL.md` for the full template with all required sections.
 
 ## Available agents
 
-Agents run in `primary` or `subagent` mode and are invoked by name (`@agent-name`) inside a supported AI tool.
+Agents run in `primary` or `subagent` mode, invoked as `@agent-name` in a supported tool.
 
 ### Orchestration & workflow
 
@@ -153,7 +153,7 @@ Agents run in `primary` or `subagent` mode and are invoked by name (`@agent-name
 Main orchestrator for development workflows. Pulls tickets, plans with OpenSpec, executes via specialist sub-agents, runs the mandatory security gate, iterates until all checks pass, and opens a pull request.
 
 **Invoke when:** starting any feature, bug fix, issue, or audit — the default entry point for development work.
-**Claude Code:** run it as the whole session with `claude --agent dev-orchestrator`, or call it as a sub-agent with `@dev-orchestrator`. Independent slices of a feature are built in parallel, each by the matching specialist (e.g. `@spring-boot-backend-engineer`), or by `general-purpose` when none fits or is installed.
+**Claude Code:** run it as the whole session with `claude --agent dev-orchestrator`, or call it as a sub-agent with `@dev-orchestrator`. Independent slices are built in parallel, each by the matching specialist (e.g. `@spring-boot-backend-engineer`), or `general-purpose` when none fits or is installed.
 
 #### `@issue-architect`
 
@@ -212,40 +212,44 @@ Consumes a `@security-auditor` report's Handoff Block and applies every fixable 
 
 **Invoke when:** after `@security-auditor` has produced a report with a Handoff Block.
 
+### `@local-slice-worker`
+
+Builds one mechanical new-file slice via the `local-codegen` MCP; returns `blocked` when the local model cannot deliver. See [docs/local-codegen.md](docs/local-codegen.md).
+
 ## Adding new agents
 
-Agent files live in `agents/<agent-name>.md`. Add the file there and it appears in the installer. See `templates/AGENT.md` for the full template.
+Add `agents/<agent-name>.md` and it appears in the installer. Template: `templates/AGENT.md`.
 
 If the agent requires MCP servers, add an entry to `AgentMcpServerRegistry` in `bin/agentic-skills-cli` (the Java installer — see [Requirements](#requirements)).
 
 ## Global MCP tools
 
-The CLI can also configure global MCP tools during Install/Quick install, independent of any skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
+The CLI also configures global MCP tools during Install/Quick install, independent of any skill. Antigravity (`~/.gemini/config/mcp_config.json` → `mcpServers`, shared by its CLI and IDE) and Codex CLI (`~/.codex/config.toml` → `[mcp_servers.<name>]` tables, edited in place so your comments and other settings are kept) are configured alongside the other tools.
 
-MCP servers (these and the [local servers](#local-mcp-servers) below) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Antigravity and Codex CLI**.
+MCP servers (these and the [local servers](#local-mcp-servers)) are configured for **OpenCode, Claude Code, Cursor, VS Code, Devin Desktop (Windsurf), Zed, Antigravity and Codex CLI**.
 
-For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), because Devin's docs give both locations. Uninstall removes them from both files.
+For Devin Desktop (formerly Windsurf), MCP servers are written to `~/.codeium/windsurf/mcp_config.json` and, if the directory `~/.config/devin/` exists, also to `~/.config/devin/mcp_config.json` (`$XDG_CONFIG_HOME/devin` when set; `%APPDATA%\devin` on Windows), as Devin's docs give both. Uninstall removes both.
 
 ### `figma-mcp`
 
 MCP server for Figma — gives your AI agent access to Figma files, components, and design tokens. No token or local install needed:
 
 - **Claude Code, Cursor, VS Code, Codex** — configured against Figma's hosted server (`https://mcp.figma.com/mcp`); you sign in with Figma (OAuth) on first use (Codex: `codex mcp login figma-mcp`).
-- **OpenCode, Devin Desktop (Windsurf), Zed, Antigravity** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the desktop app is open with Dev Mode enabled.
+- **OpenCode, Devin Desktop (Windsurf), Zed, Antigravity** — Figma's hosted server only accepts [catalog-listed clients](https://www.figma.com/mcp-catalog/), so these use the Figma desktop app's local server (`http://127.0.0.1:3845/mcp`), available while the app is open with Dev Mode on.
 
 ### `engram`
 
-Persistent memory MCP for AI agents — must be installed locally first (`brew install gentleman-programming/tap/engram`); the CLI only registers it.
+Persistent memory MCP; install locally first (`brew install gentleman-programming/tap/engram`), the CLI only registers it.
 
 ### `context7`
 
-Up-to-date library documentation MCP, configured against Context7's hosted endpoint (`https://mcp.context7.com/mcp`) — nothing runs locally. Works on the free tier with no key; an optional API key (from `context7.com/dashboard`) can be supplied during install for higher rate limits.
+Library documentation MCP on Context7's hosted endpoint (`https://mcp.context7.com/mcp`); nothing runs locally. Works free with no key; an optional API key (`context7.com/dashboard`) raises rate limits.
 
-Upgrading from 1.x: existing `npx`-based context7/figma entries are migrated to the hosted endpoints automatically; entries you've customised are left alone.
+Upgrading from 1.x: `npx`-based context7/figma entries migrate to the hosted endpoints automatically; customised entries are left alone.
 
 ## Local MCP servers
 
-The CLI also installs these into your AI agent configuration. Both are Java/Spring Boot servers prebuilt inside `agentic-skills.jar`. For Codex CLI the `issue-tickets` credentials are never written into its config: it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
+The CLI installs these into your AI agent configuration. All are Java/Spring Boot servers prebuilt inside `agentic-skills.jar`. For Codex CLI the `issue-tickets` credentials are never written into its config: it forwards them via `env_vars` from your shell profile. Antigravity's entry holds the values (its `$VAR` expansion is undocumented).
 
 ### `issue-tickets`
 
@@ -278,13 +282,17 @@ Tools:
 
 A shared circuit breaker aborts the rest of a scan the moment the target's error rate or latency degrades sharply. Reports are written to `security-scans/<host>-<timestamp>.json` and `.md` in the calling process's working directory. See `mcp/security-scanner/README.md` for full development docs.
 
+### `local-codegen`
+
+Offloads mechanical new-file code generation to a local OpenAI-compatible model; never writes into your project or runs gates. Tested on one machine only; see [docs/local-codegen.md](docs/local-codegen.md).
+
 ## Hooks and usage data
 
-Installing for **Claude Code** (also **Antigravity** and an OpenCode plugin) copies a hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
+Installing for **Claude Code** (also **Antigravity**, and an OpenCode plugin) copies a hooks jar to `~/.agentic-skills/hooks/` and registers it. The hooks record tool use, model and token counts, prompt/response *lengths* (never the text), redacted Bash commands, and skills/agents used. Events go to one local SQLite database, `~/.agentic-skills/data/usage.db`, shared by all projects; nothing leaves your machine unless `ANALYTICS_SERVICE_URL` is set Analytics hooks always exit 0.
 
 - **Opt-in hooks** (default **no**): `guard` blocks destructive `rm`, force-push to `main`/`master`, `.env`/key reads; `verify` keeps the AI working until your `.agentic-skills/verify.json` checks pass (approve per project: `agentic-skills verify trust`); `context` adds session context. Re-running the installer refreshes our entries.
 - `agentic-skills upgrade [--dry-run] [--project <dir>]...` refreshes installed skills, agents, commands, templates, hooks (opt-ins kept) and local MCP jars; never touches MCP config or deletes files. Project installs aren't tracked, so pass `--project`. Exit 0 ok, 1 a step failed (others ran), 2 bad args. A newer-version notice asks GitHub for the latest release at most once/24h (off: `AGENTIC_SKILLS_NO_UPDATE_CHECK=1`); no self-update.
-- `agentic-skills dashboard` serves a read-only localhost dashboard: usage, tools, installed-vs-used skills and agents, sessions, guard blocks.
+- `agentic-skills dashboard` serves a read-only localhost dashboard (usage, tools, installed-vs-used skills and agents, sessions, guard blocks).
 - `agentic-skills data import [dir…]` (or `--find <root>`) loads old `ai-usage-events.json` files; `data prune`.
 - `--uninstall` removes our hooks (not yours); the database is kept.
 
