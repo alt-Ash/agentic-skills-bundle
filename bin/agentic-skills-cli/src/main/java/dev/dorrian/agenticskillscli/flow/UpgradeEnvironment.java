@@ -6,6 +6,7 @@ import dev.dorrian.agenticskillscli.state.InstallManifest;
 import dev.dorrian.agenticskillscli.detect.InstalledToolDetector;
 import dev.dorrian.agenticskillscli.install.HooksInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.IssueTicketsMcpInstaller;
+import dev.dorrian.agenticskillscli.mcp.local.LocalCodegenMcpInstaller;
 import dev.dorrian.agenticskillscli.mcp.local.SecurityScannerMcpInstaller;
 import dev.dorrian.agenticskillscli.registry.AgentToolDef;
 import dev.dorrian.agenticskillscli.registry.AgentToolRegistry;
@@ -101,7 +102,10 @@ public record UpgradeEnvironment(
                 IssueTicketsMcpInstaller::install),
             new McpJar("security-scanner", PackageRoot.securityScannerMcpJar(),
                 SecurityScannerMcpInstaller.DEFAULT_INSTALL_DIR, SecurityScannerMcpInstaller.JAR_NAME,
-                SecurityScannerMcpInstaller::install));
+                SecurityScannerMcpInstaller::install),
+            new McpJar("local-codegen", PackageRoot.localCodegenMcpJar(),
+                LocalCodegenMcpInstaller.DEFAULT_INSTALL_DIR, LocalCodegenMcpInstaller.JAR_NAME,
+                LocalCodegenMcpInstaller::install));
         return new UpgradeEnvironment(AgentToolRegistry.ALL, detected, PackageRoot.skillsDir(),
             PackageRoot.agentsDir(), PackageRoot.commandsDir(), PackageRoot.templatesDir(), hooks, mcps,
             InstallManifest.defaultFile(), BundleExtractor.runningVersion());

@@ -17,6 +17,7 @@ updates:
       - "/evals/agentic-skills-evals"
       - "/mcp/issue-tickets"
       - "/mcp/security-scanner"
+      - "/mcp/local-codegen"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

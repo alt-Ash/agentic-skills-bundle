@@ -89,6 +89,11 @@ jobs:
             module: mcp/issue-tickets
             command: ./mvnw -B -pl mcp/issue-tickets test
 
+          - name: local-codegen
+            artifact: local-codegen
+            module: mcp/local-codegen
+            command: ./mvnw -B -pl mcp/local-codegen test
+
           # ===================================================================
           # !!! EVALS: ZERO-COST UNIT TESTS ONLY !!!
           # The billed behavioral evals — every *EvalTest class
@@ -178,7 +183,8 @@ jobs:
             bundle/agents/ \
             bundle/agentic-skills-hooks.jar \
             bundle/issue-tickets.jar \
-            bundle/security-scanner.jar
+            bundle/security-scanner.jar \
+            bundle/local-codegen.jar
           do
             # Directories may have no explicit zip entry, so match any path
             # under them; files must match exactly.

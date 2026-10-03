@@ -25,6 +25,7 @@ class PackageRootTest {
         assertEquals(fakePackage.resolve("agentic-skills-hooks.jar"), PackageRoot.hooksJar());
         assertEquals(fakePackage.resolve("issue-tickets.jar"), PackageRoot.issueTicketsMcpJar());
         assertEquals(fakePackage.resolve("security-scanner.jar"), PackageRoot.securityScannerMcpJar());
+        assertEquals(fakePackage.resolve("local-codegen.jar"), PackageRoot.localCodegenMcpJar());
     }
 
     @Test

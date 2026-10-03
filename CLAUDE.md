@@ -1,16 +1,14 @@
 # CLAUDE.md
 
-Guidance for Claude Code in this repo.
-
 ## What this project is
 
 This repo **produces** AI agent skills, agents, commands, hooks, and MCP servers — it does not consume them. The CLI (`agentic-skills`, a self-contained jar built by `bin/agentic-skills-cli`) copies files from this repo into users' own AI tool configurations.
 
-**Critical:** `~/.claude/`, `~/.config/opencode/`, `~/.cursor/` etc. are install **targets**, written only when a user runs the CLI in their own environment. Never read or validate against them during development.
+**Critical:** `~/.claude/`, `~/.config/opencode/`, `~/.cursor/` etc. are install **targets**, written only when a user runs the CLI. Never read or validate against them.
 
 ## Commands
 
-Everything is Maven via the root aggregator `pom.xml` and wrapper (no Node/npm anywhere):
+Everything is Maven via the root `pom.xml` and wrapper (no Node/npm):
 
 ```bash
 ./mvnw verify                                   # all modules: unit tests + ITs; billed evals excluded by default
@@ -18,18 +16,22 @@ Everything is Maven via the root aggregator `pom.xml` and wrapper (no Node/npm a
 java -jar bin/agentic-skills-cli/target/agentic-skills.jar  # run the interactive installer
 java -jar bin/agentic-skills-cli/target/agentic-skills.jar --package-root .   # ...against this checkout's content
 ./mvnw -pl bin/agentic-skills-cli -am test -Dtest=AgentFileStructureTest,SkillFileStructureTest,CommandFileStructureTest,TokenBudgetTest -Dsurefire.failIfNoSpecifiedTests=false   # structural + token-budget checks
-./mvnw -pl evals/agentic-skills-evals -Pbilled-evals test -Dtest=TddEngineerEvalTest   # behavioral eval — REAL BILLED model calls, run sparingly
+./mvnw -pl evals/agentic-skills-evals -Pbilled-evals test -Dtest=TddEngineerEvalTest   # REAL BILLED model calls, run sparingly
 # hooks: black-box IT against the packaged jar
 ./mvnw -pl hooks/agentic-skills-hooks verify -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=HookInvocationIT
 ```
 
-Run one test class: `-Dtest=<Class> -Dsurefire.failIfNoSpecifiedTests=false`.
+One class: `-Dtest=<Class> -Dsurefire.failIfNoSpecifiedTests=false`.
+
+## Validation gates
+
+Cheapest first: (1) structural + token-budget `test` command, (2) `./mvnw verify`. No billed evals.
 
 ## Architecture
 
 ### Installer (`bin/agentic-skills-cli`)
 
-Plain Java 21 (no Spring Boot, no DI). One jar, `target/agentic-skills.jar`, carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the hooks jar and both MCP jars under `bundle/`. Without `--package-root`, `BundleExtractor` unpacks `bundle/` once per version to `~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`. `--uninstall` jumps to the uninstall wizard; `upgrade` refreshes installs; `data <path|import|prune>` and `dashboard` (read-only, localhost) skip the bundle. Released via JReleaser on `v*` tags.
+Plain Java 21 (no Spring Boot/DI). One jar, `target/agentic-skills.jar`, carries `skills/`, `agents/`, `.opencode/commands/`, `templates/`, the hooks jar and all MCP jars under `bundle/`. Without `--package-root`, `BundleExtractor` unpacks `bundle/` once per version to `~/.agentic-skills/dist/<version>/`, which becomes `PackageRoot`. `--uninstall` jumps to the uninstall wizard; `upgrade` refreshes installs; `data <path|import|prune>` and `dashboard` (read-only, localhost) skip the bundle. Released via JReleaser on `v*` tags.
 
 Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 
@@ -56,25 +58,25 @@ Plain Java 21 fat jar: `java -jar agentic-skills-hooks.jar <hookType>`. Fresh JV
 | `subagent` | `subagent_start`/`_stop` | sub-agent start/stop |
 | `guard`, `verify`, `context` (opt-in) | `guard_block`, `verify_*` | `PreToolUse` / `Stop` / `SessionStart` |
 
-`ProviderDetector` guesses the provider from payload shape; shims set it; `agy` = Antigravity adapter.
+`ProviderDetector` guesses the provider from payload shape; shims set it; `agy` = Antigravity.
 
 ### Evals (`evals/agentic-skills-evals`)
 
-Behavioral evals: **real, billed calls; run sparingly.** Plain Java 21. They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Full detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
+Behavioral evals: **real, billed calls; run sparingly.** They drive the `claude` CLI over its bidirectional control protocol (`ProcessBuilder`, stream-json, `hook_callback`/`mcp_message` round-trips), giving real tool execution and live `PreToolUse`/`PostToolUse` interception. That protocol is **undocumented and reverse-engineered**; it can drift across `claude` releases. `GoldenChecker` (deterministic checks) and `Judge` (1–5 rubric) gate each scenario; `AbstractEvalTest` generates one `DynamicTest` per fixture under `src/test/resources/fixtures/`. `EvalCli` has `check`, `select`, `report [--save-baseline]`. Detail: `evals/README.md`. `/eval-agent` (`.opencode/commands/eval-agent.md`) runs `check` after editing an agent; needs a local jar and `claude login`, so it's **not** in `CommandRegistry`. The module is never bundled into `agentic-skills.jar`.
 
 ### Extension patterns
 
 - **New skill:** add `skills/<category>/<name>/` — auto-discovered.
 - **New agent:** add `agents/<name>.md` — auto-discovered.
 - **New command:** add `.opencode/commands/<name>.md` (installed to every tool with `supportsCommands`: OpenCode, Claude Code) and map it in `CommandRegistry`. Frontmatter is `description` (+ optional `subtask`) only; quote a `description` containing a colon.
-- **New local MCP:** no registry pattern exists. Write bespoke build/install/config/uninstall code in `mcp/local/`, modelled on `SecurityScannerMcpInstaller`. MCPs are Java/Spring Boot modules in the root reactor; add the new fat jar to the cli module's `provided` deps and the `maven-dependency-plugin` copy list. Keep MCPs on the JVM.
+- **New local MCP:** no registry pattern; write bespoke build/install/config/uninstall code in `mcp/local/`, modelled on `SecurityScannerMcpInstaller` (second example: `mcp/local-codegen`, see `docs/local-codegen.md`). MCPs are Java/Spring Boot modules in the root reactor; add the fat jar to the cli module's `provided` deps and the `maven-dependency-plugin` copy list. Keep MCPs on the JVM.
 - **New hook type:** add the class under `hooks/.../hooks/`, register it in `HookDispatcher`, add a `HookDescriptor` to `HooksRegistry` (`ALL`, or an opt-in constant like `GUARD`). A new tool: implement `ToolHooksInstaller`, add it to `ToolHooksInstallers` and `HookToolSupport`.
 
 ### Test suites
 
 | Suite | Covers |
 |---|---|
-| cli `content/` (`AgentFileStructureTest`, `SkillFileStructureTest`, `CommandFileStructureTest`, `TokenBudgetTest`) | Frontmatter/structure of agents, skills, commands, plus per-file token ceilings in `token-budgets.properties`. No model calls. Repo root is resolved independently of the shared `PackageRoot` singleton. |
+| cli `content/` (`AgentFileStructureTest`, `SkillFileStructureTest`, `CommandFileStructureTest`, `TokenBudgetTest`) | Frontmatter/structure checks plus per-file token ceilings in `token-budgets.properties`. No model calls. Repo root is resolved independently of the shared `PackageRoot` singleton. |
 | `evals/agentic-skills-evals/` | `./mvnw -pl evals/agentic-skills-evals test` runs only zero-cost classes; `-Pbilled-evals` (or an explicit `-Dtest=…EvalTest`) opts into billed ones |
 | `hooks/agentic-skills-hooks/` | Unit tests, then `HookInvocationIT` (failsafe) spawns the shaded jar per hook type and asserts DB rows and POSTed events |
 

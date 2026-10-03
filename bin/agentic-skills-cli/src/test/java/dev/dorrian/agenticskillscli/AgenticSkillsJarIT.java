@@ -73,7 +73,7 @@ class AgenticSkillsJarIT {
         try (JarFile hooks = new JarFile(dist.resolve("agentic-skills-hooks.jar").toFile())) {
             assertNotNull(hooks.getManifest().getMainAttributes().getValue("Main-Class"));
         }
-        for (String mcp : List.of("issue-tickets.jar", "security-scanner.jar")) {
+        for (String mcp : List.of("issue-tickets.jar", "security-scanner.jar", "local-codegen.jar")) {
             try (JarFile jar = new JarFile(dist.resolve(mcp).toFile())) {
                 // Spring Boot repackaged fat jar, not the thin pre-repackage artifact.
                 assertNotNull(jar.getEntry("BOOT-INF/lib/"), mcp + " is not a Spring Boot fat jar");
