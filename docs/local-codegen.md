@@ -68,4 +68,8 @@ Concerns to check on a work laptop:
 - The licence of the chosen model.
 - Quality of smaller models drops sharply for anything beyond mechanical slices.
 
-No token or cost saving has been measured. Treat any saving as a hypothesis until it is.
+## Token savings: no (one run)
+
+Does routing a slice through `local-slice-worker` use fewer Claude tokens than giving it to the specialist? **No.** One paired run, same four-file spec (entity, repository, DTO, mapper), same gate, both compiled: the local worker plus the plan-vs-diff reviewer used more Claude tokens than the specialist alone. The worker by itself was cheaper; the review step is what made the local path cost more.
+
+Scope: one slice, one machine, one run, counting only the harness's per-agent Claude token usage. It says nothing about larger slices and was not repeated, so do not read it as a measured saving or a measured loss beyond that run. Because of that, the plan-vs-diff review is optional in `parallel-feature-build`: by default the orchestrator reads the generated files against the spec itself, and `pr-reviewer` runs only when the user asks or the spec has null, empty or boundary rules a read could miss (the reviewer is what catches a spec-violating `requireNonNull`, which a compile gate does not). Treat the feature as an opt-in for large mechanical slices, not as a saving.

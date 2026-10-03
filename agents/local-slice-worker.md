@@ -89,6 +89,6 @@ Status      : completed | partial | blocked
 - <why the local model could not deliver, with the exact error or rejection | "—">
 
 ### For the next agent or step
-<completed: orchestrator re-runs compile, checks git status, then runs the plan-vs-diff review. blocked: reassign to <suggested specialist> or take over; local output was <kept in output_dir / removed>.>
+<completed: orchestrator re-runs compile, checks git status, then reviews the files against the spec. blocked: reassign to <suggested specialist> or take over; local output was <kept in output_dir / removed>.>
 ***END HANDOFF BLOCK***
 ```

@@ -3,7 +3,7 @@ name: parallel-feature-build
 description:
   Splits one feature into independent, file-scoped slices and builds them with
   parallel workers, each in its own isolated working tree. Each slice goes to
-  the matching named specialist agent (e.g. spring-boot-backend-engineer) or to
+  the matching named specialist agent or to
   a general-purpose worker when none fits or is installed. Use when a feature or
   ticket clearly decomposes into two or more slices that do not touch the same
   files, no shared migration/schema ordering, and no shared config edits.
@@ -65,15 +65,15 @@ The orchestrator reviews each bundle, fixes small things itself if they fit its 
 - The `local-codegen` MCP runs no gates by design.
 - The merged-tree `validation-loop` still runs once.
 
-## Plan-vs-diff review (local slices only)
+## Plan-vs-diff review (local slices, optional)
 
-Compiling does not show the local model built what was asked. Review each completed `local-slice-worker` slice against its spec **before** merging.
+Compiling does not show the local model built what was asked, but a reviewer agent cost about as much as the specialist (measured once). Default: read each completed slice's files against its spec yourself. Use `pr-reviewer` only when the user asks or the spec has null, empty or boundary rules a read could miss, **before** merging:
 
 1. **Spawn `pr-reviewer`** (read-only; reviews may run concurrently). Brief it with:
    - the worktree path and base branch;
    - the spec and allowed-files list as the **scope baseline**: skip the ticket lookup, report alignment item by item;
    - the files created. They are untracked, so `git diff` shows nothing: have it read them directly and `git status` to confirm nothing else changed. Any other file is outside the allowed list and must be reported;
-   - the "Scope alignment" format: a numbered list with one line per spec requirement (split compound items), each `MET`, `MISSING` or `CONTRADICTED` with file and line evidence, then an explicit statement of any file or behaviour added beyond the spec. For each requirement, also have it state the behaviour on null, empty and boundary inputs, and mark `CONTRADICTED` any requirement that fails for an input the spec allows (e.g. a nullable field). This wording caught every seeded deviation in testing (a dropped id copy, a missing not-null, an extra file) without false positives.
+   - the "Scope alignment" format: a numbered list with one line per spec requirement (split compound items), each `MET`, `MISSING` or `CONTRADICTED` with file and line evidence, then an explicit statement of any file or behaviour added beyond the spec. For each requirement, also have it state the behaviour on null, empty and boundary inputs, and mark `CONTRADICTED` any requirement that fails for an input the spec allows (e.g. a nullable field).
 2. **Verdict.** The reviewer is advisory, so you decide. Fail on any Blocking finding, missing or contradicted spec item, file outside the allowed list, or unrequested behaviour. Should-fix findings are only recorded. Surface security flags.
 3. **On failure, one retry** with the findings appended to the spec (clean slice state), then review once more. A second failure reassigns the slice per the fallback rule.
 4. **Never hand-fix local output** to get a pass.
@@ -110,7 +110,7 @@ A conflict is a Phase 0 false negative: stop, never auto-resolve, tell the user.
 
 ## Merge and validation
 
-After merging (a slice can pass alone and still break the integration):
+After merging:
 
 1. Diff each HANDOFF's "Artifacts produced" lists; a shared file is a real conflict, surface it.
 2. Load `validation-loop` against the integration branch, exactly once.
@@ -120,7 +120,7 @@ After merging (a slice can pass alone and still break the integration):
 
 - `decomposition_verdict`: `parallel` or `sequential-fallback` (with the overlap).
 - `slice_results`: each HANDOFF BLOCK by slice, worker type, fallback or not.
-- `local_slice_reviews`: per local slice, `pass`, `pass-after-retry` or `reassigned`, plus findings.
+- `local_slice_reviews`: per local slice, `pass`, `pass-after-retry`, `reassigned` or `skipped`, plus findings.
 - `merge_conflicts`: files touched by more than one slice (empty if none).
 
 ***CONTEXT BLOCK***
@@ -150,7 +150,7 @@ Status      : completed | partial | blocked
 |---|---|
 | Phase 0 gate | ✅ passed / ❌ overlap found |
 | Slice gates reproduced | ✅ passed / ❌ failed |
-| Local slice plan-vs-diff review | ✅ passed / ❌ failed / ⚪ no local slices |
+| Local slice plan-vs-diff review | ✅ passed / ❌ failed / ⚪ skipped or no local slices |
 | Merged-tree build | ✅ passed / ❌ failed / ⚪ n/a |
 | Merged-tree tests | ✅ passed / ❌ failed / ⚪ n/a |
 | Cross-slice artifact overlap check | ✅ none found / ❌ conflicts found |
