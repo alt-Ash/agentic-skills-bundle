@@ -40,7 +40,7 @@ Install behaviour is driven by registries in `.../agenticskillscli/registry/`:
 | `CommandRegistry` | Maps skill/agent names to companion slash command files |
 | `HooksRegistry` | Maps each hook type to its Claude Code hook-event name(s) |
 
-Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode-format agent → target tool's format), `install/{Agent,Skill,Command}Installer`, and the wizards in `flow/` (`QuickInstallFlow`, `FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`. `config/HookRegistrar` merges the hooks (5 analytics + opt-in `guard`) into Claude Code's `settings.json`, preserving existing `hooks`; Claude via `HookRegistrar`, others via `ToolHooksInstallers`.
+Key classes: `discovery/{Agent,Skill}Discovery` (scan `agents/`, `skills/<category>/`), `frontmatter/AgentContentTransformer` (OpenCode agent → target format), `install/{Agent,Skill,Command}Installer`, and wizards in `flow/` (`FullInstallFlow`, `TokenUpdateFlow`, `UninstallWizard`) from `App.main`; shared `state/{InstallDetector,InstallManifest}`; `UpgradeCommand`/`UpgradePlanner`. `config/HookRegistrar` merges the hooks (5 analytics, opt-in `guard`) into Claude Code's `settings.json`, keeping existing `hooks`; Claude via it, others via `ToolHooksInstallers`.
 
 ### Hooks (`hooks/agentic-skills-hooks`)
 

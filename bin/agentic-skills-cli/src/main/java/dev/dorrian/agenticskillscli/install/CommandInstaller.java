@@ -5,6 +5,9 @@ import dev.dorrian.agenticskillscli.config.OperationResult;
 import dev.dorrian.agenticskillscli.discovery.AgentDescriptor;
 import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
 import dev.dorrian.agenticskillscli.registry.CommandRegistry;
+import dev.dorrian.agenticskillscli.state.ContentHash;
+import dev.dorrian.agenticskillscli.state.InstallRecorder;
+import dev.dorrian.agenticskillscli.state.ItemKind;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -62,12 +65,21 @@ public final class CommandInstaller {
     }
 
     public static List<OperationResult> install(List<CommandDescriptor> commands, Path targetPath) {
+        return install(commands, targetPath, InstallRecorder.NOOP);
+    }
+
+    public static List<OperationResult> install(List<CommandDescriptor> commands, Path targetPath, InstallRecorder recorder) {
         ensureDir(targetPath);
         List<OperationResult> results = new ArrayList<>();
         for (CommandDescriptor cmd : commands) {
             Path dest = targetPath.resolve(cmd.name() + ".md");
             try {
                 Files.copy(cmd.srcFile(), dest, StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    recorder.record(ItemKind.COMMAND, cmd.name(), ContentHash.ofFile(dest));
+                } catch (IOException | RuntimeException ignored) {
+                    // recording must never fail an install
+                }
                 results.add(OperationResult.ok(cmd.name(), false, null));
             } catch (IOException e) {
                 results.add(OperationResult.failed(cmd.name(), null, e.getMessage()));

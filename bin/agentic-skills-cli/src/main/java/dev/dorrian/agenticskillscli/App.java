@@ -9,7 +9,6 @@ import dev.dorrian.agenticskillscli.discovery.AgentDiscovery;
 import dev.dorrian.agenticskillscli.discovery.SkillDescriptor;
 import dev.dorrian.agenticskillscli.discovery.SkillDiscovery;
 import dev.dorrian.agenticskillscli.flow.FullInstallFlow;
-import dev.dorrian.agenticskillscli.flow.QuickInstallFlow;
 import dev.dorrian.agenticskillscli.flow.TokenUpdateFlow;
 import dev.dorrian.agenticskillscli.flow.UninstallWizard;
 import dev.dorrian.agenticskillscli.ui.Ansi;
@@ -27,7 +26,7 @@ import java.util.Map;
  * dispatch (source read directly, lines ~2328-2390, on 2026-09-30).
  *
  * <p>All four modes are fully wired: {@link
- * dev.dorrian.agenticskillscli.flow.QuickInstallFlow}, {@link
+ * dev.dorrian.agenticskillscli.flow.UpgradeCommand}, {@link
  * dev.dorrian.agenticskillscli.flow.FullInstallFlow}, {@link
  * dev.dorrian.agenticskillscli.flow.TokenUpdateFlow}, and {@link
  * dev.dorrian.agenticskillscli.flow.UninstallWizard}. Both the top-level
@@ -77,6 +76,14 @@ public final class App {
                 mode = promptTopLevelMenu(prompter);
             }
 
+            if ("upgrade".equals(mode)) {
+                // Same code path as the `upgrade` subcommand; needs no skill/agent discovery.
+                int exit = dev.dorrian.agenticskillscli.flow.UpgradeCommand.run(List.of(), null, System.out, System.err);
+                if (exit != 0) System.exit(exit);
+                printUpdateNotice();
+                return;
+            }
+
             System.out.println("  " + Ansi.dim("Discovering skills & agents…"));
             List<SkillDescriptor> availableSkills = SkillDiscovery.discover();
             List<AgentDescriptor> availableAgentFiles = AgentDiscovery.discover();
@@ -90,7 +97,6 @@ public final class App {
             switch (mode) {
                 case "uninstall" -> UninstallWizard.run(prompter, availableSkills, availableAgentFiles, detectedTools);
                 case "update-token" -> TokenUpdateFlow.run(prompter);
-                case "install-quick" -> QuickInstallFlow.run(prompter, availableSkills, availableAgentFiles, detectedTools);
                 default -> FullInstallFlow.run(prompter, availableSkills, availableAgentFiles, detectedTools);
             }
             if (!"uninstall".equals(mode)) printUpdateNotice();
@@ -134,14 +140,22 @@ public final class App {
     }
 
     private static String promptTopLevelMenu(Prompter prompter) {
-        List<String> choices = List.of(
-            Ansi.boldGreen("Quick install") + " — select tools, install everything globally (recommended)",
-            Ansi.green("Install") + "   — add skills, agents, and commands",
+        return modeFor(prompter.list("What do you want to do?", menuChoices()));
+    }
+
+    /** Top-level menu labels, in display order. */
+    static List<String> menuChoices() {
+        return List.of(
+            Ansi.boldGreen("Upgrade") + " — refresh what is installed to this version; no prompts",
+            Ansi.green("Install") + "   — add skills, agents, commands and MCPs; shows what is installed",
             Ansi.yellow("Update token") + " — replace an expired PAT for issue-tickets",
             Ansi.red("Uninstall") + " — remove skills, agents, and commands"
         );
-        String chosen = prompter.list("What do you want to do?", choices);
-        if (chosen.startsWith(Ansi.boldGreen("Quick install"))) return "install-quick";
+    }
+
+    /** Maps a chosen menu label to its mode: upgrade, install, update-token or uninstall. */
+    static String modeFor(String chosen) {
+        if (chosen.startsWith(Ansi.boldGreen("Upgrade"))) return "upgrade";
         if (chosen.startsWith(Ansi.yellow("Update token"))) return "update-token";
         if (chosen.startsWith(Ansi.red("Uninstall"))) return "uninstall";
         return "install";

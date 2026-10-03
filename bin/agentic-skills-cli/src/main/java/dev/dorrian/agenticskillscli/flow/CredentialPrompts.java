@@ -11,11 +11,9 @@ import java.util.regex.Pattern;
 
 /**
  * Shared Azure DevOps / GitHub credential-collection loops, used identically
- * by both the Quick-install flow (bin/install.js lines ~2416-2494) and the
- * Full-install flow's issue-tickets credential step (lines ~2907-2984) — the
- * prompt text and looping shape are byte-for-byte the same at both call
- * sites in the original, just assigned to differently-named local
- * variables.
+ * by the Full-install flow's issue-tickets credential step (bin/install.js
+ * lines ~2907-2984); the prompt text and looping shape are ported from the
+ * original.
  */
 public final class CredentialPrompts {
 

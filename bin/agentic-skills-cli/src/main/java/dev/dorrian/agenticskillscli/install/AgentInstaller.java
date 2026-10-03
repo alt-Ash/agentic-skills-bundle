@@ -6,6 +6,9 @@ import dev.dorrian.agenticskillscli.discovery.AgentDescriptor;
 import dev.dorrian.agenticskillscli.frontmatter.AgentContentTransformer;
 import dev.dorrian.agenticskillscli.frontmatter.AgentFileNaming;
 import dev.dorrian.agenticskillscli.registry.CompanionFileRegistry;
+import dev.dorrian.agenticskillscli.state.ContentHash;
+import dev.dorrian.agenticskillscli.state.InstallRecorder;
+import dev.dorrian.agenticskillscli.state.ItemKind;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -35,10 +38,19 @@ public final class AgentInstaller {
     }
 
     public static List<OperationResult> install(List<AgentDescriptor> agents, Path targetPath, String toolKey) {
-        return install(agents, targetPath, toolKey, PackageRoot.agentsDir());
+        return install(agents, targetPath, toolKey, PackageRoot.agentsDir(), InstallRecorder.NOOP);
+    }
+
+    public static List<OperationResult> install(List<AgentDescriptor> agents, Path targetPath, String toolKey, InstallRecorder recorder) {
+        return install(agents, targetPath, toolKey, PackageRoot.agentsDir(), recorder);
     }
 
     public static List<OperationResult> install(List<AgentDescriptor> agents, Path targetPath, String toolKey, Path agentsDir) {
+        return install(agents, targetPath, toolKey, agentsDir, InstallRecorder.NOOP);
+    }
+
+    public static List<OperationResult> install(List<AgentDescriptor> agents, Path targetPath, String toolKey, Path agentsDir,
+                                                InstallRecorder recorder) {
         ensureDir(targetPath);
         List<OperationResult> results = new ArrayList<>();
         for (AgentDescriptor agentDef : agents) {
@@ -52,6 +64,11 @@ public final class AgentInstaller {
                 // Upgrade cleanup: drop files an older version wrote under a different name (Codex .md).
                 for (String legacy : AgentFileNaming.legacyFileNames(agentDef.name(), toolKey)) {
                     Files.deleteIfExists(targetPath.resolve(legacy));
+                }
+                try {
+                    recorder.record(ItemKind.AGENT, agentDef.name(), ContentHash.ofFile(dest));
+                } catch (IOException | RuntimeException ignored) {
+                    // recording must never fail an install
                 }
                 results.add(OperationResult.ok(agentDef.name(), false, null));
             } catch (IOException e) {

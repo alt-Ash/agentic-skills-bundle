@@ -8,7 +8,7 @@ import static dev.dorrian.agenticskillscli.registry.McpServerConfig.of;
 
 /**
  * Config builders for the three global MCP servers offered directly by the
- * Quick-install and Full-install wizards (Engram, Context7, Figma) —
+ * Full-install wizard (Engram, Context7, Figma) —
  * independent of the {@code SKILL_MCPS}/{@code AGENT_MCP_SERVERS}
  * registries.
  *
